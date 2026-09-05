@@ -61,6 +61,14 @@ vet: ## Análisis estático
 	docker run --rm -v "$(PWD)/backend":/src -w /src \
 		-v mooc-gomodcache:/go/pkg/mod $(GO_IMAGE) go vet ./...
 
+.PHONY: sec
+sec: ## Análisis de seguridad: govulncheck y gosec (lo mismo que el CI)
+	docker run --rm -v "$(PWD)/backend":/src -w /src \
+		-v mooc-gomodcache:/go/pkg/mod $(GO_IMAGE) sh -c "\
+		go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./... && \
+		go install github.com/securego/gosec/v2/cmd/gosec@latest && gosec -exclude-generated -quiet ./... && \
+		echo 'sin hallazgos'"
+
 .PHONY: test
 test: ## Pruebas unitarias con detector de carreras
 	docker run --rm -v "$(PWD)/backend":/src -w /src \

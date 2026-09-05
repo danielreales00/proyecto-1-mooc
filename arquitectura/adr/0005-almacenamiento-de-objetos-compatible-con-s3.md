@@ -1,8 +1,14 @@
 # ADR-0005 — Almacenamiento de objetos compatible con S3, tras un puerto propio
 
-- **Estado:** Aceptado
+- **Estado:** Aceptado — con la implementación en la nube en revisión por ADR-0015 (D1)
 - **Fecha:** 2026-09-05
 - **Requisitos:** `RF-05`, `RF-06`, `RT-01`, `RT-03`, `CA-02`, `CA-06`
+
+> **Nota (ADR-0015, D1).** El puerto `objectstore.Store` no está en discusión.
+> Lo que sí lo está es la apuesta de servir GCS con este mismo adaptador S3: el
+> endpoint de interoperabilidad de GCS exige claves HMAC de larga vida, que
+> chocan con la decisión de no crear credenciales estáticas. La propuesta es
+> añadir un adaptador GCS nativo y dejar este para MinIO.
 
 ## Contexto
 

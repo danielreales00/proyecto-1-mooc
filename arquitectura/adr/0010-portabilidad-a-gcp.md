@@ -3,6 +3,7 @@
 - **Estado:** Aceptado
 - **Fecha:** 2026-09-05
 - **Requisitos:** `RT-01`, `RT-04`, `CE-01`
+- **Refinado por:** ADR-0015 (Terraform y provisión de GCP)
 
 ## Contexto
 
@@ -63,7 +64,7 @@ respetan cuatro reglas que hacen el traslado barato, y se documenta el mapeo en
 | Opción | A favor | En contra | Por qué no |
 | --- | --- | --- | --- |
 | Usar SDKs de GCP desde ya | Menos trabajo en E3 | La entrega actual debe correr en Compose; añade emuladores y credenciales | Complica lo que hay que entregar ahora |
-| Terraform desde E1 | Infra reproducible | No hay infra que provisionar todavía | Se hace en E3 |
+| Terraform desde E1 | Infra reproducible | No hay infra que provisionar todavía | Se hace en E3. ADR-0015 mantiene esto, pero separa las decisiones que sí hay que tomar ya |
 | Abstraer también PostgreSQL y Redis | Portabilidad total | Cloud SQL y Memorystore hablan el mismo protocolo | Abstracción sin beneficio |
 
 ## Consecuencias

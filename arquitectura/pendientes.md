@@ -109,6 +109,7 @@ Lo de arriba desbloquea lo de abajo.
 
 | # | Tarea | Quién | Estado |
 | --- | --- | --- | --- |
+| 0 | Resolver D2 y D3 de ADR-0015. D2 cambia el contrato de la API, así que va **antes** del OpenAPI | Todos | Pendiente |
 | 1 | Acordar entre los cuatro el OpenAPI y el resto de las migraciones. Sigue siendo el cuello de botella para trabajar en paralelo | Todos | Pendiente |
 | 2 | Plataforma transversal: idempotencia, rate limiting, `ETag`, cursores | — | Pendiente |
 | 3 | Cerrar el `reaper` y las tareas programadas | — | Pendiente |
@@ -156,6 +157,9 @@ Cuando se resuelvan, cada una se convierte en un ADR.
 | Tecnología del frontend (E2) | React / Angular / Svelte | Equipo | No bloquea la Entrega 1 |
 | Token en claro dentro de `job_runs.payload` | Dejarlo / cifrar el payload / que el worker genere el token | Equipo | Hoy el token de verificación viaja en claro en el payload del trabajo, porque el correo debe contenerlo y `one_time_tokens` solo guarda el hash. Acotado: expira en 24 h y la fila se poda. Ver `internal/modules/identity/service.go` |
 | Recorte de la escalera HLS para la demo | 360p+720p / la escalera completa | Equipo | La completa alarga mucho la grabación |
+| **Entrega de HLS detrás del CDN** | Firma por segmento / **cookie firmada** | Equipo | **ADR-0015 (D2). Bloquea el OpenAPI**: la cookie exige un endpoint `media-sessions` que hay que fijar antes de congelar el contrato |
+| **Cliente de objetos en GCP** | Interoperabilidad S3 / **adaptador GCS nativo** | Equipo | ADR-0015 (D1). La interoperabilidad exige claves HMAC de larga vida |
+| **Credenciales hacia GCP** | Claves JSON / **Workload Identity Federation** | Equipo | ADR-0015 (D3). Decidirlo ya es gratis y evita que una clave acabe en el repositorio |
 
 ## Riesgos vigilados
 

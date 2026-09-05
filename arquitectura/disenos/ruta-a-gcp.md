@@ -3,6 +3,10 @@
 Plan para las entregas 3 y 4. **Nada de esto se implementa en la Entrega 1**
 (ADR-0010): existe para que las decisiones de hoy no se paguen después.
 
+> Las decisiones concretas y su plazo están en **ADR-0015**, en estado
+> Propuesto. Dos de ellas —la entrega de HLS y el cliente de objetos— tocan el
+> código de la Entrega 1.
+
 ## Arquitectura destino
 
 ```mermaid
@@ -48,7 +52,7 @@ graph TB
 | `migrate` | Cloud Run job en el despliegue | Nada (ADR-0003 ya lo separa) |
 | `postgres` | Cloud SQL PostgreSQL 17, HA regional | Cadena de conexión + conector |
 | `redis` | Memorystore for Redis Standard | Cadena de conexión + TLS |
-| `minio` | Cloud Storage | Adaptador `gcs`, o el mismo adaptador S3 contra el endpoint de interoperabilidad XML |
+| `minio` | Cloud Storage | Adaptador `gcs` nativo (ADR-0015, D1): la interoperabilidad S3 exigiría claves HMAC de larga vida |
 | URL firmadas de MinIO | URL firmadas V4 de GCS, o **cookies firmadas de CDN** para HLS | Un solo paquete: `adapters/objectstore` |
 | Servir HLS desde MinIO | Cloud CDN sobre bucket de respaldo | Emisión de credencial, no la lógica |
 | `mailpit` | SendGrid o Cloud Run + SMTP | Adaptador `mailer` |

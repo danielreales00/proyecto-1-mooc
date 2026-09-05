@@ -61,7 +61,18 @@ func Verify(password, encoded string) error {
 		return fmt.Errorf("hash ilegible: %w", err)
 	}
 
-	got := argon2.IDKey([]byte(password), salt, t, m, p, uint32(len(want)))
+	// Sin estas dos comprobaciones, un hash almacenado con la parte de clave
+	// vacía verificaría CUALQUIER contraseña: subtle.ConstantTimeCompare
+	// devuelve 1 al comparar dos slices vacíos. Hash() nunca produce eso, pero
+	// Verify no debe confiar en que lo almacenado venga de Hash().
+	if len(salt) == 0 {
+		return fmt.Errorf("el hash no tiene sal")
+	}
+	if len(want) != int(keyLength) {
+		return fmt.Errorf("longitud de clave inesperada: %d, se esperaba %d", len(want), keyLength)
+	}
+
+	got := argon2.IDKey([]byte(password), salt, t, m, p, keyLength)
 	if subtle.ConstantTimeCompare(got, want) != 1 {
 		return ErrMismatch
 	}

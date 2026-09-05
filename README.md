@@ -30,6 +30,7 @@ Todo está en [`arquitectura/`](arquitectura/README.md):
 make up          # levanta el stack completo y aplica migraciones
 make seed        # datos sintéticos para la demostración
 make test        # pruebas unitarias
+make sec         # govulncheck y gosec, lo mismo que el CI
 make smoke       # recorre el flujo de punta a punta y verifica las condiciones
 make postman     # ejecuta la colección de la demostración con newman
 make scale       # 3 instancias de api y 3 de worker (CE-01)
