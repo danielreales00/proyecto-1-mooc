@@ -112,6 +112,10 @@ ejemplo, `progress` no llama a `badges`: encola `badge.issue`.
 
 ## Cómo se escala
 
+La API **no publica puerto propio**: la única entrada es el proxy, que resuelve
+`api` por DNS de Docker y reparte por turnos entre las instancias. Sin eso,
+`--scale api=3` chocaría por el puerto del host.
+
 | Componente | Cómo | Límite |
 | --- | --- | --- |
 | `api` | `--scale api=N` tras el proxy | El pool de conexiones a PostgreSQL |
@@ -128,6 +132,7 @@ sobrevivan a la petición o al job (ADR-0001, ADR-0006).
 | Servicio | Imagen | Perfil |
 | --- | --- | --- |
 | `proxy` | `caddy:2-alpine` | por defecto |
+
 | `api` | construida (`target: api`) | por defecto |
 | `worker` | construida (`target: worker`) | por defecto |
 | `worker-media` | construida (`target: worker-media`, con ffmpeg) | por defecto |

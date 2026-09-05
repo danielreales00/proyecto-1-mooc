@@ -7,8 +7,10 @@ objetos, ejecutado íntegramente en Docker.
 
 ## Estado
 
-**Entrega 1 en preparación.** Documentación de arquitectura completa; el código
-todavía no empieza.
+**Entrega 1 en preparación.** Documentación de arquitectura completa. En
+`feat/esqueleto-backend` hay una rebanada vertical del backend: registro de
+estudiante → trabajo asíncrono → correo → verificación → login → `/me` →
+revocación de sesión.
 
 Para esta entrega, backend y workers van completos y funcionales; **no hay
 frontend**, y la demostración se hace con Postman.
@@ -25,25 +27,40 @@ Todo está en [`arquitectura/`](arquitectura/README.md):
 ## Puesta en marcha
 
 ```bash
-cp .env.example .env
-make up          # levanta el stack completo
-make seed        # datos sintéticos
-make smoke       # verificación de extremo a extremo
+make up          # levanta el stack completo y aplica migraciones
+make smoke       # recorre el flujo de punta a punta y verifica las condiciones
+make scale       # 3 instancias de api y 3 de worker (CE-01)
 ```
 
-> Aún no implementado. Ver [`arquitectura/pendientes.md`](arquitectura/pendientes.md).
+`make help` lista el resto: `logs`, `jobs`, `audit`, `psql`, `tidy`, `clean`.
+
+| Servicio | URL |
+| --- | --- |
+| API (tras el proxy) | http://localhost:8090/readyz |
+| Mailpit | http://localhost:8026 |
+| MinIO | http://localhost:9011 |
+
+Los puertos del host se configuran en `.env` y usan un rango propio para poder
+convivir con otros stacks de Docker en la misma máquina.
+
+Requiere Docker en marcha (`sudo service docker start` en WSL). **No hace falta
+tener Go instalado**: se compila dentro de contenedores.
 
 ## Estructura prevista
 
 ```
-backend/          monolito modular en Go (cmd/api, cmd/worker, cmd/migrate)
-  internal/       platform · adapters · modules
-  migrations/     SQL versionado
-  openapi/        openapi.yaml
+deploy/           Caddyfile del proxy de entrada
+backend/
+  cmd/            api · worker · migrate
+  internal/
+    platform/     config · logging · problem · httpx · ids · jobs · passwords · dbx
+    adapters/     postgres · rediscli · sessions · objectstore · mailer · queue
+    modules/      identity · audit          (authoring, media, assessment… pendientes)
+  migrations/     SQL versionado, hacia adelante
+  openapi/        openapi.yaml              (pendiente)
 arquitectura/     ADRs, diseños, requisitos, pendientes
-postman/          colección de la demostración (SEG-1 … SEG-9)
-scripts/          smoke, carga, restauración
-docker-compose.yml
+scripts/          smoke.sh
+docker-compose.yml · Makefile · .env.example
 ```
 
 ## Equipo
