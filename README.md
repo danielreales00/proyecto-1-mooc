@@ -28,11 +28,13 @@ Todo está en [`arquitectura/`](arquitectura/README.md):
 
 ```bash
 make up          # levanta el stack completo y aplica migraciones
+make seed        # datos sintéticos para la demostración
+make test        # pruebas unitarias
 make smoke       # recorre el flujo de punta a punta y verifica las condiciones
 make scale       # 3 instancias de api y 3 de worker (CE-01)
 ```
 
-`make help` lista el resto: `logs`, `jobs`, `audit`, `psql`, `tidy`, `clean`.
+`make help` lista el resto: `logs`, `jobs`, `audit`, `psql`, `cover`, `tidy`, `clean`.
 
 | Servicio | URL |
 | --- | --- |
@@ -51,7 +53,7 @@ tener Go instalado**: se compila dentro de contenedores.
 ```
 deploy/           Caddyfile del proxy de entrada
 backend/
-  cmd/            api · worker · migrate
+  cmd/            api · worker · migrate · seed
   internal/
     platform/     config · logging · problem · httpx · ids · jobs · passwords · dbx
     adapters/     postgres · rediscli · sessions · objectstore · mailer · queue
@@ -59,7 +61,9 @@ backend/
   migrations/     SQL versionado, hacia adelante
   openapi/        openapi.yaml              (pendiente)
 arquitectura/     ADRs, diseños, requisitos, pendientes
+postman/          colección de la demostración (SEG-1 … SEG-9)
 scripts/          smoke.sh
+.github/          CI: build, lint, seguridad, migraciones y pruebas
 docker-compose.yml · Makefile · .env.example
 ```
 

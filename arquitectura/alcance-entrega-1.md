@@ -69,6 +69,52 @@ Fuente: `aclaraciones-profesor.md` (aclaración de alcance) + `enunciado.md` §5
 | La carga multipart prefirmada es incómoda desde Postman. | Script pre-request en la colección que parte el archivo y sube las partes. |
 | El equipo es de 4 personas y el alcance es amplio. | Cortes por módulo con contratos de API acordados primero; ver `pendientes.md`. |
 
+## Lista de verificación de la entrega
+
+El profesor no califica por módulos: califica siete criterios a través de los
+nueve segmentos de la demostración (§10.2). Esta es la vista que importa el día
+de la entrega.
+
+Estado a 5 de septiembre de 2026.
+
+| Segmento | Qué debe demostrar | Necesita | Estado |
+| --- | --- | --- | --- |
+| **1.** Identidad y administración | Registro, invitación de profesor, revocación inmediata de sesiones, suspensión auditada, rechazo de operaciones no autorizadas | `identity` completo + `admin` | Parcial |
+| **2.** Autoría y publicación | Borrador, módulos, unidades y recursos; previsualización; lista exhaustiva de errores; versión inmutable | `authoring` + Markdown canónico | Nada |
+| **3.** Carga multimedia | URLs prefirmadas, reanudación, checksum, MIME real, antimalware, encolamiento, original conservado | `media` (carga) + ClamAV | Nada |
+| **4.** Procesamiento y fallos | Estados del recurso, HLS sin *upscaling*, doble entrega idempotente, backoff, DLQ, alerta, reencolado con la misma clave | Workers de medios + observabilidad + fallos inyectables | El mecanismo existe, sin nada que procesar ni alerta |
+| **5.** Consumo de contenido | Inscripción, streaming adaptativo, reanudación, entrega autorizada | `enrollment` + entrega firmada | Nada |
+| **6.** Quiz | Snapshot, guardados parciales, sin claves en el cliente, envío idempotente, expiración, cálculo de la nota | `assessment` | Nada |
+| **7.** Progreso y aprobación | Heartbeats, permanencia, rechazo de manipulación, porcentaje de obligatorios, `completed` y `approved` | `progress` | Nada |
+| **8.** Insignia y actualización | Emisión única, URL sin correo, revocación auditada, `stable_id` y progreso conservado | `badges` + versión nueva | Nada |
+| **9.** Operación | p95, escalamiento, observabilidad, fallos, backup, restauración, RTO/RPO | Carga con k6 + backup/restauración + observabilidad | Solo el escalamiento, verificado |
+
+### Requisitos formales de la demostración (§10.1)
+
+Son condiciones de aceptación, no buenas prácticas opcionales. Ninguna existe
+todavía.
+
+| Requisito | Cómo lo cumplimos | Estado |
+| --- | --- | --- |
+| Datos sintéticos sobre el sistema desplegado | `make seed` | Pendiente |
+| Evidencia con respuesta de la API, estado persistido y logs o trazas correlacionados | `trace_id` en cada respuesta y en cada log; colección de Postman | Parcial: el `trace_id` ya viaja |
+| Pruebas que cubran roles, propiedad, idempotencia, fallos inyectados y límites de rendimiento | Pruebas unitarias, de integración y la colección | Pendiente |
+| CI que complete build, lint, análisis de seguridad, migraciones y pruebas **antes** de la demostración | Flujo de trabajo en el repositorio | Pendiente |
+
+### Andamiaje de evidencia
+
+Cuatro piezas producen toda la evidencia anterior. Se construyen **junto al
+primer módulo grande, no después**: una vez que un módulo se da por hecho sin
+pruebas, nadie vuelve a escribirlas.
+
+1. **Pruebas automáticas** — unitarias del dominio, de la capa HTTP con dobles,
+   y de integración contra los contenedores reales.
+2. **Semilla de datos sintéticos** — administrador, profesor y estudiantes, con
+   correos ya verificados, para que la demo no empiece en cero.
+3. **Colección de Postman** — una carpeta por segmento, con aserciones. Es la
+   interfaz de la demostración: sin ella no hay demo.
+4. **CI** — build, `gofmt`, `go vet`, `govulncheck`, migraciones y pruebas.
+
 ## Definición de terminado
 
 Un requisito está terminado cuando: hay código, hay migración si toca esquema,

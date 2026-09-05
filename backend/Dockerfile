@@ -42,3 +42,9 @@ ENTRYPOINT ["worker"]
 FROM base AS migrate
 COPY --from=builder /out/migrate /usr/local/bin/migrate
 ENTRYPOINT ["migrate"]
+
+# --- seed -------------------------------------------------------------------
+# Datos sintéticos para la demostración (§10.1). Solo desarrollo.
+FROM base AS seed
+COPY --from=builder /out/seed /usr/local/bin/seed
+ENTRYPOINT ["seed"]

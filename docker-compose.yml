@@ -98,6 +98,21 @@ services:
         condition: service_healthy
     restart: "no"
 
+  # Bajo perfil: se ejecuta a mano con `make seed`, no al levantar el stack.
+  seed:
+    build:
+      context: ./backend
+      target: seed
+    image: mooc-seed
+    profiles: ["tools"]
+    env_file: [.env]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
   api:
     build:
       context: ./backend

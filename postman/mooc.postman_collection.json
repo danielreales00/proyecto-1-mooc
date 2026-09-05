@@ -1,0 +1,622 @@
+{
+  "info": {
+    "name": "Plataforma MOOC — Entrega 1",
+    "description": "Colección de la demostración de aceptación. Una carpeta por segmento de la sección 10.2 del enunciado.\n\n**Uso:** importar junto con `mooc.postman_environment.json`, levantar el stack con `make up` y ejecutar las carpetas en orden con el Collection Runner.\n\nLas carpetas vacías son segmentos cuyo módulo todavía no existe: el hueco se deja visible a propósito, para que el avance se mida contra la demostración y no contra el número de endpoints.\n\nEstado: SEG-1 parcial (falta `admin`); SEG-2 a SEG-8 pendientes; SEG-9 parcial.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "SEG-1 · Identidad y administración",
+      "description": "Registro de estudiante, verificación de correo, sesiones revocables y rechazo de operaciones no autorizadas.\n\nCriterio: identidad, autorización y seguridad (CE-02).\nRequisitos: RF-01, RF-02, CA-06.\n\nEl token de verificación se lee de Mailpit: ejecuta «Leer token del correo» después de registrar.",
+      "item": [
+        {
+          "name": "Salud — readyz",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/readyz",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "readyz"
+              ]
+            },
+            "description": "Comprueba PostgreSQL, Redis y el almacén de objetos (ADR-0009)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('postgres ok', () => pm.expect(d.postgres).to.eql('ok'));",
+                  "pm.test('redis ok', () => pm.expect(d.redis).to.eql('ok'));",
+                  "pm.test('objectstore ok', () => pm.expect(d.objectstore).to.eql('ok'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registro inválido — lista exhaustiva de errores",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "La API devuelve TODOS los incumplimientos en un solo 422, no el primero. Es la mecánica que CA-01 exige para la publicación de un curso.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"no-es-un-correo\",\n  \"password\": \"corta\",\n  \"full_name\": \"\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));",
+                  "pm.test('application/problem+json (RFC 9457)', () =>",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json'));",
+                  "const d = pm.response.json();",
+                  "pm.test('trae trace_id para correlacionar', () => pm.expect(d.trace_id).to.be.a('string'));",
+                  "pm.test('acumula los tres errores', () => pm.expect(d.errors).to.have.lengthOf(3));",
+                  "pm.test('cada error trae código y campo', () =>",
+                  "  d.errors.forEach(e => { pm.expect(e.code).to.be.a('string'); pm.expect(e.field).to.be.a('string'); }));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registro de estudiante",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Responde 202: la API no espera al worker que envía el correo (CA-02).\nEl correo electrónico se genera con marca de tiempo para poder repetir la demo.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{nuevo_email}}\",\n  \"password\": \"{{demo_password}}\",\n  \"full_name\": \"Estudiante de Demostración\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Correo único por ejecución, para que la demo sea repetible.",
+                  "pm.collectionVariables.set('nuevo_email', `estudiante+${Date.now()}@mooc.local`);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted — no bloquea esperando al worker', () => pm.response.to.have.status(202));",
+                  "const d = pm.response.json();",
+                  "pm.test('queda pendiente de verificación', () => pm.expect(d.status).to.eql('pending_verification'));",
+                  "pm.collectionVariables.set('user_id', d.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Leer token del correo (Mailpit)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/search?query=to:{{nuevo_email}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "search?query=to:{{nuevo_email}}"
+              ]
+            },
+            "description": "Lee el buzón de Mailpit. Sustituye la URL base por {{mailpit_url}} en la pestaña de la petición si Postman no la resuelve.\n\nEvidencia de que el worker consumió el trabajo de la cola."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('el worker entregó el correo', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.expect(d.messages, 'no llegó ningún correo').to.have.length.above(0);",
+                  "const id = d.messages[0].ID;",
+                  "pm.sendRequest(`${pm.collectionVariables.get('mailpit_url')}/api/v1/message/${id}`, (err, res) => {",
+                  "  const texto = res.json().Text;",
+                  "  const m = texto.match(/^[A-Za-z0-9_-]{40,}\\r?$/m);",
+                  "  pm.test('el correo trae el token de verificación', () => pm.expect(m).to.not.be.null);",
+                  "  pm.collectionVariables.set('verify_token', m[1] || m[0].trim());",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verificar el correo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/verify-email",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "verify-email"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{verify_token}}\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('verificado', () => pm.expect(pm.response.json().verified).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reutilizar el token — debe fallar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/verify-email",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "verify-email"
+              ]
+            },
+            "description": "Un token de un solo uso no se puede consumir dos veces.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{verify_token}}\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422 al reutilizarlo', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login con contraseña incorrecta",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Mismo 401 para usuario inexistente, contraseña incorrecta y cuenta sin verificar: no se revela qué correos existen.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{nuevo_email}}\",\n  \"password\": \"incorrecta\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{nuevo_email}}\",\n  \"password\": \"{{demo_password}}\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('devuelve token de sesión', () => pm.expect(d.token).to.be.a('string'));",
+                  "pm.test('el registro público solo crea estudiantes (RF-01)', () =>",
+                  "  pm.expect(d.user.role).to.eql('student'));",
+                  "pm.collectionVariables.set('session_token', d.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "me"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('correo verificado', () => pm.expect(d.email_verified_at).to.not.be.null);",
+                  "pm.test('nunca expone el hash de la contraseña', () =>",
+                  "  pm.expect(pm.response.text()).to.not.include('password'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /me sin sesión",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "me"
+              ]
+            },
+            "description": "Control de acceso: cada endpoint respeta rol y sesión (CA-06)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Correo duplicado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{nuevo_email}}\",\n  \"password\": \"{{demo_password}}\",\n  \"full_name\": \"Otro\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 conflict', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cerrar sesión",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /me tras cerrar sesión — revocación inmediata",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "me"
+              ]
+            },
+            "description": "Borrar la clave de Redis surte efecto en la petición siguiente, sin ventana de gracia. Es lo que el segmento 1 exige demostrar (ADR-0006)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 sin esperar a que expire', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SEG-2 · Autoría y publicación",
+      "description": "Borrador, módulos, unidades y recursos; previsualización; lista exhaustiva de errores; versión inmutable.\n\nCriterio: autoría y publicación (CE-03). Requisitos: RF-03, RF-04, CA-01.\n\nPendiente: el módulo `authoring` aún no existe.",
+      "item": []
+    },
+    {
+      "name": "SEG-3 · Carga multimedia",
+      "description": "URLs prefirmadas, reanudación, checksum, MIME real, antimalware, encolamiento y conservación del original.\n\nCriterio: multimedia y distribución (CE-04). Requisitos: RF-05, CA-02.\n\nPendiente: el módulo `media` aún no existe.",
+      "item": []
+    },
+    {
+      "name": "SEG-4 · Procesamiento y fallos",
+      "description": "Estados del recurso, HLS sin upscaling, doble entrega idempotente, backoff, DLQ, alerta y reencolado con la misma clave.\n\nCriterio: arquitectura, multimedia y calidad operativa. Requisito: CA-03.\n\nPendiente: workers de medios y observabilidad. El mecanismo de idempotencia y DLQ ya existe en platform.job_runs.",
+      "item": []
+    },
+    {
+      "name": "SEG-5 · Consumo de contenido",
+      "description": "Inscripción, streaming adaptativo, reanudación y entrega autorizada.\n\nCriterio: multimedia y progreso. Requisitos: RF-07, RF-10, CA-06.\n\nPendiente: `enrollment` y la entrega firmada. Las partes de interfaz quedan para la Entrega 2.",
+      "item": []
+    },
+    {
+      "name": "SEG-6 · Quiz",
+      "description": "Snapshot, guardados parciales, ausencia de claves en el cliente, envío idempotente, expiración y cálculo de la nota.\n\nCriterio: evaluación académica (CE-05). Requisitos: RF-08, CA-04.\n\nPendiente: el módulo `assessment` aún no existe.",
+      "item": []
+    },
+    {
+      "name": "SEG-7 · Progreso y aprobación",
+      "description": "Heartbeats, permanencia mínima, rechazo de manipulación, porcentaje de obligatorios y transición a completed y approved.\n\nCriterio: progreso e insignias (CE-06). Requisitos: RF-09, CA-05.\n\nPendiente: el módulo `progress` aún no existe.",
+      "item": []
+    },
+    {
+      "name": "SEG-8 · Insignia y actualización",
+      "description": "Emisión única, URL sin correo, revocación auditada, stable_id y conservación del progreso.\n\nCriterio: autoría, progreso e insignias. Requisito: CA-07.\n\nPendiente: el módulo `badges` aún no existe.",
+      "item": []
+    },
+    {
+      "name": "SEG-9 · Operación",
+      "description": "p95, escalamiento, observabilidad, fallos, backup, restauración y RTO/RPO.\n\nCriterio: arquitectura y calidad operativa (CE-01, CE-07).\n\nParcial: el escalamiento ya está verificado con `make scale`. Faltan la prueba de carga con k6, la observabilidad y la restauración medida.",
+      "item": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8090",
+      "type": "string"
+    },
+    {
+      "key": "mailpit_url",
+      "value": "http://localhost:8026",
+      "type": "string"
+    },
+    {
+      "key": "demo_password",
+      "value": "Contrasena-Demo-2026",
+      "type": "string"
+    },
+    {
+      "key": "nuevo_email",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "verify_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "session_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

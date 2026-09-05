@@ -62,9 +62,20 @@ vet: ## Análisis estático
 		-v mooc-gomodcache:/go/pkg/mod $(GO_IMAGE) go vet ./...
 
 .PHONY: test
-test: ## Pruebas unitarias
+test: ## Pruebas unitarias con detector de carreras
 	docker run --rm -v "$(PWD)/backend":/src -w /src \
-		-v mooc-gomodcache:/go/pkg/mod $(GO_IMAGE) go test ./...
+		-v mooc-gomodcache:/go/pkg/mod $(GO_IMAGE) \
+		sh -c "apk add --no-cache gcc musl-dev >/dev/null && go test -race ./..."
+
+.PHONY: cover
+cover: ## Pruebas con informe de cobertura
+	docker run --rm -v "$(PWD)/backend":/src -w /src \
+		-v mooc-gomodcache:/go/pkg/mod $(GO_IMAGE) \
+		sh -c "go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out"
+
+.PHONY: seed
+seed: ## Carga datos sintéticos para la demostración (idempotente)
+	$(COMPOSE) run --rm seed
 
 .PHONY: smoke
 smoke: ## Prueba de extremo a extremo: registro, verificación, login y /me

@@ -91,16 +91,17 @@ Solo corre `email.send`.
 | `worker-media` (imagen con FFmpeg) | Falta |
 | Perfil `observability` (Prometheus, Grafana, Jaeger) | Falta |
 | Perfil `carga` (k6) | Falta |
-| **Pruebas automáticas** | **Cero.** `make test` corre y no ejecuta nada |
-| Semilla de datos sintéticos (`make seed`) | Falta |
-| Colección de Postman (SEG-1 … SEG-9) | Falta |
+| Pruebas automáticas | **Andamiaje hecho**: dominio, contraseñas, capa HTTP con dobles y `ParseQueues`. Falta cubrir cada módulo nuevo |
+| Semilla de datos sintéticos (`make seed`) | **Hecho** — 8 cuentas, idempotente |
+| Colección de Postman (SEG-1 … SEG-9) | **Estructura hecha**: SEG-1 con 13 peticiones y aserciones; SEG-2 a SEG-8 vacías a propósito |
 | Backup, restauración y `make restore-test` | Falta |
-| CI: build, lint, `gosec`/`govulncheck`, migraciones, pruebas | Falta |
+| CI: build, lint, `gosec`/`govulncheck`, migraciones, pruebas | **Hecho** — 4 trabajos, incluido el extremo a extremo con Compose |
 | Fallos inyectables para SEG-4 (`FAIL_TRANSCODE`, `DUPLICATE_DELIVERY`) | Falta |
 
-Que no haya ninguna prueba es lo más urgente de esta tabla: es criterio Must
-(`CE-07`) y el enunciado es explícito en §10 — un comportamiento que no pueda
-reproducirse no acredita el requisito, aunque exista el código.
+El andamiaje de evidencia ya está montado (pruebas, semilla, Postman y CI). Lo
+que queda es **usarlo**: cada módulo nuevo entra con sus pruebas y su carpeta de
+Postman en el mismo PR. El enunciado es explícito en §10 — un comportamiento que
+no pueda reproducirse no acredita el requisito, aunque exista el código.
 
 ## Orden propuesto
 
@@ -119,12 +120,10 @@ Lo de arriba desbloquea lo de abajo.
 | 9 | `assessment` con snapshot y calificación | — | Pendiente |
 | 10 | `progress` + `badges` | — | Pendiente |
 | 11 | Observabilidad: `/metrics`, OTel, paneles y alerta de DLQ | — | Pendiente |
-| 12 | Semilla de datos sintéticos (`make seed`) | — | Pendiente |
-| 13 | Colección de Postman, una carpeta por segmento SEG-1…SEG-9 | — | Pendiente |
-| 14 | Pruebas de carga con k6 y medición de p95 con `api=1` frente a `api=3` | — | Pendiente |
-| 15 | `make restore-test` y medición de RTO | — | Pendiente |
-| 16 | CI: build, lint, análisis de seguridad, migraciones, pruebas | — | Pendiente |
-| 17 | Grabar el video de la demostración | Todos | Pendiente |
+| 12 | Llenar la carpeta de Postman de cada segmento a medida que entre su módulo | — | Pendiente |
+| 13 | Pruebas de carga con k6 y medición de p95 con `api=1` frente a `api=3` | — | Pendiente |
+| 14 | `make restore-test` y medición de RTO | — | Pendiente |
+| 15 | Grabar el video de la demostración | Todos | Pendiente |
 
 Las pruebas no son una fila de esta tabla a propósito: van con cada módulo, no al
 final. Un módulo sin prueba no está terminado (ver la definición de terminado en
@@ -141,6 +140,7 @@ final. Un módulo sin prueba no está terminado (ver la definición de terminado
 | `identity`, parcial | Registro, verificación de correo, login, `/me`, logout con revocación inmediata |
 | `audit` | Registro inmutable, verificado contra `UPDATE` |
 | Proxy y escalado | Caddy con reparto por turnos; `--scale api=3 --scale worker=3` verificado |
+| Andamiaje de evidencia | Pruebas unitarias y de capa HTTP, `make seed`, colección de Postman por segmentos, CI con 4 trabajos y plantilla de PR |
 
 ## Decisiones abiertas
 
@@ -162,7 +162,7 @@ Cuando se resuelvan, cada una se convierte en un ADR.
 | Riesgo | Señal temprana | Qué haríamos |
 | --- | --- | --- |
 | El alcance de E1 es amplio para 4 personas | La tarea 1 no está lista al final de la semana 1 | Congelar el contrato aunque esté imperfecto; se puede corregir con migraciones |
-| Las pruebas se dejan para el final | Un módulo se da por hecho sin `_test.go` | La definición de terminado ya lo prohíbe; hacerlo visible en la revisión del PR |
+| Las pruebas se dejan para el final | Un módulo se da por hecho sin `_test.go` | La plantilla de PR lo pide como casilla explícita; el CI corre `go test` en cada empuje |
 | FFmpeg alarga la grabación de la demo | Un video de prueba tarda más de 5 min | Usar clips de 30 s y una escalera recortada |
 | ClamAV falla al arrancar en la máquina de la demo | El healthcheck no pasa en 3 min | Imagen con firmas precargadas; ensayar en la máquina donde se grabará |
 | La carga multipart es incómoda desde Postman | El script pre-request no parte bien el archivo | Un `scripts/upload.sh` con `curl` como respaldo, mostrado en el video |

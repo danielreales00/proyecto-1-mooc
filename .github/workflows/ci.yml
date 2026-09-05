@@ -1,0 +1,149 @@
+# CI de la Entrega 1.
+#
+# El §10.1 del enunciado lo exige explícitamente: "el pipeline de CI debe
+# completar build, lint, análisis de seguridad, migraciones y pruebas antes de
+# la demostración". No es una buena práctica opcional: es requisito formal.
+
+name: CI
+
+on:
+  push:
+    branches: [main, "feat/**", "fix/**", "docs/**"]
+  pull_request:
+    branches: [main]
+
+env:
+  GO_VERSION: "1.26"
+
+jobs:
+  # --- build y lint ---------------------------------------------------------
+  build:
+    name: Build y lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      - name: go.mod y go.sum al día
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum \
+            || { echo "::error::go.mod o go.sum están desactualizados; ejecuta 'make tidy'"; exit 1; }
+
+      - name: Formato
+        run: |
+          sin_formato=$(gofmt -l .)
+          if [ -n "$sin_formato" ]; then
+            echo "::error::archivos sin formatear; ejecuta 'make fmt':"
+            echo "$sin_formato"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: Compilar los cuatro binarios
+        run: go build ./...
+
+  # --- pruebas unitarias ----------------------------------------------------
+  test:
+    name: Pruebas unitarias
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      - name: go test con detector de carreras
+        run: go test -race -coverprofile=coverage.out ./...
+
+      - name: Resumen de cobertura
+        run: go tool cover -func=coverage.out | tail -1
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cobertura
+          path: backend/coverage.out
+
+  # --- análisis de seguridad ------------------------------------------------
+  security:
+    name: Análisis de seguridad
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      - name: govulncheck — vulnerabilidades conocidas en las dependencias
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+      - name: gosec — patrones inseguros en el código
+        run: |
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          gosec -exclude-generated ./...
+
+  # --- migraciones y extremo a extremo --------------------------------------
+  # Levanta el stack real con Docker Compose y corre el smoke: es la misma
+  # evidencia que se muestra en la demostración, no una simulación.
+  e2e:
+    name: Migraciones y extremo a extremo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preparar el entorno
+        run: cp .env.example .env
+
+      - name: Levantar el stack
+        run: docker compose up -d --build --wait
+
+      - name: Estado de los servicios
+        if: always()
+        run: docker compose ps
+
+      - name: Migraciones aplicadas
+        run: |
+          docker compose run --rm migrate
+          docker compose exec -T postgres \
+            psql -U mooc -d mooc -c "SELECT version, applied_at FROM platform.schema_migrations ORDER BY version;"
+
+      - name: Semilla de datos sintéticos
+        run: docker compose run --rm seed
+
+      - name: Smoke de extremo a extremo
+        run: make smoke
+
+      - name: Escalamiento horizontal (CE-01)
+        run: |
+          docker compose up -d --scale api=3 --scale worker=3 --no-recreate --wait
+          make smoke
+
+      - name: Logs en caso de fallo
+        if: failure()
+        run: docker compose logs --tail=200
+
+      - name: Recoger
+        if: always()
+        run: docker compose down -v
