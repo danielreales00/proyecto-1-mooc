@@ -115,9 +115,9 @@ func TestVerifyUsaLosParametrosDelHashYNoLosDelPaquete(t *testing.T) {
 // importado sí podría: sería una omisión de autenticación completa.
 func TestVerifyNoAceptaCualquierContrasenaConHashDegenerado(t *testing.T) {
 	degenerados := []string{
-		"$argon2id$v=19$m=65536,t=3,p=2$c2FsdA$",   // clave vacía
-		"$argon2id$v=19$m=65536,t=3,p=2$$",         // sal y clave vacías
-		"$argon2id$v=19$m=65536,t=3,p=2$$aGFzaA",   // sin sal
+		"$argon2id$v=19$m=65536,t=3,p=2$c2FsdA$", // clave vacía
+		"$argon2id$v=19$m=65536,t=3,p=2$$",       // sal y clave vacías
+		"$argon2id$v=19$m=65536,t=3,p=2$$aGFzaA", // sin sal
 	}
 	contrasenas := []string{"", "cualquiera", "otra-distinta", strings.Repeat("x", 100)}
 
