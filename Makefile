@@ -83,6 +83,16 @@ smoke: ## Prueba de extremo a extremo: registro, verificación, login y /me
 	API="http://localhost:$${API_PORT:-8090}" \
 	MAILPIT="http://localhost:$${MAILPIT_UI_PORT:-8026}" ./scripts/smoke.sh
 
+.PHONY: postman
+postman: ## Ejecuta la colección de la demostración con newman
+	@source .env; \
+	docker run --rm --network host -v "$(PWD)/postman":/etc/newman \
+		postman/newman:alpine run mooc.postman_collection.json \
+		-e mooc.postman_environment.json \
+		--env-var base_url=http://localhost:$${API_PORT:-8090} \
+		--env-var mailpit_url=http://localhost:$${MAILPIT_UI_PORT:-8026} \
+		--delay-request 300
+
 .PHONY: scale
 scale: ## Levanta 3 instancias de api y 3 de worker (CE-01)
 	$(COMPOSE) up -d --scale api=3 --scale worker=3 --no-recreate

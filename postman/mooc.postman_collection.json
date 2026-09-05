@@ -125,8 +125,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "// Correo único por ejecución, para que la demo sea repetible.",
-                  "pm.collectionVariables.set('nuevo_email', `estudiante+${Date.now()}@mooc.local`);"
+                  "// Correo único por ejecución, para que la demo se pueda repetir",
+                  "// sin limpiar la base de datos.",
+                  "pm.collectionVariables.set('nuevo_email', `estudiante+${Date.now()}@mooc.local`);",
+                  "pm.collectionVariables.set('mailpit_intento', 0);"
                 ]
               }
             },
@@ -150,17 +152,23 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{base_url}}/api/v1/search?query=to:{{nuevo_email}}",
+              "raw": "{{mailpit_url}}/api/v1/search?query=to:{{nuevo_email}}",
               "host": [
-                "{{base_url}}"
+                "{{mailpit_url}}"
               ],
               "path": [
                 "api",
                 "v1",
-                "search?query=to:{{nuevo_email}}"
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "query",
+                  "value": "to:{{nuevo_email}}"
+                }
               ]
             },
-            "description": "Lee el buzón de Mailpit. Sustituye la URL base por {{mailpit_url}} en la pestaña de la petición si Postman no la resuelve.\n\nEvidencia de que el worker consumió el trabajo de la cola."
+            "description": "Lee el buzón de Mailpit, no la API. Es la evidencia de que el worker consumió el trabajo de la cola y envió el correo.\n\nGuarda el token en la variable `verify_token` para la petición siguiente."
           },
           "response": [],
           "event": [
@@ -169,15 +177,37 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('el worker entregó el correo', () => pm.response.to.have.status(200));",
+                  "// El worker es asíncrono: la API respondió 202 sin esperarlo. Esta",
+                  "// petición se reintenta a sí misma hasta que el correo llegue.",
+                  "// Ejecutar con --delay-request para espaciar los intentos.",
+                  "const MAX_INTENTOS = 20;",
+                  "",
                   "const d = pm.response.json();",
-                  "pm.expect(d.messages, 'no llegó ningún correo').to.have.length.above(0);",
-                  "const id = d.messages[0].ID;",
+                  "const mensajes = (d && d.messages) || [];",
+                  "const intento = Number(pm.collectionVariables.get('mailpit_intento') || 0);",
+                  "",
+                  "if (mensajes.length === 0) {",
+                  "  if (intento < MAX_INTENTOS) {",
+                  "    pm.collectionVariables.set('mailpit_intento', intento + 1);",
+                  "    postman.setNextRequest('Leer token del correo (Mailpit)');",
+                  "    return;",
+                  "  }",
+                  "  pm.test('el worker entregó el correo', () =>",
+                  "    pm.expect.fail(`no llegó ningún correo tras ${MAX_INTENTOS} intentos`));",
+                  "  return;",
+                  "}",
+                  "",
+                  "pm.collectionVariables.set('mailpit_intento', 0);",
+                  "pm.test('el worker entregó el correo', () => pm.expect(mensajes.length).to.be.above(0));",
+                  "pm.test(`llegó en ${intento + 1} intento(s)`, () => pm.expect(true).to.be.true);",
+                  "",
+                  "const id = mensajes[0].ID;",
                   "pm.sendRequest(`${pm.collectionVariables.get('mailpit_url')}/api/v1/message/${id}`, (err, res) => {",
-                  "  const texto = res.json().Text;",
-                  "  const m = texto.match(/^[A-Za-z0-9_-]{40,}\\r?$/m);",
+                  "  pm.test('el cuerpo del correo se puede leer', () => pm.expect(err).to.be.null);",
+                  "  // El token va en una línea propia; el \\r del CRLF forma parte de ella.",
+                  "  const m = res.json().Text.match(/^([A-Za-z0-9_-]{40,})\\r?$/m);",
                   "  pm.test('el correo trae el token de verificación', () => pm.expect(m).to.not.be.null);",
-                  "  pm.collectionVariables.set('verify_token', m[1] || m[0].trim());",
+                  "  pm.collectionVariables.set('verify_token', m[1]);",
                   "});"
                 ]
               }
@@ -616,6 +646,11 @@
     {
       "key": "user_id",
       "value": "",
+      "type": "string"
+    },
+    {
+      "key": "mailpit_intento",
+      "value": "0",
       "type": "string"
     }
   ]

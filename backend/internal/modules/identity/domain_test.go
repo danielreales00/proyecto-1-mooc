@@ -20,9 +20,9 @@ func TestRegisterInputValidateAcumulaTodosLosErrores(t *testing.T) {
 		t.Fatalf("se esperaban 3 errores, llegaron %d: %v", len(errs), errs)
 	}
 	want := map[string]bool{
-		"email.invalid":       false,
-		"password.too_short":  false,
-		"full_name.required":  false,
+		"email.invalid":      false,
+		"password.too_short": false,
+		"full_name.required": false,
 	}
 	for _, e := range errs {
 		if _, ok := want[e.Code]; !ok {

@@ -18,6 +18,12 @@ make seed    # datos sintéticos (§10.1)
 Importar ambos archivos en Postman, seleccionar el entorno **MOOC local** y
 ejecutar las carpetas en orden con el Collection Runner.
 
+Sin Postman, la colección también se ejecuta desde la línea de órdenes:
+
+```bash
+make postman     # newman en un contenedor; es lo que corre el CI
+```
+
 ## Estructura
 
 Una carpeta por segmento, en el orden en que se graba el video:
@@ -46,6 +52,9 @@ endpoints implementados.
   carpetas se ejecutan en orden y no requieren copiar y pegar a mano.
 - El correo de registro se genera con marca de tiempo en el script previo, para
   que la demo se pueda repetir sin limpiar la base.
+- La lectura del correo en Mailpit **se reintenta a sí misma** hasta 20 veces:
+  el worker es asíncrono y la API respondió 202 sin esperarlo. Por eso
+  `make postman` pasa `--delay-request 300`.
 - Cuando un módulo entre, su carpeta se llena en el mismo PR. Un requisito no
   está terminado si no aparece aquí (ver `arquitectura/alcance-entrega-1.md`).
 

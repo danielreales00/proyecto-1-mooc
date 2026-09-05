@@ -109,7 +109,7 @@ func (s *fakeStore) ConsumeOneTimeToken(_ context.Context, _ dbx.DB, purpose str
 	return t, nil
 }
 
-func (s *fakeStore) InsertSession(context.Context, dbx.DB, Session) error         { return nil }
+func (s *fakeStore) InsertSession(context.Context, dbx.DB, Session) error              { return nil }
 func (s *fakeStore) RevokeSession(context.Context, dbx.DB, uuid.UUID, time.Time) error { return nil }
 
 type fakeSessions struct{ porToken map[string]Session }

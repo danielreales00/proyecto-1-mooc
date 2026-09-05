@@ -62,14 +62,14 @@ func TestHashUsaSalDistintaCadaVez(t *testing.T) {
 
 func TestVerifyRechazaHashesMalformados(t *testing.T) {
 	casos := map[string]string{
-		"vacío":                  "",
-		"sin formato PHC":        "no-es-un-hash",
-		"algoritmo distinto":     "$argon2i$v=19$m=65536,t=3,p=2$c2FsdA$aGFzaA",
-		"versión desconocida":    "$argon2id$v=99$m=65536,t=3,p=2$c2FsdA$aGFzaA",
-		"parámetros ilegibles":   "$argon2id$v=19$m=xx,t=yy,p=zz$c2FsdA$aGFzaA",
-		"sal no es base64":       "$argon2id$v=19$m=65536,t=3,p=2$!!!$aGFzaA",
-		"hash no es base64":      "$argon2id$v=19$m=65536,t=3,p=2$c2FsdA$!!!",
-		"le faltan componentes":  "$argon2id$v=19$m=65536,t=3,p=2$c2FsdA",
+		"vacío":                 "",
+		"sin formato PHC":       "no-es-un-hash",
+		"algoritmo distinto":    "$argon2i$v=19$m=65536,t=3,p=2$c2FsdA$aGFzaA",
+		"versión desconocida":   "$argon2id$v=99$m=65536,t=3,p=2$c2FsdA$aGFzaA",
+		"parámetros ilegibles":  "$argon2id$v=19$m=xx,t=yy,p=zz$c2FsdA$aGFzaA",
+		"sal no es base64":      "$argon2id$v=19$m=65536,t=3,p=2$!!!$aGFzaA",
+		"hash no es base64":     "$argon2id$v=19$m=65536,t=3,p=2$c2FsdA$!!!",
+		"le faltan componentes": "$argon2id$v=19$m=65536,t=3,p=2$c2FsdA",
 	}
 	for nombre, encoded := range casos {
 		t.Run(nombre, func(t *testing.T) {

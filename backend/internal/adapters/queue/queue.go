@@ -61,6 +61,9 @@ func ParseQueues(spec string) map[string]int {
 		if !ok {
 			continue
 		}
+		// Recortar los dos lados: "critical = 6" es una forma razonable de
+		// escribirlo en un .env y no debe descartarse en silencio.
+		name, weight = trim(name), trim(weight)
 		w := 0
 		for _, r := range weight {
 			if r < '0' || r > '9' {

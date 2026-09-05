@@ -135,6 +135,9 @@ jobs:
       - name: Smoke de extremo a extremo
         run: make smoke
 
+      - name: Colección de la demostración (newman)
+        run: make postman
+
       - name: Escalamiento horizontal (CE-01)
         run: |
           docker compose up -d --scale api=3 --scale worker=3 --no-recreate --wait
