@@ -1,0 +1,23 @@
+# Entorno
+.env
+*.local
+
+# Go
+/backend/bin/
+/backend/tmp/
+*.test
+coverage.out
+
+# Datos de contenedores
+/data/
+/backups/
+
+# Artefactos de pruebas
+/scripts/out/
+*.log
+
+# Editores
+.vscode/
+.idea/
+.DS_Store
+
