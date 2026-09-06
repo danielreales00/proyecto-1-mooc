@@ -1,33 +1,48 @@
 # Contrato de la API (RT-05). Es entregable del proyecto (enunciado §8).
 #
-# Cubre lo implementado más los endpoints ya decididos cuyo contrato no debe
-# cambiar al implementarlos. Los endpoints marcados con `x-estado: planificado`
-# están acordados pero todavía no responden.
+# Cubre las 88 operaciones del inventario de arquitectura/disenos/api-v1.md.
+# Las que aún no responden llevan `x-estado: planificado`; su contrato ya está
+# acordado y no debe cambiar al implementarlas.
 #
-# El inventario completo de los 84 endpoints está en
-# arquitectura/disenos/api-v1.md; se van trasladando aquí módulo a módulo.
+# Se valida en CI con redocly. La API lo sirve en GET /openapi.yaml.
 
 openapi: 3.1.0
 
 info:
   title: Plataforma MOOC — API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     Plataforma web de cursos masivos abiertos en línea.
 
-    **Convenciones transversales**
+    ## Convenciones transversales
 
-    - Autenticación por token opaco: `Authorization: Bearer <token>`.
-      La sesión se resuelve contra Redis en cada petición, de modo que
-      revocarla surte efecto de inmediato (ADR-0006).
-    - Todos los errores usan `application/problem+json` (RFC 9457), con
-      `trace_id` para correlacionar con los logs y un arreglo `errors` que
-      lista **todos** los incumplimientos, no el primero (ADR-0009).
-    - Los endpoints que crean o mutan de forma no repetible exigen
-      `Idempotency-Key` (ADR-0008).
-    - Paginación por cursor, nunca por desplazamiento.
-    - Los binarios no pasan por la API: se suben y descargan con credenciales
+    - **Autenticación.** Token opaco en `Authorization: Bearer <token>`. La
+      sesión se resuelve contra Redis en cada petición, así que revocarla surte
+      efecto de inmediato (ADR-0006).
+    - **Errores.** Siempre `application/problem+json` (RFC 9457), con
+      `trace_id` para correlacionar con logs y trazas, y un arreglo `errors`
+      que lista **todos** los incumplimientos, no el primero (ADR-0009).
+    - **Idempotencia.** Los endpoints marcados exigen `Idempotency-Key`.
+      Repetir la petición con la misma clave y el mismo cuerpo devuelve la
+      respuesta guardada con `Idempotency-Replayed: true`; con cuerpo distinto,
+      `422` (ADR-0008).
+    - **Concurrencia.** Los recursos editables devuelven `ETag`, y su `PATCH`
+      exige `If-Match`. Si no coincide, `412` con el estado del servidor.
+    - **Paginación.** Siempre por cursor opaco, nunca por desplazamiento.
+    - **Binarios.** No pasan por la API: se suben y descargan con credenciales
       firmadas contra el almacenamiento de objetos (ADR-0005).
+
+    ## Invariantes que este contrato hace cumplir
+
+    1. Una versión de curso publicada es **inmutable** (ADR-0007).
+    2. El progreso se ancla a `stable_id`, no al `id` de fila, para sobrevivir
+       a una versión nueva (ADR-0007).
+    3. **La clave correcta de un quiz nunca sale del servidor** por las rutas
+       del estudiante (ADR-0013).
+    4. El porcentaje de progreso **lo calcula el servidor**; uno enviado por el
+       cliente se rechaza con `422` y se audita (ADR-0012).
+    5. La insignia se emite **una sola vez** por inscripción, y su URL pública
+       no expone el correo (ADR-0008, CA-07).
   license:
     name: Uso académico
 
@@ -36,25 +51,43 @@ servers:
     description: Desarrollo local (Docker Compose)
 
 tags:
-  - name: identidad
-    description: Registro, verificación de correo y sesiones (RF-01)
-  - name: medios
-    description: Entrega de contenido multimedia (RF-06, RF-07)
   - name: operación
-    description: Salud del servicio
+    description: Salud y contrato del servicio
+  - name: identidad
+    description: Registro, verificación, sesiones y contraseñas (RF-01)
+  - name: administración
+    description: Usuarios, roles, sesiones, auditoría y cola (RF-02)
+  - name: autoría
+    description: Cursos, versiones, jerarquía y publicación (RF-03, RF-04)
+  - name: medios
+    description: Carga, procesamiento y entrega de binarios (RF-05, RF-06, RF-07)
+  - name: catálogo
+    description: Búsqueda pública de cursos (RF-10)
+  - name: inscripción
+    description: Inscripción, retiro y consumo de contenido (RF-10)
+  - name: evaluación
+    description: Quizzes e intentos (RF-08)
+  - name: progreso
+    description: Evidencias, cálculo y aprobación (RF-09)
+  - name: insignias
+    description: Emisión y verificación pública (RF-09)
 
 security:
   - sesion: []
 
 paths:
+  # ==========================================================================
+  # Operación
+  # ==========================================================================
   /openapi.yaml:
     get:
       tags: [operación]
       operationId: getOpenApiSpec
       summary: El contrato de esta API
       description: |
-        La API sirve su propio contrato. Si el archivo no está en el árbol de
-        fuentes, el binario no compila: así el contrato no se queda atrás.
+        La API sirve su propio contrato, empotrado en el binario. Si el archivo
+        no está en el árbol de fuentes, no compila: así el contrato no se queda
+        atrás del código.
       security: []
       responses:
         "200":
@@ -100,19 +133,38 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Readiness" }
 
+  /metrics:
+    get:
+      tags: [operación]
+      operationId: getMetrics
+      x-estado: planificado
+      summary: Métricas en formato Prometheus
+      description: |
+        Expuesto solo a la red interna. Incluye `jobs_dead_letter_total`, que
+        es lo que dispara la alerta que exige el enunciado §6.
+      security: []
+      responses:
+        "200":
+          description: Métricas
+          content:
+            text/plain:
+              schema: { type: string }
+
+  # ==========================================================================
+  # Identidad (RF-01)
+  # ==========================================================================
   /api/v1/auth/register:
     post:
       tags: [identidad]
       operationId: registerStudent
       summary: Registro público de estudiante
       description: |
-        Solo crea estudiantes: los profesores se crean por administración
-        (RF-01).
+        Solo crea estudiantes: los profesores se crean por administración.
 
-        Responde `202` sin esperar al worker que envía el correo de
-        verificación. El trabajo se registra en PostgreSQL dentro de la misma
-        transacción que el usuario y se publica en la cola después del commit,
-        de modo que un fallo de Redis no pierde el correo (ADR-0004).
+        Responde `202` sin esperar al worker que envía el correo. El trabajo se
+        registra en PostgreSQL dentro de la misma transacción que el usuario y
+        se publica en la cola después del commit, de modo que un fallo de Redis
+        no pierde el correo (ADR-0004).
       security: []
       requestBody:
         required: true
@@ -125,12 +177,9 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/RegisterResponse" }
-        "409":
-          $ref: "#/components/responses/Conflicto"
-        "422":
-          $ref: "#/components/responses/Validacion"
-        "429":
-          $ref: "#/components/responses/DemasiadasSolicitudes"
+        "409": { $ref: "#/components/responses/Conflicto" }
+        "422": { $ref: "#/components/responses/Validacion" }
+        "429": { $ref: "#/components/responses/DemasiadasSolicitudes" }
 
   /api/v1/auth/verify-email:
     post:
@@ -158,11 +207,30 @@ paths:
                 properties:
                   verified: { type: boolean, const: true }
                   detail: { type: string }
-        "422":
-          description: Token inválido, ya consumido o expirado
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
+        "422": { $ref: "#/components/responses/Validacion" }
+
+  /api/v1/auth/resend-verification:
+    post:
+      tags: [identidad]
+      operationId: resendVerification
+      x-estado: planificado
+      summary: Reenviar el correo de verificación
+      description: |
+        Limitado a 3 por hora y por correo. Responde `202` exista o no la
+        cuenta, para no revelar qué correos están registrados.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "202": { description: "Si la cuenta existe y no está verificada, se encoló el correo" }
+        "429": { $ref: "#/components/responses/DemasiadasSolicitudes" }
 
   /api/v1/auth/login:
     post:
@@ -170,9 +238,11 @@ paths:
       operationId: login
       summary: Iniciar sesión
       description: |
-        Devuelve un token opaco de sesión. El mismo `401` y el mismo mensaje se
-        usan para usuario inexistente, contraseña incorrecta, cuenta sin
-        verificar y cuenta suspendida: no se revela qué correos existen.
+        Devuelve un token opaco de sesión.
+
+        El mismo `401` y el mismo mensaje para usuario inexistente, contraseña
+        incorrecta, cuenta sin verificar y cuenta suspendida: no se revela qué
+        correos existen ni en qué estado están. Limitado a 5 por minuto e IP.
       security: []
       requestBody:
         required: true
@@ -190,12 +260,9 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/LoginResponse" }
-        "401":
-          $ref: "#/components/responses/NoAutenticado"
-        "422":
-          $ref: "#/components/responses/Validacion"
-        "429":
-          $ref: "#/components/responses/DemasiadasSolicitudes"
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "422": { $ref: "#/components/responses/Validacion" }
+        "429": { $ref: "#/components/responses/DemasiadasSolicitudes" }
 
   /api/v1/auth/logout:
     post:
@@ -206,10 +273,55 @@ paths:
         Borra la sesión de Redis. La petición siguiente con ese token responde
         `401`, sin ventana de gracia.
       responses:
-        "204":
-          description: Sesión revocada
-        "401":
-          $ref: "#/components/responses/NoAutenticado"
+        "204": { description: Sesión revocada }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+
+  /api/v1/auth/password/forgot:
+    post:
+      tags: [identidad]
+      operationId: forgotPassword
+      x-estado: planificado
+      summary: Solicitar el restablecimiento de la contraseña
+      description: |
+        Responde `202` **siempre**, exista o no el correo. Limitado a 3 por
+        hora y por correo.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "202": { description: "Si la cuenta existe, se encoló el correo" }
+        "429": { $ref: "#/components/responses/DemasiadasSolicitudes" }
+
+  /api/v1/auth/password/reset:
+    post:
+      tags: [identidad]
+      operationId: resetPassword
+      x-estado: planificado
+      summary: Restablecer la contraseña con el token recibido
+      description: |
+        Consume el token y **revoca todas las sesiones del usuario**: si alguien
+        había entrado con la contraseña anterior, pierde el acceso.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: { type: string, minLength: 1 }
+                password: { type: string, format: password, minLength: 10, maxLength: 128 }
+      responses:
+        "204": { description: Contraseña cambiada y sesiones revocadas }
+        "422": { $ref: "#/components/responses/Validacion" }
 
   /api/v1/me:
     get:
@@ -222,25 +334,1316 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/User" }
-        "401":
-          $ref: "#/components/responses/NoAutenticado"
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+    patch:
+      tags: [identidad]
+      operationId: updateCurrentUser
+      x-estado: planificado
+      summary: Actualizar el perfil propio
+      description: En la Entrega 1 solo el nombre; el correo no cambia.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                full_name: { type: string, minLength: 1, maxLength: 120 }
+      responses:
+        "200":
+          description: Perfil actualizado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "412": { $ref: "#/components/responses/PrecondicionFallida" }
+        "422": { $ref: "#/components/responses/Validacion" }
+
+  /api/v1/me/password:
+    post:
+      tags: [identidad]
+      operationId: changeOwnPassword
+      x-estado: planificado
+      summary: Cambiar la contraseña propia
+      description: |
+        Exige la contraseña actual. Revoca las demás sesiones del usuario y
+        conserva la que hace la petición.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              properties:
+                current_password: { type: string, format: password }
+                new_password: { type: string, format: password, minLength: 10, maxLength: 128 }
+      responses:
+        "204": { description: Contraseña cambiada }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "422": { $ref: "#/components/responses/Validacion" }
+
+  /api/v1/me/sessions:
+    get:
+      tags: [identidad]
+      operationId: listOwnSessions
+      x-estado: planificado
+      summary: Sesiones propias abiertas
+      responses:
+        "200":
+          description: Sesiones
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Session" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+
+  /api/v1/me/sessions/{sessionId}:
+    delete:
+      tags: [identidad]
+      operationId: revokeOwnSession
+      x-estado: planificado
+      summary: Revocar una sesión propia
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204": { description: "Sesión revocada, con efecto inmediato" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "404": { $ref: "#/components/responses/NoEncontrado" }
+
+  # ==========================================================================
+  # Administración (RF-02)
+  # ==========================================================================
+  /api/v1/admin/users:
+    get:
+      tags: [administración]
+      operationId: listUsers
+      x-estado: planificado
+      summary: Listar usuarios
+      parameters:
+        - { name: role, in: query, schema: { type: string, enum: [admin, teacher, student] } }
+        - { name: status, in: query, schema: { type: string, enum: [active, suspended, deleted] } }
+        - { name: q, in: query, description: Búsqueda por nombre o correo, schema: { type: string } }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Página de usuarios
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserPage" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+    post:
+      tags: [administración]
+      operationId: createUser
+      x-estado: planificado
+      summary: Crear un profesor o administrador
+      description: |
+        La única vía para crear cuentas que no sean de estudiante (RF-01).
+        Envía una invitación por correo; la cuenta nace sin contraseña.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, full_name, role]
+              properties:
+                email: { type: string, format: email }
+                full_name: { type: string, minLength: 1, maxLength: 120 }
+                role: { type: string, enum: [admin, teacher] }
+      responses:
+        "201":
+          description: Cuenta creada e invitación encolada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/Conflicto" }
+        "422": { $ref: "#/components/responses/Validacion" }
+
+  /api/v1/admin/users/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    get:
+      tags: [administración]
+      operationId: getUser
+      x-estado: planificado
+      summary: Ver un usuario
+      responses:
+        "200":
+          description: Usuario
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "404": { $ref: "#/components/responses/NoEncontrado" }
+    patch:
+      tags: [administración]
+      operationId: updateUser
+      x-estado: planificado
+      summary: Cambiar el rol o el estado de un usuario
+      description: |
+        Responde `409 last_admin` al intentar suspender, eliminar o degradar al
+        **último administrador activo**: el sistema no puede quedarse sin quien
+        lo administre (RF-02). Toda transición queda auditada.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role: { type: string, enum: [admin, teacher, student] }
+                status: { type: string, enum: [active, suspended, deleted] }
+      responses:
+        "200":
+          description: Usuario actualizado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409":
+          description: Se intentó dejar el sistema sin administrador activo
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "412": { $ref: "#/components/responses/PrecondicionFallida" }
+
+  /api/v1/admin/users/{userId}/sessions:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    get:
+      tags: [administración]
+      operationId: listUserSessions
+      x-estado: planificado
+      summary: Sesiones abiertas de un usuario
+      responses:
+        "200":
+          description: Sesiones
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Session" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+    delete:
+      tags: [administración]
+      operationId: revokeAllUserSessions
+      x-estado: planificado
+      summary: Revocar todas las sesiones de un usuario
+      description: |
+        Efecto inmediato: la petición siguiente de ese usuario responde `401`,
+        sin esperar a que la sesión expire. Es lo que el segmento 1 de la
+        demostración tiene que evidenciar.
+      responses:
+        "204": { description: Sesiones revocadas }
+        "403": { $ref: "#/components/responses/Prohibido" }
+
+  /api/v1/admin/audit:
+    get:
+      tags: [administración]
+      operationId: listAuditEvents
+      x-estado: planificado
+      summary: Consultar el rastro de auditoría
+      description: |
+        El rastro es inmutable: PostgreSQL rechaza cualquier `UPDATE` o
+        `DELETE` sobre él mediante un trigger (ADR-0003).
+      parameters:
+        - { name: actor_id, in: query, schema: { type: string, format: uuid } }
+        - { name: action, in: query, schema: { type: string } }
+        - { name: entity_type, in: query, schema: { type: string } }
+        - { name: entity_id, in: query, schema: { type: string, format: uuid } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Página de eventos
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuditEventPage" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+
+  /api/v1/admin/jobs:
+    get:
+      tags: [administración]
+      operationId: listJobs
+      x-estado: planificado
+      summary: Estado de la cola, los reintentos y la DLQ
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [queued, running, succeeded, failed, dead] } }
+        - { name: type, in: query, schema: { type: string } }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Página de trabajos
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRunPage" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+
+  /api/v1/admin/jobs/{jobId}:requeue:
+    post:
+      tags: [administración]
+      operationId: requeueJob
+      x-estado: planificado
+      summary: Reencolar un trabajo desde la DLQ
+      description: |
+        Reencola **con la misma `job_key`** que tenía el trabajo original, que
+        es exactamente lo que el segmento 4 de la demostración debe evidenciar.
+        Gracias al reclamo atómico, si el trabajo ya se completó por otra vía,
+        el reencolado no produce una segunda salida (ADR-0008).
+      parameters:
+        - { name: jobId, in: path, required: true, schema: { type: string } }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "202":
+          description: Trabajo reencolado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRun" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "404": { $ref: "#/components/responses/NoEncontrado" }
+        "409":
+          description: El trabajo no está en la DLQ
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  # ==========================================================================
+  # Autoría (RF-03, RF-04)
+  # ==========================================================================
+  /api/v1/courses:
+    get:
+      tags: [autoría]
+      operationId: listCourses
+      x-estado: planificado
+      summary: Listar los cursos de los que se es autor
+      description: Un profesor ve los suyos; un administrador, todos.
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [draft, published, unpublished, archived] } }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Página de cursos
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CoursePage" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+    post:
+      tags: [autoría]
+      operationId: createCourse
+      x-estado: planificado
+      summary: Crear un curso
+      description: Crea el curso y su versión 1 en estado `draft`.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CourseInput" }
+      responses:
+        "201":
+          description: Curso creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Course" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/Conflicto" }
+        "422": { $ref: "#/components/responses/Validacion" }
+
+  /api/v1/courses/{courseId}:
+    parameters:
+      - $ref: "#/components/parameters/CourseId"
+    get:
+      tags: [autoría]
+      operationId: getCourse
+      x-estado: planificado
+      summary: Ver un curso
+      responses:
+        "200":
+          description: Curso
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Course" }
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "404": { $ref: "#/components/responses/NoEncontrado" }
+    patch:
+      tags: [autoría]
+      operationId: updateCourse
+      x-estado: planificado
+      summary: Actualizar los metadatos del curso
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CourseInput" }
+      responses:
+        "200":
+          description: Curso actualizado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Course" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "412": { $ref: "#/components/responses/PrecondicionFallida" }
+        "422": { $ref: "#/components/responses/Validacion" }
+    delete:
+      tags: [autoría]
+      operationId: deleteCourse
+      x-estado: planificado
+      summary: Eliminar un curso
+      description: Solo si nunca se publicó. Un curso con historia no se borra.
+      responses:
+        "204": { description: Curso eliminado }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409":
+          description: El curso tuvo alguna versión publicada
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /api/v1/courses/{courseId}/versions:
+    parameters:
+      - $ref: "#/components/parameters/CourseId"
+    get:
+      tags: [autoría]
+      operationId: listCourseVersions
+      x-estado: planificado
+      summary: Listar las versiones del curso
+      responses:
+        "200":
+          description: Versiones
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/CourseVersion" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+    post:
+      tags: [autoría]
+      operationId: createCourseVersion
+      x-estado: planificado
+      summary: Crear una versión nueva a partir de la vigente
+      description: |
+        Clona la versión vigente a un borrador con `version_number + 1`,
+        **conservando los `stable_id`** de módulos, unidades y recursos. Eso es
+        lo que hace que el progreso de los estudiantes sobreviva a la
+        publicación (ADR-0007).
+
+        Los binarios no se duplican: los recursos de la versión nueva apuntan
+        al mismo `asset_id`.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201":
+          description: Borrador creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CourseVersion" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409":
+          description: Ya existe un borrador abierto para este curso
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /api/v1/courses/{courseId}/versions/{versionNumber}:
+    parameters:
+      - $ref: "#/components/parameters/CourseId"
+      - $ref: "#/components/parameters/VersionNumber"
+    get:
+      tags: [autoría]
+      operationId: getCourseVersion
+      x-estado: planificado
+      summary: Árbol completo de una versión
+      responses:
+        "200":
+          description: Curso, módulos, unidades y recursos
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CourseVersionTree" }
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "404": { $ref: "#/components/responses/NoEncontrado" }
+
+  /api/v1/courses/{courseId}/versions/{versionNumber}/preview:
+    parameters:
+      - $ref: "#/components/parameters/CourseId"
+      - $ref: "#/components/parameters/VersionNumber"
+    get:
+      tags: [autoría]
+      operationId: previewCourseVersion
+      x-estado: planificado
+      summary: Previsualizar la versión como la vería un estudiante
+      description: |
+        Devuelve el árbol con `content_html` ya renderizado desde el Markdown
+        canónico y **sanitizado** con lista blanca (ADR-0014). El HTML crudo se
+        descarta en el parseo, no en la sanitización: dos barreras contra XSS.
+      responses:
+        "200":
+          description: Previsualización
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CourseVersionTree" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+
+  /api/v1/courses/{courseId}/versions/{versionNumber}:validate:
+    parameters:
+      - $ref: "#/components/parameters/CourseId"
+      - $ref: "#/components/parameters/VersionNumber"
+    post:
+      tags: [autoría]
+      operationId: validateCourseVersion
+      x-estado: planificado
+      summary: Comprobar si la versión se puede publicar, sin publicarla
+      description: |
+        Mismas reglas que `:publish`, pero sin efecto. Devuelve `200` con la
+        lista de incumplimientos, vacía si todo está en orden.
+      responses:
+        "200":
+          description: Resultado de la validación
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PublicationCheck" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+
+  /api/v1/courses/{courseId}/versions/{versionNumber}:publish:
+    parameters:
+      - $ref: "#/components/parameters/CourseId"
+      - $ref: "#/components/parameters/VersionNumber"
+    post:
+      tags: [autoría]
+      operationId: publishCourseVersion
+      x-estado: planificado
+      summary: Publicar la versión
+      description: |
+        **No falla al primer error**: recorre todas las reglas y devuelve la
+        lista completa de incumplimientos en un solo `422` (CA-01).
+
+        Reglas comprobadas: metadatos completos, estructura mínima
+        curso → módulo → unidad → recurso visible, ningún recurso visible fuera
+        de estado `ready`, criterios de aprobación definidos, todo quiz con al
+        menos una pregunta y cada pregunta con al menos una opción correcta, y
+        todo iframe apuntando a un dominio de la lista blanca.
+
+        Al publicar, la versión pasa a ser **inmutable**: un trigger de
+        PostgreSQL rechaza cualquier modificación de su árbol (ADR-0007).
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Versión publicada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CourseVersion" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "422":
+          description: |
+            La versión no cumple los requisitos. `errors` trae **todos** los
+            incumplimientos, no el primero.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /api/v1/courses/{courseId}/versions/{versionNumber}:unpublish:
+    parameters:
+      - $ref: "#/components/parameters/CourseId"
+      - $ref: "#/components/parameters/VersionNumber"
+    post:
+      tags: [autoría]
+      operationId: unpublishCourseVersion
+      x-estado: planificado
+      summary: Despublicar la versión para poder editarla
+      description: |
+        En la Entrega 1, editar un curso publicado exige despublicarlo, como
+        permite el §5.1 del enunciado.
+
+        `unpublished` bloquea inscripciones nuevas, pero **conserva las
+        existentes y su progreso**.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Versión despublicada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CourseVersion" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/Conflicto" }
+
+  /api/v1/versions/{versionId}/modules:
+    parameters:
+      - $ref: "#/components/parameters/VersionId"
+    post:
+      tags: [autoría]
+      operationId: createModule
+      x-estado: planificado
+      summary: Añadir un módulo a la versión
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NodeInput" }
+      responses:
+        "201":
+          description: Módulo creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Module" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/VersionInmutable" }
+        "422": { $ref: "#/components/responses/Validacion" }
+
+  /api/v1/versions/{versionId}/modules:reorder:
+    parameters:
+      - $ref: "#/components/parameters/VersionId"
+    post:
+      tags: [autoría]
+      operationId: reorderModules
+      x-estado: planificado
+      summary: Reordenar los módulos de la versión
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReorderInput" }
+      responses:
+        "204": { description: Orden aplicado }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/VersionInmutable" }
+        "422": { $ref: "#/components/responses/Validacion" }
+
+  /api/v1/modules/{moduleId}:
+    parameters:
+      - $ref: "#/components/parameters/ModuleId"
+    patch:
+      tags: [autoría]
+      operationId: updateModule
+      x-estado: planificado
+      summary: Actualizar un módulo
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NodeInput" }
+      responses:
+        "200":
+          description: Módulo actualizado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Module" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/VersionInmutable" }
+        "412": { $ref: "#/components/responses/PrecondicionFallida" }
+    delete:
+      tags: [autoría]
+      operationId: deleteModule
+      x-estado: planificado
+      summary: Eliminar un módulo
+      responses:
+        "204": { description: Módulo eliminado }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/VersionInmutable" }
+
+  /api/v1/modules/{moduleId}/units:
+    parameters:
+      - $ref: "#/components/parameters/ModuleId"
+    post:
+      tags: [autoría]
+      operationId: createUnit
+      x-estado: planificado
+      summary: Añadir una unidad al módulo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NodeInput" }
+      responses:
+        "201":
+          description: Unidad creada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Unit" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/VersionInmutable" }
+
+  /api/v1/modules/{moduleId}/units:reorder:
+    parameters:
+      - $ref: "#/components/parameters/ModuleId"
+    post:
+      tags: [autoría]
+      operationId: reorderUnits
+      x-estado: planificado
+      summary: Reordenar las unidades del módulo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReorderInput" }
+      responses:
+        "204": { description: Orden aplicado }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/VersionInmutable" }
+
+  /api/v1/units/{unitId}:
+    parameters:
+      - $ref: "#/components/parameters/UnitId"
+    patch:
+      tags: [autoría]
+      operationId: updateUnit
+      x-estado: planificado
+      summary: Actualizar una unidad
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NodeInput" }
+      responses:
+        "200":
+          description: Unidad actualizada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Unit" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/VersionInmutable" }
+        "412": { $ref: "#/components/responses/PrecondicionFallida" }
+    delete:
+      tags: [autoría]
+      operationId: deleteUnit
+      x-estado: planificado
+      summary: Eliminar una unidad
+      responses:
+        "204": { description: Unidad eliminada }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/VersionInmutable" }
+
+  /api/v1/units/{unitId}/resources:
+    parameters:
+      - $ref: "#/components/parameters/UnitId"
+    post:
+      tags: [autoría]
+      operationId: createResource
+      x-estado: planificado
+      summary: Añadir un recurso a la unidad
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResourceInput" }
+      responses:
+        "201":
+          description: Recurso creado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Resource" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/VersionInmutable" }
+        "422": { $ref: "#/components/responses/Validacion" }
+
+  /api/v1/units/{unitId}/resources:reorder:
+    parameters:
+      - $ref: "#/components/parameters/UnitId"
+    post:
+      tags: [autoría]
+      operationId: reorderResources
+      x-estado: planificado
+      summary: Reordenar los recursos de la unidad
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReorderInput" }
+      responses:
+        "204": { description: Orden aplicado }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/VersionInmutable" }
+
+  /api/v1/resources/{resourceId}:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    patch:
+      tags: [autoría]
+      operationId: updateResource
+      x-estado: planificado
+      summary: Actualizar los atributos de un recurso
+      description: Título, visibilidad, obligatoriedad y posibilidad de descarga.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResourceInput" }
+      responses:
+        "200":
+          description: Recurso actualizado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Resource" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/VersionInmutable" }
+        "412": { $ref: "#/components/responses/PrecondicionFallida" }
+    delete:
+      tags: [autoría]
+      operationId: deleteResource
+      x-estado: planificado
+      summary: Eliminar un recurso
+      responses:
+        "204": { description: Recurso eliminado }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/VersionInmutable" }
+
+  /api/v1/resources/{resourceId}/content:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    patch:
+      tags: [autoría]
+      operationId: saveResourceContent
+      x-estado: planificado
+      summary: Guardar el contenido del recurso (autosave)
+      description: |
+        El servidor **no guarda lo que recibe**: parsea el Markdown, lo valida
+        contra el subconjunto del MVP y lo vuelve a serializar en su forma
+        canónica (ADR-0014). Guardar dos veces lo mismo produce byte a byte lo
+        mismo, y por eso el `ETag` es estable y el autosave no genera revisiones
+        falsas.
+
+        `If-Match` es obligatorio: si el `ETag` no coincide, responde `412` con
+        el contenido del servidor para que el editor resuelva el conflicto.
+
+        Las referencias a binarios se escriben como `asset://{asset_id}`, nunca
+        como URL firmada: las firmas caducan.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content_md]
+              properties:
+                content_md: { type: string }
+      responses:
+        "200":
+          description: Contenido guardado, ya normalizado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResourceContent" }
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/VersionInmutable" }
+        "412": { $ref: "#/components/responses/PrecondicionFallida" }
+        "422":
+          description: El Markdown usa sintaxis fuera del subconjunto del MVP
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /api/v1/resources/{resourceId}/revisions:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [autoría]
+      operationId: listResourceRevisions
+      x-estado: planificado
+      summary: Últimas 20 revisiones del contenido
+      description: Es la recuperación que exige RF-04 y la base del historial de RO-03.
+      responses:
+        "200":
+          description: Revisiones, de la más reciente a la más antigua
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/ContentRevision" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+
+  /api/v1/resources/{resourceId}/revisions/{revisionId}:restore:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+      - { name: revisionId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [autoría]
+      operationId: restoreResourceRevision
+      x-estado: planificado
+      summary: Restaurar una revisión anterior
+      description: Restaurar crea una revisión nueva; no borra la historia.
+      responses:
+        "200":
+          description: Contenido restaurado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResourceContent" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/VersionInmutable" }
+
+  # ==========================================================================
+  # Medios (RF-05, RF-06, RF-07)
+  # ==========================================================================
+  /api/v1/assets:init:
+    post:
+      tags: [medios]
+      operationId: initAssetUpload
+      x-estado: planificado
+      summary: Iniciar una carga multipart directa al almacenamiento
+      description: |
+        Crea el asset y la carga multipart, y devuelve **URLs prefirmadas por
+        parte**. Los bytes nunca pasan por la API (enunciado §4).
+
+        Las URLs se firman a 24 horas, que es lo que exige la reanudación de
+        RF-05. El cliente declara `sha256` y tamaño; el servidor los
+        **recalcula leyendo del bucket** al completar, y rechaza el asset si no
+        coinciden. La integridad la verifica el servidor, no la promesa del
+        cliente.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filename, content_type, size_bytes, sha256, kind]
+              properties:
+                filename: { type: string }
+                content_type: { type: string }
+                size_bytes: { type: integer, format: int64, maximum: 5368709120 }
+                sha256: { type: string, pattern: "^[a-f0-9]{64}$" }
+                kind: { type: string, enum: [video, audio, image, pdf, slides, file] }
+      responses:
+        "201":
+          description: Carga iniciada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadTicket" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "413": { $ref: "#/components/responses/DemasiadoGrande" }
+        "415": { $ref: "#/components/responses/TipoNoSoportado" }
+        "422": { $ref: "#/components/responses/Validacion" }
+
+  /api/v1/assets/{assetId}/upload:
+    parameters:
+      - $ref: "#/components/parameters/AssetId"
+    get:
+      tags: [medios]
+      operationId: getUploadState
+      x-estado: planificado
+      summary: Partes ya recibidas de una carga en curso
+      description: |
+        **Esto es lo que permite reanudar.** Tras una interrupción, el cliente
+        consulta qué partes llegaron y sube solo las que faltan, dentro de la
+        ventana de 24 horas (RNF-07). Es el segmento 3 de la demostración.
+      responses:
+        "200":
+          description: Estado de la carga
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadState" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "404": { $ref: "#/components/responses/NoEncontrado" }
+
+  /api/v1/assets/{assetId}/upload/parts:
+    parameters:
+      - $ref: "#/components/parameters/AssetId"
+    post:
+      tags: [medios]
+      operationId: refreshUploadParts
+      x-estado: planificado
+      summary: Renovar las URLs firmadas de las partes que faltan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [parts]
+              properties:
+                parts:
+                  type: array
+                  items: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: URLs renovadas
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  parts:
+                    type: array
+                    items: { $ref: "#/components/schemas/UploadPartUrl" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/Conflicto" }
+
+  /api/v1/assets/{assetId}:complete:
+    parameters:
+      - $ref: "#/components/parameters/AssetId"
+    post:
+      tags: [medios]
+      operationId: completeAssetUpload
+      x-estado: planificado
+      summary: Completar la carga y encolar el procesamiento
+      description: |
+        Cierra la multipart y encola `media.probe`. Responde `202`: la API no
+        espera al worker (CA-02).
+
+        A partir de aquí el asset recorre
+        `uploaded → scanning → clean → processing → ready`, y el original se
+        conserva intacto pase lo que pase.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [parts]
+              properties:
+                parts:
+                  type: array
+                  items:
+                    type: object
+                    required: [part_number, etag]
+                    properties:
+                      part_number: { type: integer, minimum: 1 }
+                      etag: { type: string }
+      responses:
+        "202":
+          description: Carga completada, procesamiento encolado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Asset" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/Conflicto" }
+        "422":
+          description: El checksum o el tamaño no coinciden con lo declarado
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /api/v1/assets/{assetId}:abort:
+    parameters:
+      - $ref: "#/components/parameters/AssetId"
+    post:
+      tags: [medios]
+      operationId: abortAssetUpload
+      x-estado: planificado
+      summary: Abortar una carga en curso
+      responses:
+        "204": { description: Carga abortada }
+        "403": { $ref: "#/components/responses/Prohibido" }
+
+  /api/v1/assets/{assetId}:
+    parameters:
+      - $ref: "#/components/parameters/AssetId"
+    get:
+      tags: [medios]
+      operationId: getAsset
+      x-estado: planificado
+      summary: Estado y metadatos del asset
+      description: |
+        Incluye el MIME **detectado por el servidor** a partir de los bytes, no
+        el declarado por el cliente ni el deducido de la extensión.
+      responses:
+        "200":
+          description: Asset
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Asset" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "404": { $ref: "#/components/responses/NoEncontrado" }
+
+  /api/v1/assets/{assetId}/content:
+    parameters:
+      - $ref: "#/components/parameters/AssetId"
+    get:
+      tags: [medios]
+      operationId: getAssetContent
+      x-estado: planificado
+      summary: Descargar el asset por URL firmada
+      description: |
+        Responde `302` hacia una URL firmada de 15 minutos, emitida **después**
+        de verificar rol, propiedad e inscripción (CA-06). Nunca devuelve los
+        bytes por la API.
+      responses:
+        "302":
+          description: Redirección a la URL firmada
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "404": { $ref: "#/components/responses/NoEncontrado" }
+        "409":
+          description: El asset todavía no está listo
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /api/v1/assets/{assetId}/hls/master.m3u8:
+    parameters:
+      - $ref: "#/components/parameters/AssetId"
+    get:
+      tags: [medios]
+      operationId: getHlsManifest
+      x-estado: planificado
+      summary: Manifiesto HLS del asset
+      description: |
+        Devuelve el manifiesto maestro con las variantes generadas. La
+        credencial para los segmentos **no se emite aquí**, sino en
+        `POST /enrollments/{id}/media-sessions` (ADR-0015, D2).
+
+        La escalera no hace *upscaling*: solo se generan variantes cuya altura
+        sea menor o igual a la del original.
+      responses:
+        "200":
+          description: Manifiesto
+          content:
+            application/vnd.apple.mpegurl:
+              schema: { type: string }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409":
+          description: La transcodificación aún no terminó
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  # ==========================================================================
+  # Catálogo (RF-10)
+  # ==========================================================================
+  /api/v1/catalog/courses:
+    get:
+      tags: [catálogo]
+      operationId: searchCatalog
+      x-estado: planificado
+      summary: Buscar cursos publicados
+      description: Público. Solo cursos con una versión publicada.
+      security: []
+      parameters:
+        - { name: q, in: query, description: Búsqueda de texto completo sobre título y resumen, schema: { type: string } }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: language, in: query, schema: { type: string } }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Página de cursos publicados
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogPage" }
+
+  /api/v1/catalog/courses/{slug}:
+    parameters:
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [catálogo]
+      operationId: getCatalogCourse
+      x-estado: planificado
+      summary: Ficha pública de un curso
+      description: |
+        Devuelve la estructura (módulos y unidades) **sin el contenido
+        privado**: títulos sí, `content_md` y binarios no.
+      security: []
+      responses:
+        "200":
+          description: Ficha pública
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogCourse" }
+        "404": { $ref: "#/components/responses/NoEncontrado" }
+
+  # ==========================================================================
+  # Inscripción y consumo (RF-10, RF-07)
+  # ==========================================================================
+  /api/v1/enrollments:
+    get:
+      tags: [inscripción]
+      operationId: listOwnEnrollments
+      x-estado: planificado
+      summary: Inscripciones propias
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [active, withdrawn] } }
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Página de inscripciones
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnrollmentPage" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+    post:
+      tags: [inscripción]
+      operationId: enroll
+      x-estado: planificado
+      summary: Inscribirse en un curso
+      description: |
+        Si el estudiante ya estuvo inscrito y se retiró, **reactiva la
+        inscripción conservando el progreso y los resultados de quizzes**: nada
+        se borró al retirarse (RF-10).
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [course_id]
+              properties:
+                course_id: { type: string, format: uuid }
+      responses:
+        "201":
+          description: Inscripción creada o reactivada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Enrollment" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409":
+          description: El curso no está publicado, o ya hay una inscripción activa
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /api/v1/enrollments/{enrollmentId}:
+    parameters:
+      - $ref: "#/components/parameters/EnrollmentId"
+    get:
+      tags: [inscripción]
+      operationId: getEnrollment
+      x-estado: planificado
+      summary: Ver una inscripción
+      description: Incluye el estado, el porcentaje calculado y la insignia si la hay.
+      responses:
+        "200":
+          description: Inscripción
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Enrollment" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "404": { $ref: "#/components/responses/NoEncontrado" }
+
+  /api/v1/enrollments/{enrollmentId}:withdraw:
+    parameters:
+      - $ref: "#/components/parameters/EnrollmentId"
+    post:
+      tags: [inscripción]
+      operationId: withdrawEnrollment
+      x-estado: planificado
+      summary: Retirarse del curso
+      description: |
+        Marca la inscripción como `withdrawn`. **No borra nada**: el progreso y
+        los intentos se conservan para poder reinscribirse (RF-10).
+      responses:
+        "200":
+          description: Inscripción retirada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Enrollment" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+
+  /api/v1/enrollments/{enrollmentId}/content:
+    parameters:
+      - $ref: "#/components/parameters/EnrollmentId"
+    get:
+      tags: [inscripción]
+      operationId: getEnrollmentContent
+      x-estado: planificado
+      summary: Árbol del curso con el progreso del estudiante
+      description: |
+        Devuelve la versión vigente con el estado de cada recurso. Los recursos
+        ocultos no aparecen, y los de tipo quiz **nunca traen las claves
+        correctas** (ADR-0013).
+      responses:
+        "200":
+          description: Contenido con progreso
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnrollmentContent" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+
+  /api/v1/enrollments/{enrollmentId}/resources/{resourceStableId}:
+    parameters:
+      - $ref: "#/components/parameters/EnrollmentId"
+      - $ref: "#/components/parameters/ResourceStableId"
+    get:
+      tags: [inscripción]
+      operationId: getEnrollmentResource
+      x-estado: planificado
+      summary: Detalle de un recurso para el estudiante
+      description: |
+        Las referencias `asset://` del Markdown se resuelven aquí a URLs
+        firmadas, después de comprobar la inscripción (CA-06). Para un recurso
+        de tipo quiz devuelve la configuración **sin las claves correctas**.
+      responses:
+        "200":
+          description: Recurso
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StudentResource" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "404": { $ref: "#/components/responses/NoEncontrado" }
 
   /api/v1/enrollments/{enrollmentId}/media-sessions:
+    parameters:
+      - $ref: "#/components/parameters/EnrollmentId"
     post:
       tags: [medios]
       operationId: createMediaSession
-      summary: Abrir una sesión de reproducción para un recurso
       x-estado: planificado
       x-adr: ADR-0015 (D2)
+      summary: Abrir una sesión de reproducción para un recurso
       description: |
         Emite la credencial con la que el estudiante reproduce un recurso de
         video o audio, **después** de verificar rol, propiedad e inscripción
         (CA-06).
 
-        **Por qué existe este endpoint.** Firmar cada segmento HLS por separado
-        no escala detrás de un CDN: un video de 40 minutos son unos 400
-        segmentos, y cada uno pediría una firma a la API. La credencial se emite
-        una sola vez por sesión de reproducción.
+        **Por qué existe.** Firmar cada segmento HLS por separado no escala
+        detrás de un CDN: un video de 40 minutos son unos 400 segmentos, y cada
+        uno pediría una firma a la API. La credencial se emite una sola vez por
+        sesión de reproducción.
 
         **Cómo cambia entre entregas, sin romper al cliente.**
 
@@ -249,14 +1652,9 @@ paths:
         | 1 (Docker Compose, MinIO) | `signed_url` | El `manifest_url` ya viene firmado |
         | 3 (GCP, Cloud CDN) | `signed_cookie` | Cabecera `Set-Cookie` acotada por prefijo de ruta |
 
-        El cliente lee `delivery` y actúa en consecuencia: en ambos casos pide
-        `manifest_url` y reproduce. El campo `scope` indica hasta dónde alcanza
-        la credencial, para poder ampliarla más adelante sin cambiar el
-        contrato.
-
-        La sesión caduca; al expirar se vuelve a llamar a este endpoint.
-      parameters:
-        - $ref: "#/components/parameters/EnrollmentId"
+        El cliente lee `delivery` y actúa: en ambos casos pide `manifest_url` y
+        reproduce. El campo `scope` indica hasta dónde alcanza la credencial,
+        para poder ampliarla más adelante sin cambiar el contrato.
       requestBody:
         required: true
         content:
@@ -284,23 +1682,507 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MediaSession" }
-        "401":
-          $ref: "#/components/responses/NoAutenticado"
-        "403":
-          description: |
-            Sin inscripción activa en el curso, o el recurso no pertenece a la
-            versión vigente.
-          content:
-            application/problem+json:
-              schema: { $ref: "#/components/schemas/Problem" }
-        "404":
-          $ref: "#/components/responses/NoEncontrado"
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "404": { $ref: "#/components/responses/NoEncontrado" }
         "409":
           description: El recurso todavía no está listo para reproducirse
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
 
+  # ==========================================================================
+  # Evaluación (RF-08)
+  # ==========================================================================
+  /api/v1/resources/{resourceId}/quiz:
+    parameters:
+      - $ref: "#/components/parameters/ResourceId"
+    get:
+      tags: [evaluación]
+      operationId: getQuizForAuthoring
+      x-estado: planificado
+      summary: Ver el quiz completo, con las claves correctas
+      description: |
+        **La única ruta por la que `is_correct` sale del servidor**, y solo para
+        el profesor dueño del curso o un administrador. Ninguna respuesta de las
+        rutas del estudiante lo incluye (ADR-0013).
+      responses:
+        "200":
+          description: Quiz con claves
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QuizAuthoring" }
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "404": { $ref: "#/components/responses/NoEncontrado" }
+    put:
+      tags: [evaluación]
+      operationId: putQuiz
+      x-estado: planificado
+      summary: Configurar el quiz completo
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QuizInput" }
+      responses:
+        "200":
+          description: Quiz configurado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QuizAuthoring" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/VersionInmutable" }
+        "412": { $ref: "#/components/responses/PrecondicionFallida" }
+        "422": { $ref: "#/components/responses/Validacion" }
+
+  /api/v1/quizzes/{quizId}/questions:
+    parameters:
+      - { name: quizId, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [evaluación]
+      operationId: createQuestion
+      x-estado: planificado
+      summary: Añadir una pregunta al quiz
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QuestionInput" }
+      responses:
+        "201":
+          description: Pregunta creada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QuestionAuthoring" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/VersionInmutable" }
+        "422":
+          description: Ninguna opción marcada como correcta, o menos de dos opciones
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /api/v1/questions/{questionId}:
+    parameters:
+      - { name: questionId, in: path, required: true, schema: { type: string, format: uuid } }
+    patch:
+      tags: [evaluación]
+      operationId: updateQuestion
+      x-estado: planificado
+      summary: Actualizar una pregunta
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QuestionInput" }
+      responses:
+        "200":
+          description: Pregunta actualizada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QuestionAuthoring" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/VersionInmutable" }
+        "412": { $ref: "#/components/responses/PrecondicionFallida" }
+    delete:
+      tags: [evaluación]
+      operationId: deleteQuestion
+      x-estado: planificado
+      summary: Eliminar una pregunta
+      responses:
+        "204": { description: Pregunta eliminada }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/VersionInmutable" }
+
+  /api/v1/enrollments/{enrollmentId}/quizzes/{quizStableId}/attempts:
+    parameters:
+      - $ref: "#/components/parameters/EnrollmentId"
+      - $ref: "#/components/parameters/QuizStableId"
+    get:
+      tags: [evaluación]
+      operationId: listAttempts
+      x-estado: planificado
+      summary: Historial de intentos del estudiante en este quiz
+      responses:
+        "200":
+          description: Intentos
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/AttemptSummary" }
+                  max_attempts:
+                    type: integer
+                    description: "`0` significa ilimitados."
+        "403": { $ref: "#/components/responses/Prohibido" }
+    post:
+      tags: [evaluación]
+      operationId: startAttempt
+      x-estado: planificado
+      summary: Iniciar un intento
+      description: |
+        **Congela un snapshot** de las preguntas y opciones tal como están en
+        ese momento, ya barajadas si la política lo pide. Gracias a eso, el
+        estudiante ve siempre el mismo examen aunque el profesor edite el quiz,
+        y la calificación es reproducible (ADR-0013).
+
+        El snapshot **no incluye las claves correctas**: se leen de la base al
+        calificar, por `stable_id`.
+
+        Solo puede haber un intento `in_progress` por quiz y estudiante.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201":
+          description: Intento iniciado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Attempt" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409":
+          description: Ya hay un intento en curso, o se agotaron los intentos
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /api/v1/attempts/{attemptId}:
+    parameters:
+      - $ref: "#/components/parameters/AttemptId"
+    get:
+      tags: [evaluación]
+      operationId: getAttempt
+      x-estado: planificado
+      summary: Ver el intento con el snapshot y lo guardado
+      description: |
+        La respuesta **nunca contiene `is_correct`**. Una prueba de contrato
+        recorre el flujo completo buscando esa subcadena y falla si aparece.
+      responses:
+        "200":
+          description: Intento
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Attempt" }
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "404": { $ref: "#/components/responses/NoEncontrado" }
+
+  /api/v1/attempts/{attemptId}/answers:
+    parameters:
+      - $ref: "#/components/parameters/AttemptId"
+    patch:
+      tags: [evaluación]
+      operationId: saveAttemptAnswers
+      x-estado: planificado
+      summary: Guardado parcial de respuestas
+      description: |
+        Naturalmente idempotente: guardar de nuevo sustituye la respuesta de esa
+        pregunta. No exige `Idempotency-Key`, pero sí `If-Match`, para detectar
+        dos pestañas escribiendo a la vez.
+
+        Después de `expires_at` responde `409`: el reloj lo pone el servidor.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [answers]
+              properties:
+                answers:
+                  type: array
+                  items: { $ref: "#/components/schemas/AnswerInput" }
+      responses:
+        "200":
+          description: Respuestas guardadas
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Attempt" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409":
+          description: El intento expiró o ya fue enviado
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "412": { $ref: "#/components/responses/PrecondicionFallida" }
+
+  /api/v1/attempts/{attemptId}:submit:
+    parameters:
+      - $ref: "#/components/parameters/AttemptId"
+    post:
+      tags: [evaluación]
+      operationId: submitAttempt
+      x-estado: planificado
+      summary: Enviar el intento y calificarlo
+      description: |
+        La calificación **se calcula en el servidor** contra el snapshot, nunca
+        en el cliente (CA-04).
+
+        Idempotente: reenviar con la misma `Idempotency-Key` devuelve la misma
+        nota y el mismo cuerpo, con `Idempotency-Replayed: true`.
+
+        Si llega después de `expires_at`, se acepta pero **se califica solo lo
+        guardado antes de expirar** y el intento queda `expired_submitted`. Se
+        prefiere puntuar el trabajo hecho a descartarlo.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Intento calificado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AttemptResult" }
+          headers:
+            Idempotency-Replayed: { $ref: "#/components/headers/IdempotencyReplayed" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409": { $ref: "#/components/responses/Conflicto" }
+        "422": { $ref: "#/components/responses/ClaveIdempotenciaReusada" }
+
+  /api/v1/attempts/{attemptId}/result:
+    parameters:
+      - $ref: "#/components/parameters/AttemptId"
+    get:
+      tags: [evaluación]
+      operationId: getAttemptResult
+      x-estado: planificado
+      summary: Resultado del intento, según la política de retroalimentación
+      description: |
+        Lo que se devuelve depende de `feedback_policy` del quiz:
+
+        | Política | El estudiante ve |
+        | --- | --- |
+        | `none` | Nada hasta que el profesor libere |
+        | `score_only` | Solo la nota |
+        | `correctness` | Nota y qué preguntas acertó, **sin** cuáles eran las correctas |
+        | `full` | Nota, aciertos y explicación por pregunta |
+
+        Solo `full` revela la clave, y **solo si ya no quedan intentos
+        disponibles**. Con intentos restantes, `full` degrada a `correctness`.
+      responses:
+        "200":
+          description: Resultado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AttemptResult" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "409":
+          description: El intento aún no se ha enviado
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  # ==========================================================================
+  # Progreso (RF-09)
+  # ==========================================================================
+  /api/v1/enrollments/{enrollmentId}/progress:
+    parameters:
+      - $ref: "#/components/parameters/EnrollmentId"
+    post:
+      tags: [progreso]
+      operationId: reportProgressEvidence
+      x-estado: planificado
+      summary: Reportar una evidencia de avance
+      description: |
+        **El cliente reporta evidencias, nunca conclusiones.**
+
+        El cuerpo no tiene campo de porcentaje ni de completado. Si llega
+        `progress_percent`, `completed` o `state`, la respuesta es
+        `422 progress.client_computed_value` y se escribe un evento de
+        auditoría `progress.tampering_attempt` con usuario, recurso y cuerpo
+        recibido. Es la demostración literal de CA-05, y el segmento 7 tiene que
+        evidenciarla con señales fraudulentas.
+
+        El servidor descarta además la evidencia sospechosa:
+
+        | Regla | Umbral |
+        | --- | --- |
+        | Cadencia mínima entre heartbeats | ≥ 10 s de reloj del servidor |
+        | Avance de posición por heartbeat | ≤ 2× el tiempo real transcurrido |
+        | Posición dentro de la duración | `0 ≤ pos ≤ duración + 2 s` |
+        | Se exige `open` antes del primer `heartbeat` | — |
+        | El reloj lo pone el servidor | `client_ts` se registra, no se usa |
+
+        Toda evidencia descartada incrementa `progress_rejected_total{reason}`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProgressEvidence" }
+      responses:
+        "202":
+          description: Evidencia aceptada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProgressAck" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "422":
+          description: |
+            Cuerpo inválido, o el cliente intentó enviar un valor calculado. En
+            el segundo caso el intento queda auditado.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "429": { $ref: "#/components/responses/DemasiadasSolicitudes" }
+    get:
+      tags: [progreso]
+      operationId: getProgress
+      x-estado: planificado
+      summary: Progreso calculado por el servidor
+      description: |
+        El porcentaje se calcula **solo sobre los recursos obligatorios y
+        visibles** de la versión vigente. Los opcionales no cuentan.
+      responses:
+        "200":
+          description: Progreso
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProgressSummary" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+
+  /api/v1/enrollments/{enrollmentId}/resources/{resourceStableId}/position:
+    parameters:
+      - $ref: "#/components/parameters/EnrollmentId"
+      - $ref: "#/components/parameters/ResourceStableId"
+    get:
+      tags: [progreso]
+      operationId: getPlaybackPosition
+      x-estado: planificado
+      summary: Última posición reportada, para reanudar la reproducción
+      description: Es lo que permite retomar un video donde se dejó (RF-07).
+      responses:
+        "200":
+          description: Posición
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PlaybackPosition" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "404": { $ref: "#/components/responses/NoEncontrado" }
+
+  # ==========================================================================
+  # Insignias (RF-09, CA-07)
+  # ==========================================================================
+  /api/v1/me/badges:
+    get:
+      tags: [insignias]
+      operationId: listOwnBadges
+      x-estado: planificado
+      summary: Insignias propias
+      responses:
+        "200":
+          description: Insignias
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/Badge" }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+
+  /api/v1/badges/{badgeId}:
+    parameters:
+      - $ref: "#/components/parameters/BadgeId"
+    get:
+      tags: [insignias]
+      operationId: getBadge
+      x-estado: planificado
+      summary: Ver una insignia
+      responses:
+        "200":
+          description: Insignia
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Badge" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "404": { $ref: "#/components/responses/NoEncontrado" }
+
+  /api/v1/badges/{badgeId}:revoke:
+    parameters:
+      - $ref: "#/components/parameters/BadgeId"
+    post:
+      tags: [insignias]
+      operationId: revokeBadge
+      x-estado: planificado
+      summary: Revocar una insignia
+      description: |
+        Queda auditado. Una insignia revocada **sigue siendo consultable** por
+        su URL pública, indicando `status: revoked` con la fecha: se prefiere
+        transparencia a un `404`.
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: Insignia revocada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Badge" }
+        "403": { $ref: "#/components/responses/Prohibido" }
+        "404": { $ref: "#/components/responses/NoEncontrado" }
+
+  /api/v1/verify/{publicCode}:
+    parameters:
+      - $ref: "#/components/parameters/PublicCode"
+    get:
+      tags: [insignias]
+      operationId: verifyBadge
+      x-estado: planificado
+      summary: Verificación pública de una insignia
+      description: |
+        **Pública, sin autenticación.** Devuelve nombre del estudiante, curso,
+        versión cursada, fecha y estado.
+
+        **Nunca devuelve el correo del estudiante** (CA-07). La URL tampoco lo
+        contiene: el código es aleatorio y no derivado de la identidad.
+      security: []
+      responses:
+        "200":
+          description: Insignia verificada
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BadgeVerification" }
+        "404": { $ref: "#/components/responses/NoEncontrado" }
+
+  /api/v1/verify/{publicCode}/image:
+    parameters:
+      - $ref: "#/components/parameters/PublicCode"
+    get:
+      tags: [insignias]
+      operationId: getBadgeImage
+      x-estado: planificado
+      summary: Imagen pública de la insignia
+      security: []
+      responses:
+        "302":
+          description: Redirección a la imagen en el bucket público
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+        "404": { $ref: "#/components/responses/NoEncontrado" }
+
+# ============================================================================
+# Componentes
+# ============================================================================
 components:
   securitySchemes:
     sesion:
@@ -310,24 +2192,199 @@ components:
         Token opaco de 32 bytes emitido por `/api/v1/auth/login`. No es un JWT:
         no lleva información dentro y se puede revocar (ADR-0006).
 
+  headers:
+    ETag:
+      description: Versión del recurso. Se devuelve en `If-Match` al modificarlo.
+      schema: { type: string }
+    IdempotencyReplayed:
+      description: |
+        `true` cuando la respuesta se recuperó del registro de idempotencia en
+        lugar de ejecutarse de nuevo.
+      schema: { type: boolean }
+    RetryAfter:
+      description: Segundos que conviene esperar antes de reintentar.
+      schema: { type: integer }
+
   parameters:
+    Limit:
+      name: limit
+      in: query
+      description: Tamaño de página.
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Cursor:
+      name: cursor
+      in: query
+      description: |
+        Cursor opaco devuelto por la página anterior en `next_cursor`. No se usa
+        desplazamiento numérico.
+      schema: { type: string }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        Clave única elegida por el cliente. Repetir con la misma clave y el mismo
+        cuerpo devuelve la respuesta guardada; con cuerpo distinto, `422`
+        (ADR-0008).
+      schema: { type: string, minLength: 8, maxLength: 255 }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: "`ETag` obtenido al leer el recurso. Si no coincide, `412`."
+      schema: { type: string }
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    CourseId:
+      name: courseId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    VersionId:
+      name: versionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    VersionNumber:
+      name: versionNumber
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    ModuleId:
+      name: moduleId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    UnitId:
+      name: unitId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ResourceId:
+      name: resourceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ResourceStableId:
+      name: resourceStableId
+      in: path
+      required: true
+      description: |
+        Identidad pedagógica del recurso, estable entre versiones del curso
+        (ADR-0007).
+      schema: { type: string, format: uuid }
+    AssetId:
+      name: assetId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     EnrollmentId:
       name: enrollmentId
       in: path
       required: true
-      description: Identificador de la inscripción del estudiante
       schema: { type: string, format: uuid }
+    AttemptId:
+      name: attemptId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    QuizStableId:
+      name: quizStableId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    BadgeId:
+      name: badgeId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PublicCode:
+      name: publicCode
+      in: path
+      required: true
+      description: Código público y aleatorio de la insignia. No deriva de la identidad.
+      schema: { type: string }
+
+  responses:
+    NoAutenticado:
+      description: Sin sesión, o la sesión fue revocada o expiró
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Prohibido:
+      description: |
+        El rol, la propiedad o la inscripción no alcanzan para esta operación
+        (CA-06).
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    NoEncontrado:
+      description: No encontrado
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Conflicto:
+      description: Estado incompatible con la operación
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    VersionInmutable:
+      description: |
+        La versión del curso está publicada y es inmutable. Para editarla hay
+        que despublicarla (ADR-0007, enunciado §5.1).
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    PrecondicionFallida:
+      description: |
+        El `If-Match` no coincide: alguien modificó el recurso mientras tanto.
+        El cuerpo trae el estado actual del servidor.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Validacion:
+      description: |
+        La solicitud tiene campos inválidos. `errors` lista **todos** los
+        incumplimientos.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    ClaveIdempotenciaReusada:
+      description: Misma `Idempotency-Key` con un cuerpo distinto
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    DemasiadasSolicitudes:
+      description: Límite de tasa superado
+      headers:
+        Retry-After: { $ref: "#/components/headers/RetryAfter" }
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    DemasiadoGrande:
+      description: El archivo supera el máximo permitido
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    TipoNoSoportado:
+      description: |
+        El MIME real, detectado por el servidor a partir de los bytes, no está
+        en la lista blanca del tipo de recurso.
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
 
   schemas:
+    # ---- plataforma -------------------------------------------------------
     Problem:
       type: object
       description: Error uniforme, RFC 9457.
       required: [type, title, status]
       properties:
-        type:
-          type: string
-          format: uri
-          examples: ["https://mooc.local/errors/validation_failed"]
+        type: { type: string, format: uri, examples: ["https://mooc.local/errors/validation_failed"] }
         title: { type: string }
         status: { type: integer }
         detail: { type: string }
@@ -346,18 +2403,27 @@ components:
       type: object
       required: [code]
       properties:
-        code: { type: string, examples: ["password.too_short"] }
-        field: { type: string, examples: ["password"] }
+        code: { type: string, examples: ["structure.minimum_not_met"] }
+        field: { type: string, examples: ["modules[0].units[1].resources[0]"] }
         detail: { type: string }
 
     Readiness:
       type: object
-      description: "`ok` o el motivo del fallo, por dependencia."
+      description: "`ok`, o el motivo del fallo, por dependencia."
       properties:
         postgres: { type: string }
         redis: { type: string }
         objectstore: { type: string }
 
+    Page:
+      type: object
+      description: Envoltorio de paginación por cursor.
+      properties:
+        next_cursor:
+          type: [string, "null"]
+          description: Cursor de la página siguiente, o `null` si no hay más.
+
+    # ---- identidad --------------------------------------------------------
     RegisterRequest:
       type: object
       required: [email, password, full_name]
@@ -379,7 +2445,7 @@ components:
       properties:
         token:
           type: string
-          description: "Token opaco de sesión. Va en la cabecera `Authorization: Bearer`."
+          description: Token opaco de sesión. Va en la cabecera de autorización.
         expires_at: { type: string, format: date-time }
         user: { $ref: "#/components/schemas/User" }
 
@@ -389,15 +2455,376 @@ components:
         id: { type: string, format: uuid }
         email: { type: string, format: email }
         full_name: { type: string }
-        role:
+        role: { type: string, enum: [admin, teacher, student] }
+        status: { type: string, enum: [active, suspended, deleted] }
+        email_verified_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+
+    UserPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/User" }
+
+    Session:
+      type: object
+      description: |
+        El token nunca aparece: solo se guarda su SHA-256, y esto es el registro
+        para listar y revocar (ADR-0006).
+      properties:
+        id: { type: string, format: uuid }
+        ip: { type: [string, "null"] }
+        user_agent: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        last_seen_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        current:
+          type: boolean
+          description: Si es la sesión que hace esta petición.
+
+    # ---- auditoría y cola -------------------------------------------------
+    AuditEvent:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        occurred_at: { type: string, format: date-time }
+        actor_id: { type: [string, "null"], format: uuid }
+        actor_role: { type: string }
+        action: { type: string, examples: ["progress.tampering_attempt"] }
+        entity_type: { type: string }
+        entity_id: { type: [string, "null"], format: uuid }
+        ip: { type: [string, "null"] }
+        trace_id: { type: [string, "null"] }
+        metadata: { type: object, additionalProperties: true }
+
+    AuditEventPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/AuditEvent" }
+
+    JobRun:
+      type: object
+      description: |
+        Es a la vez la bandeja de salida, el registro de idempotencia y la DLQ
+        (ADR-0004, ADR-0008).
+      properties:
+        id: { type: integer, format: int64 }
+        job_key:
           type: string
-          enum: [admin, teacher, student]
+          description: |
+            Determinista: identifica la intención, no el momento. Reencolar
+            conserva la misma clave.
+          examples: ["media.transcode_hls:018f...:v1"]
+        type: { type: string }
+        queue: { type: string, enum: [critical, default, bulk] }
+        status: { type: string, enum: [queued, running, succeeded, failed, dead] }
+        attempt: { type: integer }
+        last_error: { type: [string, "null"] }
+        heartbeat_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+
+    JobRunPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/JobRun" }
+
+    # ---- autoría ----------------------------------------------------------
+    CourseInput:
+      type: object
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        summary: { type: string, maxLength: 2000 }
+        category: { type: string }
+        language: { type: string, examples: ["es"] }
+        cover_asset_id: { type: [string, "null"], format: uuid }
+
+    Course:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        category: { type: [string, "null"] }
+        language: { type: [string, "null"] }
+        cover_asset_id: { type: [string, "null"], format: uuid }
+        owner_id: { type: string, format: uuid }
+        status: { type: string, enum: [draft, published, unpublished, archived] }
+        current_version_id: { type: [string, "null"], format: uuid }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CoursePage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/Course" }
+
+    ApprovalCriteria:
+      type: object
+      description: Condiciones para pasar de `completed` a `approved`.
+      properties:
+        required_completion_pct:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Porcentaje de recursos obligatorios que hay que completar.
+        min_quiz_score:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Nota mínima en los quizzes obligatorios.
+
+    CourseVersion:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        course_id: { type: string, format: uuid }
+        version_number: { type: integer }
+        status: { type: string, enum: [draft, published, unpublished, archived] }
+        approval_criteria: { $ref: "#/components/schemas/ApprovalCriteria" }
+        published_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+
+    CourseVersionTree:
+      allOf:
+        - $ref: "#/components/schemas/CourseVersion"
+        - type: object
+          properties:
+            course: { $ref: "#/components/schemas/Course" }
+            modules:
+              type: array
+              items: { $ref: "#/components/schemas/Module" }
+
+    PublicationCheck:
+      type: object
+      description: Resultado de comprobar si una versión se puede publicar.
+      properties:
+        publishable: { type: boolean }
+        errors:
+          type: array
+          description: Vacío cuando `publishable` es `true`.
+          items: { $ref: "#/components/schemas/FieldError" }
+
+    NodeInput:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+
+    ReorderInput:
+      type: object
+      required: [order]
+      description: |
+        Orden completo por `stable_id`. Se aplica en una transacción, con la
+        restricción de posición diferida.
+      properties:
+        order:
+          type: array
+          minItems: 1
+          items: { type: string, format: uuid }
+
+    Module:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Identificador de fila. Cambia en cada versión.
+        stable_id:
+          type: string
+          format: uuid
+          description: |
+            Identidad pedagógica. Se copia al clonar la versión, y es a lo que
+            se ancla el progreso (ADR-0007).
+        position: { type: integer }
+        title: { type: string }
+        units:
+          type: array
+          items: { $ref: "#/components/schemas/Unit" }
+
+    Unit:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        stable_id: { type: string, format: uuid }
+        position: { type: integer }
+        title: { type: string }
+        resources:
+          type: array
+          items: { $ref: "#/components/schemas/Resource" }
+
+    ResourceType:
+      type: string
+      enum: [rich_text, image, video, audio, pdf, slides, download, iframe, link, quiz]
+
+    ResourceInput:
+      type: object
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        type: { $ref: "#/components/schemas/ResourceType" }
+        visible: { type: boolean }
+        required:
+          type: boolean
+          description: Solo los obligatorios y visibles cuentan para el progreso.
+        downloadable: { type: boolean }
+        asset_id: { type: [string, "null"], format: uuid }
+        external_url:
+          type: [string, "null"]
+          description: |
+            Para `link` e `iframe`. Los iframes se validan contra la lista
+            blanca de dominios al guardar y al publicar.
+
+    Resource:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        stable_id: { type: string, format: uuid }
+        position: { type: integer }
+        title: { type: string }
+        type: { $ref: "#/components/schemas/ResourceType" }
+        visible: { type: boolean }
+        required: { type: boolean }
+        downloadable: { type: boolean }
+        asset_id: { type: [string, "null"], format: uuid }
+        external_url: { type: [string, "null"] }
+        processing_status:
+          type: string
+          enum: [n/a, pending, processing, ready, failed]
+          description: |
+            Derivado del asset. Un recurso visible que no esté `ready` bloquea
+            la publicación (CA-01).
+
+    ResourceContent:
+      type: object
+      properties:
+        resource_id: { type: string, format: uuid }
+        content_md:
+          type: string
+          description: |
+            Markdown extendido **canónico**: el servidor lo normaliza al
+            guardar, así que guardar dos veces lo mismo produce byte a byte lo
+            mismo (ADR-0014).
+        content_html:
+          type: [string, "null"]
+          description: Solo en previsualización. Sanitizado con lista blanca.
+        asset_refs:
+          type: array
+          description: |
+            `asset_id` referenciados desde el Markdown como `asset://`. Se
+            extraen al normalizar y sirven para validar la publicación.
+          items: { type: string, format: uuid }
+        updated_at: { type: string, format: date-time }
+
+    ContentRevision:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        author_id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        excerpt: { type: string, description: "Primeras líneas, para poder elegir." }
+
+    # ---- medios -----------------------------------------------------------
+    UploadPartUrl:
+      type: object
+      properties:
+        part_number: { type: integer, minimum: 1 }
+        url:
+          type: string
+          format: uri
+          description: URL prefirmada de subida. Válida 24 horas (RNF-07).
+        expires_at: { type: string, format: date-time }
+
+    UploadTicket:
+      type: object
+      properties:
+        asset_id: { type: string, format: uuid }
+        upload_id: { type: string }
+        part_size:
+          type: integer
+          description: Tamaño de cada parte en bytes.
+          examples: [8388608]
+        total_parts: { type: integer }
+        expires_at: { type: string, format: date-time }
+        parts:
+          type: array
+          items: { $ref: "#/components/schemas/UploadPartUrl" }
+
+    UploadState:
+      type: object
+      properties:
+        asset_id: { type: string, format: uuid }
+        upload_id: { type: string }
+        part_size: { type: integer }
+        total_parts: { type: integer }
+        received_parts:
+          type: array
+          description: |
+            Partes ya almacenadas. El cliente sube solo las que faltan: esto es
+            lo que hace reanudable la carga.
+          items:
+            type: object
+            properties:
+              part_number: { type: integer }
+              etag: { type: string }
+              size_bytes: { type: integer, format: int64 }
+        expires_at: { type: string, format: date-time }
+
+    AssetDerivative:
+      type: object
+      properties:
+        kind: { type: string, enum: [hls_master, hls_variant, poster, pdf] }
+        variant: { type: [string, "null"], examples: ["720p"] }
+        bytes: { type: integer, format: int64 }
+
+    Asset:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [video, audio, image, pdf, slides, file] }
+        original_filename: { type: string }
+        declared_mime:
+          type: string
+          description: Lo que dijo el cliente. Informativo.
+        detected_mime:
+          type: [string, "null"]
+          description: |
+            Determinado por el servidor a partir de los bytes. Es el que manda:
+            si no está en la lista blanca del tipo, el asset se rechaza.
+        size_bytes: { type: integer, format: int64 }
+        sha256:
+          type: [string, "null"]
+          description: Recalculado por el servidor leyendo del bucket.
+        duration_seconds: { type: [number, "null"] }
+        width: { type: [integer, "null"] }
+        height: { type: [integer, "null"] }
         status:
           type: string
-          enum: [active, suspended, deleted]
-        email_verified_at:
-          type: [string, "null"]
-          format: date-time
+          enum: [uploading, uploaded, scanning, clean, processing, ready, rejected, infected, failed]
+          description: |
+            Recorrido normal:
+            `uploading → uploaded → scanning → clean → processing → ready`.
+            `rejected` si falla el checksum o el MIME; `infected` si el escaneo
+            antimalware lo detecta, y entonces el objeto va a cuarentena.
+        scan_result: { type: [string, "null"] }
+        derivatives:
+          type: array
+          items: { $ref: "#/components/schemas/AssetDerivative" }
         created_at: { type: string, format: date-time }
 
     MediaSession:
@@ -423,29 +2850,416 @@ components:
             sin cambiar el contrato (ADR-0015, consecuencia abierta de D2).
         expires_at: { type: string, format: date-time }
 
-  responses:
-    NoAutenticado:
-      description: Sin sesión, o la sesión fue revocada o expiró
-      content:
-        application/problem+json:
-          schema: { $ref: "#/components/schemas/Problem" }
-    NoEncontrado:
-      description: No encontrado
-      content:
-        application/problem+json:
-          schema: { $ref: "#/components/schemas/Problem" }
-    Conflicto:
-      description: Estado incompatible con la operación
-      content:
-        application/problem+json:
-          schema: { $ref: "#/components/schemas/Problem" }
-    Validacion:
-      description: La solicitud tiene campos inválidos
-      content:
-        application/problem+json:
-          schema: { $ref: "#/components/schemas/Problem" }
-    DemasiadasSolicitudes:
-      description: Límite de tasa superado
-      content:
-        application/problem+json:
-          schema: { $ref: "#/components/schemas/Problem" }
+    # ---- catálogo e inscripción -------------------------------------------
+    CatalogCourse:
+      type: object
+      description: Ficha pública. Sin contenido privado ni binarios.
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        title: { type: string }
+        summary: { type: string }
+        category: { type: [string, "null"] }
+        language: { type: [string, "null"] }
+        cover_url: { type: [string, "null"], format: uri }
+        published_at: { type: string, format: date-time }
+        enrolled_count: { type: integer }
+        outline:
+          type: array
+          description: Títulos de módulos y unidades. Sin recursos ni contenido.
+          items:
+            type: object
+            properties:
+              title: { type: string }
+              units:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    title: { type: string }
+
+    CatalogPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/CatalogCourse" }
+
+    Enrollment:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        course_id: { type: string, format: uuid }
+        course_title: { type: string }
+        status: { type: string, enum: [active, withdrawn] }
+        state:
+          type: string
+          enum: [in_progress, completed, approved]
+          description: |
+            `completed` cuando todos los recursos obligatorios y visibles están
+            completos; `approved` cuando además se cumplen los criterios de
+            aprobación. Aprobar es un hecho histórico: una versión nueva del
+            curso **no** revoca la aprobación (ADR-0007).
+        progress_pct:
+          type: number
+          description: Calculado por el servidor. El cliente no lo envía nunca.
+        approved_version_id:
+          type: [string, "null"]
+          format: uuid
+          description: Qué versión se cursó al aprobar.
+        badge_id: { type: [string, "null"], format: uuid }
+        enrolled_at: { type: string, format: date-time }
+        completed_at: { type: [string, "null"], format: date-time }
+        approved_at: { type: [string, "null"], format: date-time }
+
+    EnrollmentPage:
+      allOf:
+        - $ref: "#/components/schemas/Page"
+        - type: object
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/Enrollment" }
+
+    StudentResource:
+      type: object
+      description: |
+        Vista del recurso para el estudiante. Para un quiz **no incluye las
+        opciones correctas** (ADR-0013).
+      properties:
+        stable_id: { type: string, format: uuid }
+        title: { type: string }
+        type: { $ref: "#/components/schemas/ResourceType" }
+        required: { type: boolean }
+        downloadable: { type: boolean }
+        content_html: { type: [string, "null"] }
+        content_url:
+          type: [string, "null"]
+          format: uri
+          description: URL firmada, emitida tras verificar la inscripción.
+        quiz: { $ref: "#/components/schemas/QuizStudentView" }
+        progress: { $ref: "#/components/schemas/ResourceProgress" }
+
+    ResourceProgress:
+      type: object
+      properties:
+        state: { type: string, enum: [not_started, in_progress, completed] }
+        dwell_ms_total: { type: integer, format: int64 }
+        last_position_seconds: { type: [number, "null"] }
+        completed_at: { type: [string, "null"], format: date-time }
+
+    EnrollmentContent:
+      type: object
+      properties:
+        enrollment: { $ref: "#/components/schemas/Enrollment" }
+        version_number: { type: integer }
+        modules:
+          type: array
+          items:
+            type: object
+            properties:
+              stable_id: { type: string, format: uuid }
+              title: { type: string }
+              units:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    stable_id: { type: string, format: uuid }
+                    title: { type: string }
+                    resources:
+                      type: array
+                      items: { $ref: "#/components/schemas/StudentResource" }
+
+    # ---- evaluación -------------------------------------------------------
+    FeedbackPolicy:
+      type: string
+      enum: [none, score_only, correctness, full]
+      description: |
+        Qué ve el estudiante tras enviar. Solo `full` revela las claves, y solo
+        cuando ya no le quedan intentos.
+
+    QuizInput:
+      type: object
+      required: [pass_score]
+      properties:
+        max_attempts: { type: integer, minimum: 0, description: "`0` = ilimitados." }
+        time_limit_seconds: { type: [integer, "null"], minimum: 30 }
+        pass_score: { type: number, minimum: 0, maximum: 100 }
+        feedback_policy: { $ref: "#/components/schemas/FeedbackPolicy" }
+        shuffle: { type: boolean }
+        partial_credit:
+          type: boolean
+          description: |
+            En preguntas de respuesta múltiple. Sin él, la calificación es todo
+            o nada.
+
+    OptionAuthoring:
+      type: object
+      description: |
+        **Solo aparece en las rutas de autoría.** Ningún tipo de salida del
+        estudiante tiene `is_correct`: son dos tipos distintos en Go, no un
+        campo omitido al serializar (ADR-0013).
+      properties:
+        stable_id: { type: string, format: uuid }
+        position: { type: integer }
+        text_md: { type: string }
+        is_correct: { type: boolean }
+
+    QuestionInput:
+      type: object
+      required: [statement_md, kind, options]
+      properties:
+        statement_md: { type: string, minLength: 1 }
+        kind: { type: string, enum: [single, multiple] }
+        points: { type: number, minimum: 0 }
+        explanation_md: { type: [string, "null"] }
+        options:
+          type: array
+          minItems: 2
+          items:
+            type: object
+            required: [text_md, is_correct]
+            properties:
+              text_md: { type: string, minLength: 1 }
+              is_correct: { type: boolean }
+
+    QuestionAuthoring:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        stable_id: { type: string, format: uuid }
+        position: { type: integer }
+        statement_md: { type: string }
+        kind: { type: string, enum: [single, multiple] }
+        points: { type: number }
+        explanation_md: { type: [string, "null"] }
+        options:
+          type: array
+          items: { $ref: "#/components/schemas/OptionAuthoring" }
+
+    QuizAuthoring:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        stable_id: { type: string, format: uuid }
+        resource_id: { type: string, format: uuid }
+        max_attempts: { type: integer }
+        time_limit_seconds: { type: [integer, "null"] }
+        pass_score: { type: number }
+        feedback_policy: { $ref: "#/components/schemas/FeedbackPolicy" }
+        shuffle: { type: boolean }
+        partial_credit: { type: boolean }
+        questions:
+          type: array
+          items: { $ref: "#/components/schemas/QuestionAuthoring" }
+
+    QuizStudentView:
+      type: object
+      description: Lo que el estudiante ve antes de empezar. Sin preguntas.
+      properties:
+        stable_id: { type: string, format: uuid }
+        max_attempts: { type: integer }
+        attempts_used: { type: integer }
+        time_limit_seconds: { type: [integer, "null"] }
+        pass_score: { type: number }
+        feedback_policy: { $ref: "#/components/schemas/FeedbackPolicy" }
+        best_score: { type: [number, "null"] }
+
+    OptionStudentView:
+      type: object
+      description: |
+        La vista de opción del estudiante. **No tiene `is_correct`**, ni
+        siquiera como campo nulo.
+      properties:
+        stable_id: { type: string, format: uuid }
+        text_md: { type: string }
+
+    QuestionSnapshot:
+      type: object
+      properties:
+        stable_id: { type: string, format: uuid }
+        position: { type: integer }
+        statement_md: { type: string }
+        kind: { type: string, enum: [single, multiple] }
+        points: { type: number }
+        options:
+          type: array
+          items: { $ref: "#/components/schemas/OptionStudentView" }
+
+    AnswerInput:
+      type: object
+      required: [question_stable_id, selected_option_stable_ids]
+      properties:
+        question_stable_id: { type: string, format: uuid }
+        selected_option_stable_ids:
+          type: array
+          description: |
+            Se identifica por `stable_id`, nunca por posición: el snapshot puede
+            estar barajado.
+          items: { type: string, format: uuid }
+
+    Attempt:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        quiz_stable_id: { type: string, format: uuid }
+        attempt_number: { type: integer }
+        status: { type: string, enum: [in_progress, submitted, expired, expired_submitted] }
+        started_at: { type: string, format: date-time }
+        expires_at: { type: [string, "null"], format: date-time }
+        submitted_at: { type: [string, "null"], format: date-time }
+        questions:
+          type: array
+          description: Snapshot congelado al iniciar el intento. Sin claves.
+          items: { $ref: "#/components/schemas/QuestionSnapshot" }
+        answers:
+          type: array
+          items: { $ref: "#/components/schemas/AnswerInput" }
+
+    AttemptSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        attempt_number: { type: integer }
+        status: { type: string, enum: [in_progress, submitted, expired, expired_submitted] }
+        score: { type: [number, "null"] }
+        submitted_at: { type: [string, "null"], format: date-time }
+
+    QuestionResult:
+      type: object
+      properties:
+        question_stable_id: { type: string, format: uuid }
+        awarded_points: { type: number }
+        max_points: { type: number }
+        correct:
+          type: [boolean, "null"]
+          description: Solo con política `correctness` o `full`.
+        correct_option_stable_ids:
+          type: array
+          description: |
+            **Solo con política `full` y sin intentos restantes.** En cualquier
+            otro caso el campo no aparece.
+          items: { type: string, format: uuid }
+        explanation_md: { type: [string, "null"] }
+
+    AttemptResult:
+      type: object
+      properties:
+        attempt_id: { type: string, format: uuid }
+        status: { type: string, enum: [submitted, expired, expired_submitted] }
+        score:
+          type: [number, "null"]
+          description: Escala 0–100, con dos decimales. Calculada en el servidor.
+        passed: { type: [boolean, "null"] }
+        grading_version:
+          type: integer
+          description: |
+            Versión del algoritmo de calificación. Permite recalificar de forma
+            auditable si se corrige un error.
+        feedback_policy: { $ref: "#/components/schemas/FeedbackPolicy" }
+        questions:
+          type: array
+          description: Ausente con política `none` o `score_only`.
+          items: { $ref: "#/components/schemas/QuestionResult" }
+
+    # ---- progreso ---------------------------------------------------------
+    ProgressEvidence:
+      type: object
+      required: [resource_stable_id, kind]
+      description: |
+        **Evidencias, no conclusiones.** Este objeto no tiene ni puede tener
+        `progress_percent`, `completed` ni `state`: si llegan, la petición se
+        rechaza con `422` y el intento queda auditado (CA-05).
+      additionalProperties: false
+      properties:
+        resource_stable_id: { type: string, format: uuid }
+        kind: { type: string, enum: [open, heartbeat, close] }
+        position_seconds:
+          type: [number, "null"]
+          minimum: 0
+          description: Solo para audio y video.
+        client_ts:
+          type: [string, "null"]
+          format: date-time
+          description: |
+            Se registra para diagnóstico, pero **no se usa para calcular**: el
+            reloj lo pone el servidor.
+
+    ProgressAck:
+      type: object
+      properties:
+        accepted: { type: boolean }
+        reject_reason:
+          type: [string, "null"]
+          enum: [null, cadence, position_jump, position_out_of_range, missing_open, not_enrolled]
+          description: Motivo por el que la evidencia se descartó, si se descartó.
+        resource_state: { type: string, enum: [not_started, in_progress, completed] }
+        progress_pct:
+          type: number
+          description: Recalculado por el servidor tras aplicar la evidencia.
+
+    ProgressSummary:
+      type: object
+      properties:
+        enrollment_id: { type: string, format: uuid }
+        state: { type: string, enum: [in_progress, completed, approved] }
+        progress_pct:
+          type: number
+          description: Sobre los recursos obligatorios y visibles de la versión vigente.
+        required_total: { type: integer }
+        required_completed: { type: integer }
+        resources:
+          type: array
+          items:
+            allOf:
+              - type: object
+                properties:
+                  resource_stable_id: { type: string, format: uuid }
+                  title: { type: string }
+                  required: { type: boolean }
+              - $ref: "#/components/schemas/ResourceProgress"
+
+    PlaybackPosition:
+      type: object
+      properties:
+        resource_stable_id: { type: string, format: uuid }
+        last_position_seconds: { type: number }
+        duration_seconds: { type: [number, "null"] }
+        updated_at: { type: string, format: date-time }
+
+    # ---- insignias --------------------------------------------------------
+    Badge:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        enrollment_id:
+          type: string
+          format: uuid
+          description: |
+            Único por inscripción: la restricción está en la base, además del
+            reclamo idempotente del trabajo (ADR-0008, CA-07).
+        course_id: { type: string, format: uuid }
+        course_title: { type: string }
+        public_code: { type: string }
+        verification_url: { type: string, format: uri }
+        image_url: { type: string, format: uri }
+        issued_at: { type: string, format: date-time }
+        revoked_at: { type: [string, "null"], format: date-time }
+        revocation_reason: { type: [string, "null"] }
+
+    BadgeVerification:
+      type: object
+      description: |
+        Respuesta pública. **No contiene el correo del estudiante** (CA-07).
+      properties:
+        public_code: { type: string }
+        status: { type: string, enum: [valid, revoked] }
+        student_name: { type: string }
+        course_title: { type: string }
+        course_version: { type: integer }
+        issued_at: { type: string, format: date-time }
+        revoked_at: { type: [string, "null"], format: date-time }
+        image_url: { type: string, format: uri }

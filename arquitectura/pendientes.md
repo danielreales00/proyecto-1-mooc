@@ -52,7 +52,7 @@ hechos, así que conviene antes de repartir el dominio.
 | Rate limiting en Redis | No existe | `CE-02`. La base lógica 3 está reservada y sin usar |
 | `ETag` / `If-Match` | No existe | El autosave de `RF-04` lo necesita para detectar escrituras concurrentes |
 | Paginación por cursor | No existe (no hay listas todavía) | `RT-05` |
-| OpenAPI 3.1 | **Creado y validado**, con identidad, salud y `media-sessions`. La API lo sirve en `GET /openapi.yaml`. Faltan los otros ~75 endpoints | `RT-05` y entregable §8 |
+| OpenAPI 3.1 | **Completo**: las 88 operaciones del inventario, validadas con redocly sin advertencias. Las 80 que aún no responden llevan `x-estado: planificado`. La API lo sirve en `GET /openapi.yaml` y `make contrato` detecta la deriva | `RT-05` y entregable §8 |
 | `/metrics` (Prometheus) | No existe | Sin métricas no hay alerta de DLQ (`CA-03`) ni p95 (`RNF-05`) |
 | Trazas OpenTelemetry | Solo hay logs estructurados | `RT-06`, exigido explícitamente |
 | Protección del último administrador | No existe | `RF-02` |
@@ -109,7 +109,7 @@ Lo de arriba desbloquea lo de abajo.
 
 | # | Tarea | Quién | Estado |
 | --- | --- | --- | --- |
-| 1 | Trasladar al OpenAPI el resto de los 84 endpoints, y acordar las migraciones. Sigue siendo el cuello de botella para trabajar en paralelo. **El archivo ya existe** con identidad, salud y `media-sessions` | Todos | Pendiente |
+| 1 | **Revisar el contrato entre los cuatro** y acordar el resto de las migraciones. El OpenAPI ya está escrito con las 88 operaciones: es un borrador para enmendar, no un acuerdo | Todos | Pendiente |
 | 2 | Plataforma transversal: idempotencia, rate limiting, `ETag`, cursores | — | Pendiente |
 | 3 | Cerrar el `reaper` y las tareas programadas | — | Pendiente |
 | 4 | Normalizador de Markdown canónico y su prueba de ida y vuelta (§11 recomienda hacerlo primero) | — | Pendiente |
@@ -140,7 +140,7 @@ final. Un módulo sin prueba no está terminado (ver la definición de terminado
 | `identity`, parcial | Registro, verificación de correo, login, `/me`, logout con revocación inmediata |
 | `audit` | Registro inmutable, verificado contra `UPDATE` |
 | Proxy y escalado | Caddy con reparto por turnos; `--scale api=3 --scale worker=3` verificado |
-| Contrato OpenAPI | `backend/openapi/openapi.yaml`, validado con redocly sin advertencias, servido por la API e incluido en el CI |
+| Contrato OpenAPI | Las 88 operaciones, validadas con redocly sin advertencias, servidas por la API. `scripts/contrato.sh` comprueba en CI que lo declarado como implementado exista de verdad |
 | ADR-0015, D2 y D3 | Aceptadas: cookie firmada con endpoint `media-sessions` (ya en el contrato) y prohibición de claves JSON (comprobada en el CI) |
 | Andamiaje de evidencia | Pruebas unitarias y de capa HTTP, `make seed`, colección de Postman por segmentos, CI con 4 trabajos y plantilla de PR |
 

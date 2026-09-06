@@ -1,8 +1,11 @@
 # API v1 — inventario de endpoints
 
-Prefijo `/api/v1`. Contrato formal en `backend/openapi/openapi.yaml` (OpenAPI
-3.1); este documento es el mapa para repartir el trabajo entre las 4 personas del
-equipo.
+Prefijo `/api/v1`. Este documento es el mapa para repartir el trabajo entre las
+4 personas del equipo.
+
+> **El contrato formal es `backend/openapi/openapi.yaml`**, con las 88
+> operaciones. Si este documento y el contrato discrepan, manda el contrato: es
+> lo que se valida en CI y lo que sirve la API en `GET /openapi.yaml`.
 
 ## Convenciones transversales
 

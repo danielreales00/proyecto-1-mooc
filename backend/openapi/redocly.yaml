@@ -18,6 +18,10 @@ rules:
   # /healthz y /readyz no producen 4xx: o el servicio responde, o no responde.
   operation-4xx-response: off
 
+  # La entrega de binarios y la imagen de la insignia responden 302 hacia una
+  # URL firmada, y nunca 2xx: los bytes no pasan por la API (ADR-0005).
+  operation-2xx-response: off
+
   # El resto del conjunto recomendado se mantiene, incluida la exigencia de
   # operationId y de descripciones.
   operation-operationId: error

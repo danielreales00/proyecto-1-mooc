@@ -31,6 +31,8 @@ make up          # levanta el stack completo y aplica migraciones
 make seed        # datos sintéticos para la demostración
 make test        # pruebas unitarias
 make sec         # govulncheck y gosec, lo mismo que el CI
+make openapi     # valida el contrato con redocly
+make contrato    # comprueba que el contrato y la API no se hayan separado
 make smoke       # recorre el flujo de punta a punta y verifica las condiciones
 make postman     # ejecuta la colección de la demostración con newman
 make scale       # 3 instancias de api y 3 de worker (CE-01)
@@ -61,7 +63,7 @@ backend/
     adapters/     postgres · rediscli · sessions · objectstore · mailer · queue
     modules/      identity · audit          (authoring, media, assessment… pendientes)
   migrations/     SQL versionado, hacia adelante
-  openapi/        openapi.yaml              (pendiente)
+  openapi/        openapi.yaml — 88 operaciones, servido en GET /openapi.yaml
 arquitectura/     ADRs, diseños, requisitos, pendientes
 postman/          colección de la demostración (SEG-1 … SEG-9)
 scripts/          smoke.sh

@@ -148,10 +148,8 @@ jobs:
       - name: Colección de la demostración (newman)
         run: make postman
 
-      - name: La API sirve su propio contrato
-        run: |
-          curl -fsS http://localhost:8090/openapi.yaml | head -1 | grep -q "^#" \
-            && echo "contrato servido"
+      - name: El contrato y la API no se han separado
+        run: make contrato
 
       - name: Escalamiento horizontal (CE-01)
         run: |

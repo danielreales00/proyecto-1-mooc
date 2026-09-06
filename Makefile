@@ -66,6 +66,10 @@ openapi: ## Valida el contrato OpenAPI
 	docker run --rm -v "$(PWD)/backend/openapi":/spec -w /spec \
 		redocly/cli:latest lint openapi.yaml
 
+.PHONY: contrato
+contrato: ## Comprueba que el contrato y la API no se hayan separado
+	@source .env; API="http://localhost:$${API_PORT:-8090}" ./scripts/contrato.sh
+
 .PHONY: sec
 sec: ## Análisis de seguridad: govulncheck y gosec (lo mismo que el CI)
 	docker run --rm -v "$(PWD)/backend":/src -w /src \
