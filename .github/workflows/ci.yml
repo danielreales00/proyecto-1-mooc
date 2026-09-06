@@ -112,16 +112,7 @@ jobs:
 
       - name: Sin claves de cuenta de servicio de GCP (ADR-0015, D3)
         working-directory: .
-        run: |
-          hallazgos=$(grep -rInE 'service_account.*key|credentials\.json|"type":[[:space:]]*"service_account"' \
-            --include='*.go' --include='*.yml' --include='*.yaml' \
-            --include='*.json' --include='*.tf' --include='*.env*' . || true)
-          if [ -n "$hallazgos" ]; then
-            echo "::error::posible credencial de GCP en el repositorio; ADR-0015 (D3) las prohíbe"
-            echo "$hallazgos"
-            exit 1
-          fi
-          echo "sin credenciales estáticas"
+        run: ./scripts/sin-credenciales.sh
 
   # --- migraciones y extremo a extremo --------------------------------------
   # Levanta el stack real con Docker Compose y corre el smoke: es la misma

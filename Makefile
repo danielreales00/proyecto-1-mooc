@@ -73,6 +73,7 @@ sec: ## Análisis de seguridad: govulncheck y gosec (lo mismo que el CI)
 		go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./... && \
 		go install github.com/securego/gosec/v2/cmd/gosec@latest && gosec -exclude-generated -quiet ./... && \
 		echo 'sin hallazgos'"
+	@./scripts/sin-credenciales.sh
 
 .PHONY: test
 test: ## Pruebas unitarias con detector de carreras
