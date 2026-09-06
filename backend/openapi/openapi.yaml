@@ -1,0 +1,451 @@
+# Contrato de la API (RT-05). Es entregable del proyecto (enunciado §8).
+#
+# Cubre lo implementado más los endpoints ya decididos cuyo contrato no debe
+# cambiar al implementarlos. Los endpoints marcados con `x-estado: planificado`
+# están acordados pero todavía no responden.
+#
+# El inventario completo de los 84 endpoints está en
+# arquitectura/disenos/api-v1.md; se van trasladando aquí módulo a módulo.
+
+openapi: 3.1.0
+
+info:
+  title: Plataforma MOOC — API
+  version: 0.1.0
+  description: |
+    Plataforma web de cursos masivos abiertos en línea.
+
+    **Convenciones transversales**
+
+    - Autenticación por token opaco: `Authorization: Bearer <token>`.
+      La sesión se resuelve contra Redis en cada petición, de modo que
+      revocarla surte efecto de inmediato (ADR-0006).
+    - Todos los errores usan `application/problem+json` (RFC 9457), con
+      `trace_id` para correlacionar con los logs y un arreglo `errors` que
+      lista **todos** los incumplimientos, no el primero (ADR-0009).
+    - Los endpoints que crean o mutan de forma no repetible exigen
+      `Idempotency-Key` (ADR-0008).
+    - Paginación por cursor, nunca por desplazamiento.
+    - Los binarios no pasan por la API: se suben y descargan con credenciales
+      firmadas contra el almacenamiento de objetos (ADR-0005).
+  license:
+    name: Uso académico
+
+servers:
+  - url: http://localhost:8090
+    description: Desarrollo local (Docker Compose)
+
+tags:
+  - name: identidad
+    description: Registro, verificación de correo y sesiones (RF-01)
+  - name: medios
+    description: Entrega de contenido multimedia (RF-06, RF-07)
+  - name: operación
+    description: Salud del servicio
+
+security:
+  - sesion: []
+
+paths:
+  /openapi.yaml:
+    get:
+      tags: [operación]
+      operationId: getOpenApiSpec
+      summary: El contrato de esta API
+      description: |
+        La API sirve su propio contrato. Si el archivo no está en el árbol de
+        fuentes, el binario no compila: así el contrato no se queda atrás.
+      security: []
+      responses:
+        "200":
+          description: Documento OpenAPI 3.1
+          content:
+            application/yaml:
+              schema: { type: string }
+
+  /healthz:
+    get:
+      tags: [operación]
+      operationId: healthCheck
+      summary: Vivacidad del proceso
+      security: []
+      responses:
+        "200":
+          description: El proceso responde
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, const: ok }
+
+  /readyz:
+    get:
+      tags: [operación]
+      operationId: readinessCheck
+      summary: Preparación para recibir tráfico
+      description: |
+        Comprueba PostgreSQL, Redis y el almacén de objetos. Docker Compose lo
+        usa para el orden de arranque; en GCP lo usará Cloud Run.
+      security: []
+      responses:
+        "200":
+          description: Todas las dependencias responden
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Readiness" }
+        "503":
+          description: Alguna dependencia no responde
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Readiness" }
+
+  /api/v1/auth/register:
+    post:
+      tags: [identidad]
+      operationId: registerStudent
+      summary: Registro público de estudiante
+      description: |
+        Solo crea estudiantes: los profesores se crean por administración
+        (RF-01).
+
+        Responde `202` sin esperar al worker que envía el correo de
+        verificación. El trabajo se registra en PostgreSQL dentro de la misma
+        transacción que el usuario y se publica en la cola después del commit,
+        de modo que un fallo de Redis no pierde el correo (ADR-0004).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterRequest" }
+      responses:
+        "202":
+          description: Cuenta creada, pendiente de verificación
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegisterResponse" }
+        "409":
+          $ref: "#/components/responses/Conflicto"
+        "422":
+          $ref: "#/components/responses/Validacion"
+        "429":
+          $ref: "#/components/responses/DemasiadasSolicitudes"
+
+  /api/v1/auth/verify-email:
+    post:
+      tags: [identidad]
+      operationId: verifyEmail
+      summary: Verificar el correo con el token recibido
+      description: El token es de un solo uso y expira a las 24 horas.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: Correo verificado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  verified: { type: boolean, const: true }
+                  detail: { type: string }
+        "422":
+          description: Token inválido, ya consumido o expirado
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /api/v1/auth/login:
+    post:
+      tags: [identidad]
+      operationId: login
+      summary: Iniciar sesión
+      description: |
+        Devuelve un token opaco de sesión. El mismo `401` y el mismo mensaje se
+        usan para usuario inexistente, contraseña incorrecta, cuenta sin
+        verificar y cuenta suspendida: no se revela qué correos existen.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        "200":
+          description: Sesión abierta
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LoginResponse" }
+        "401":
+          $ref: "#/components/responses/NoAutenticado"
+        "422":
+          $ref: "#/components/responses/Validacion"
+        "429":
+          $ref: "#/components/responses/DemasiadasSolicitudes"
+
+  /api/v1/auth/logout:
+    post:
+      tags: [identidad]
+      operationId: logout
+      summary: Cerrar la sesión actual
+      description: |
+        Borra la sesión de Redis. La petición siguiente con ese token responde
+        `401`, sin ventana de gracia.
+      responses:
+        "204":
+          description: Sesión revocada
+        "401":
+          $ref: "#/components/responses/NoAutenticado"
+
+  /api/v1/me:
+    get:
+      tags: [identidad]
+      operationId: getCurrentUser
+      summary: Perfil de la sesión actual
+      responses:
+        "200":
+          description: Perfil
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401":
+          $ref: "#/components/responses/NoAutenticado"
+
+  /api/v1/enrollments/{enrollmentId}/media-sessions:
+    post:
+      tags: [medios]
+      operationId: createMediaSession
+      summary: Abrir una sesión de reproducción para un recurso
+      x-estado: planificado
+      x-adr: ADR-0015 (D2)
+      description: |
+        Emite la credencial con la que el estudiante reproduce un recurso de
+        video o audio, **después** de verificar rol, propiedad e inscripción
+        (CA-06).
+
+        **Por qué existe este endpoint.** Firmar cada segmento HLS por separado
+        no escala detrás de un CDN: un video de 40 minutos son unos 400
+        segmentos, y cada uno pediría una firma a la API. La credencial se emite
+        una sola vez por sesión de reproducción.
+
+        **Cómo cambia entre entregas, sin romper al cliente.**
+
+        | Entrega | `delivery` | Credencial |
+        | --- | --- | --- |
+        | 1 (Docker Compose, MinIO) | `signed_url` | El `manifest_url` ya viene firmado |
+        | 3 (GCP, Cloud CDN) | `signed_cookie` | Cabecera `Set-Cookie` acotada por prefijo de ruta |
+
+        El cliente lee `delivery` y actúa en consecuencia: en ambos casos pide
+        `manifest_url` y reproduce. El campo `scope` indica hasta dónde alcanza
+        la credencial, para poder ampliarla más adelante sin cambiar el
+        contrato.
+
+        La sesión caduca; al expirar se vuelve a llamar a este endpoint.
+      parameters:
+        - $ref: "#/components/parameters/EnrollmentId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resource_stable_id]
+              properties:
+                resource_stable_id:
+                  type: string
+                  format: uuid
+                  description: |
+                    Identificador estable del recurso, no el `id` de fila: así
+                    el enlace sobrevive a la publicación de una versión nueva
+                    del curso (ADR-0007).
+      responses:
+        "201":
+          description: Sesión de reproducción abierta
+          headers:
+            Set-Cookie:
+              description: |
+                Solo cuando `delivery` es `signed_cookie`. Acotada por prefijo
+                de ruta, `HttpOnly`, `Secure` y `SameSite=Lax`.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MediaSession" }
+        "401":
+          $ref: "#/components/responses/NoAutenticado"
+        "403":
+          description: |
+            Sin inscripción activa en el curso, o el recurso no pertenece a la
+            versión vigente.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+        "404":
+          $ref: "#/components/responses/NoEncontrado"
+        "409":
+          description: El recurso todavía no está listo para reproducirse
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+components:
+  securitySchemes:
+    sesion:
+      type: http
+      scheme: bearer
+      description: |
+        Token opaco de 32 bytes emitido por `/api/v1/auth/login`. No es un JWT:
+        no lleva información dentro y se puede revocar (ADR-0006).
+
+  parameters:
+    EnrollmentId:
+      name: enrollmentId
+      in: path
+      required: true
+      description: Identificador de la inscripción del estudiante
+      schema: { type: string, format: uuid }
+
+  schemas:
+    Problem:
+      type: object
+      description: Error uniforme, RFC 9457.
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+          examples: ["https://mooc.local/errors/validation_failed"]
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        trace_id:
+          type: string
+          description: Correlaciona esta respuesta con los logs y las trazas.
+        errors:
+          type: array
+          description: |
+            **Todos** los incumplimientos, no el primero. Es la mecánica que
+            exige CA-01 para la publicación de un curso.
+          items: { $ref: "#/components/schemas/FieldError" }
+
+    FieldError:
+      type: object
+      required: [code]
+      properties:
+        code: { type: string, examples: ["password.too_short"] }
+        field: { type: string, examples: ["password"] }
+        detail: { type: string }
+
+    Readiness:
+      type: object
+      description: "`ok` o el motivo del fallo, por dependencia."
+      properties:
+        postgres: { type: string }
+        redis: { type: string }
+        objectstore: { type: string }
+
+    RegisterRequest:
+      type: object
+      required: [email, password, full_name]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, format: password, minLength: 10, maxLength: 128 }
+        full_name: { type: string, minLength: 1, maxLength: 120 }
+
+    RegisterResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        status: { type: string, const: pending_verification }
+        detail: { type: string }
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: "Token opaco de sesión. Va en la cabecera `Authorization: Bearer`."
+        expires_at: { type: string, format: date-time }
+        user: { $ref: "#/components/schemas/User" }
+
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        full_name: { type: string }
+        role:
+          type: string
+          enum: [admin, teacher, student]
+        status:
+          type: string
+          enum: [active, suspended, deleted]
+        email_verified_at:
+          type: [string, "null"]
+          format: date-time
+        created_at: { type: string, format: date-time }
+
+    MediaSession:
+      type: object
+      required: [manifest_url, delivery, scope, expires_at]
+      properties:
+        manifest_url:
+          type: string
+          format: uri
+          description: |
+            Manifiesto HLS. Ya viene firmado cuando `delivery` es `signed_url`.
+        delivery:
+          type: string
+          enum: [signed_url, signed_cookie]
+          description: |
+            Cómo se autoriza la descarga de los segmentos. `signed_url` en la
+            Entrega 1 sobre MinIO; `signed_cookie` en GCP con Cloud CDN.
+        scope:
+          type: string
+          enum: [asset, course_version]
+          description: |
+            Hasta dónde alcanza la credencial. Permite ampliarla más adelante
+            sin cambiar el contrato (ADR-0015, consecuencia abierta de D2).
+        expires_at: { type: string, format: date-time }
+
+  responses:
+    NoAutenticado:
+      description: Sin sesión, o la sesión fue revocada o expiró
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    NoEncontrado:
+      description: No encontrado
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Conflicto:
+      description: Estado incompatible con la operación
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    Validacion:
+      description: La solicitud tiene campos inválidos
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }
+    DemasiadasSolicitudes:
+      description: Límite de tasa superado
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/Problem" }

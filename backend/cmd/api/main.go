@@ -25,6 +25,7 @@ import (
 	"mooc/backend/internal/platform/httpx"
 	"mooc/backend/internal/platform/jobs"
 	"mooc/backend/internal/platform/logging"
+	"mooc/backend/openapi"
 )
 
 func main() {
@@ -90,6 +91,13 @@ func run() error {
 	health := &health{pool: pool, redis: sessionRedis, objects: store}
 	mux.HandleFunc("GET /healthz", health.live)
 	mux.HandleFunc("GET /readyz", health.ready)
+
+	// La API sirve su propio contrato (RT-05, entregable §8).
+	mux.HandleFunc("GET /openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=300")
+		_, _ = w.Write(openapi.Spec)
+	})
 
 	handler := httpx.Chain(mux,
 		httpx.RequestID(),

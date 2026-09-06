@@ -72,6 +72,11 @@ leer el ADR correspondiente:
   genere el esquema.
 - Los secretos salen de variables de entorno (`.env` local, gestor externo en
   la nube). `.env` nunca se versiona; `.env.example` sí.
+- **Nunca se crean claves JSON de cuenta de servicio de GCP**, ni siquiera para
+  probar. La autenticación hacia GCP va por Workload Identity Federation. Una
+  clave creada "temporalmente" acaba en el repositorio. → `adr/0015` (D3)
+- **El contrato manda.** Un endpoint nuevo entra primero en
+  `backend/openapi/openapi.yaml`. La API lo sirve en `GET /openapi.yaml`.
 
 ## Estado actual
 

@@ -1,0 +1,24 @@
+# Configuración del linter del contrato.
+#
+# Las reglas desactivadas llevan su motivo: una advertencia sin explicación se
+# acaba ignorando, y entonces deja de servir para nada.
+
+extends:
+  - recommended
+
+rules:
+  # La licencia es de uso académico y no tiene identificador SPDX ni URL
+  # pública. El proyecto no se distribuye.
+  info-license-strict: off
+
+  # El único servidor declarado es el entorno local de Docker Compose, que es
+  # lo que exige la Entrega 1. Los de GCP se añaden en la Entrega 3.
+  no-server-example.com: off
+
+  # /healthz y /readyz no producen 4xx: o el servicio responde, o no responde.
+  operation-4xx-response: off
+
+  # El resto del conjunto recomendado se mantiene, incluida la exigencia de
+  # operationId y de descripciones.
+  operation-operationId: error
+  operation-summary: error

@@ -52,7 +52,7 @@ hechos, así que conviene antes de repartir el dominio.
 | Rate limiting en Redis | No existe | `CE-02`. La base lógica 3 está reservada y sin usar |
 | `ETag` / `If-Match` | No existe | El autosave de `RF-04` lo necesita para detectar escrituras concurrentes |
 | Paginación por cursor | No existe (no hay listas todavía) | `RT-05` |
-| OpenAPI 3.1 | `backend/openapi/` está vacío | `RT-05` y entregable §8 |
+| OpenAPI 3.1 | **Creado y validado**, con identidad, salud y `media-sessions`. La API lo sirve en `GET /openapi.yaml`. Faltan los otros ~75 endpoints | `RT-05` y entregable §8 |
 | `/metrics` (Prometheus) | No existe | Sin métricas no hay alerta de DLQ (`CA-03`) ni p95 (`RNF-05`) |
 | Trazas OpenTelemetry | Solo hay logs estructurados | `RT-06`, exigido explícitamente |
 | Protección del último administrador | No existe | `RF-02` |
@@ -109,8 +109,7 @@ Lo de arriba desbloquea lo de abajo.
 
 | # | Tarea | Quién | Estado |
 | --- | --- | --- | --- |
-| 0 | Resolver D2 y D3 de ADR-0015. D2 cambia el contrato de la API, así que va **antes** del OpenAPI | Todos | Pendiente |
-| 1 | Acordar entre los cuatro el OpenAPI y el resto de las migraciones. Sigue siendo el cuello de botella para trabajar en paralelo | Todos | Pendiente |
+| 1 | Trasladar al OpenAPI el resto de los 84 endpoints, y acordar las migraciones. Sigue siendo el cuello de botella para trabajar en paralelo. **El archivo ya existe** con identidad, salud y `media-sessions` | Todos | Pendiente |
 | 2 | Plataforma transversal: idempotencia, rate limiting, `ETag`, cursores | — | Pendiente |
 | 3 | Cerrar el `reaper` y las tareas programadas | — | Pendiente |
 | 4 | Normalizador de Markdown canónico y su prueba de ida y vuelta (§11 recomienda hacerlo primero) | — | Pendiente |
@@ -141,6 +140,8 @@ final. Un módulo sin prueba no está terminado (ver la definición de terminado
 | `identity`, parcial | Registro, verificación de correo, login, `/me`, logout con revocación inmediata |
 | `audit` | Registro inmutable, verificado contra `UPDATE` |
 | Proxy y escalado | Caddy con reparto por turnos; `--scale api=3 --scale worker=3` verificado |
+| Contrato OpenAPI | `backend/openapi/openapi.yaml`, validado con redocly sin advertencias, servido por la API e incluido en el CI |
+| ADR-0015, D2 y D3 | Aceptadas: cookie firmada con endpoint `media-sessions` (ya en el contrato) y prohibición de claves JSON (comprobada en el CI) |
 | Andamiaje de evidencia | Pruebas unitarias y de capa HTTP, `make seed`, colección de Postman por segmentos, CI con 4 trabajos y plantilla de PR |
 
 ## Decisiones abiertas
@@ -157,9 +158,8 @@ Cuando se resuelvan, cada una se convierte en un ADR.
 | Tecnología del frontend (E2) | React / Angular / Svelte | Equipo | No bloquea la Entrega 1 |
 | Token en claro dentro de `job_runs.payload` | Dejarlo / cifrar el payload / que el worker genere el token | Equipo | Hoy el token de verificación viaja en claro en el payload del trabajo, porque el correo debe contenerlo y `one_time_tokens` solo guarda el hash. Acotado: expira en 24 h y la fila se poda. Ver `internal/modules/identity/service.go` |
 | Recorte de la escalera HLS para la demo | 360p+720p / la escalera completa | Equipo | La completa alarga mucho la grabación |
-| **Entrega de HLS detrás del CDN** | Firma por segmento / **cookie firmada** | Equipo | **ADR-0015 (D2). Bloquea el OpenAPI**: la cookie exige un endpoint `media-sessions` que hay que fijar antes de congelar el contrato |
-| **Cliente de objetos en GCP** | Interoperabilidad S3 / **adaptador GCS nativo** | Equipo | ADR-0015 (D1). La interoperabilidad exige claves HMAC de larga vida |
-| **Credenciales hacia GCP** | Claves JSON / **Workload Identity Federation** | Equipo | ADR-0015 (D3). Decidirlo ya es gratis y evita que una clave acabe en el repositorio |
+| **Cliente de objetos en GCP** | Interoperabilidad S3 / **adaptador GCS nativo** | Equipo | ADR-0015 (D1). D3 ya lo implica casi por completo: las claves HMAC también son una credencial estática |
+| Alcance de la credencial de reproducción | Por asset / por versión de curso | Equipo | Consecuencia abierta de D2. **No toca el contrato**: la respuesta lleva un campo `scope`. Se decide al implementar `media` |
 
 ## Riesgos vigilados
 

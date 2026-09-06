@@ -61,6 +61,11 @@ vet: ## Análisis estático
 	docker run --rm -v "$(PWD)/backend":/src -w /src \
 		-v mooc-gomodcache:/go/pkg/mod $(GO_IMAGE) go vet ./...
 
+.PHONY: openapi
+openapi: ## Valida el contrato OpenAPI
+	docker run --rm -v "$(PWD)/backend/openapi":/spec -w /spec \
+		redocly/cli:latest lint openapi.yaml
+
 .PHONY: sec
 sec: ## Análisis de seguridad: govulncheck y gosec (lo mismo que el CI)
 	docker run --rm -v "$(PWD)/backend":/src -w /src \

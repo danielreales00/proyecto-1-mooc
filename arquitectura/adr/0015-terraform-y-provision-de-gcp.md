@@ -1,6 +1,7 @@
 # ADR-0015 — Terraform y provisión de GCP
 
-- **Estado:** **Propuesto** — el equipo decide. No implementar hasta aceptarlo.
+- **Estado:** **Parcialmente aceptado** — D2 y D3 aceptados el 2026-09-05.
+  D1 y D4–D7 siguen Propuestos.
 - **Fecha:** 2026-09-05
 - **Requisitos:** `RT-01`, `RT-06`, `CE-01`
 - **Refina:** ADR-0010 (portabilidad a GCP). Puede reemplazar parte de ADR-0005.
@@ -29,7 +30,7 @@ ADR separa unas de otras, para no pagar por adelantado lo que no hace falta.
 **Terraform se escribe en la Entrega 3, no antes.** Lo que se decide ahora es
 solo aquello cuyo aplazamiento obligaría a reescribir código o contratos.
 
-### D1 — Almacenamiento de objetos en GCP: SDK nativo, no interoperabilidad S3
+### D1 — Almacenamiento de objetos en GCP: SDK nativo, no interoperabilidad S3 · Propuesto
 
 ADR-0005 apostó por hablar el protocolo S3 para tener un solo adaptador en local
 (MinIO) y en la nube (GCS por su endpoint XML). El problema es la credencial: el
@@ -45,7 +46,7 @@ Coste: un adaptador más, unas 200 líneas, en la Entrega 3.
 Beneficio: cero credenciales de larga vida, y firmas de URL con la identidad de
 la carga de trabajo.
 
-### D2 — Entrega de HLS: cookie firmada de CDN, con endpoint propio
+### D2 — Entrega de HLS: cookie firmada de CDN, con endpoint propio · **ACEPTADO**
 
 El diseño actual (`disenos/api-v1.md`) firma **cada segmento** por separado.
 Detrás de Cloud CDN eso no funciona bien: un video de 40 minutos son ~400
@@ -69,7 +70,7 @@ En local, la Entrega 1 puede seguir firmando por segmento sin coste: son pocos
 recursos y no hay CDN. Lo que no se puede es **descubrir en la Entrega 3 que el
 contrato era otro**.
 
-### D3 — Autenticación: Workload Identity Federation, sin claves JSON
+### D3 — Autenticación: Workload Identity Federation, sin claves JSON · **ACEPTADO**
 
 **No se crean claves JSON de cuenta de servicio. Nunca, ni para probar.**
 
@@ -128,18 +129,41 @@ infra/
 
 Lo que el equipo debe resolver, y cuándo.
 
-| # | Decisión | Opciones | Recomendación | Qué bloquea | Cuándo |
+| # | Decisión | Opciones | Resultado | Qué bloquea | Cuándo |
 | --- | --- | --- | --- | --- | --- |
-| **D2** | Entrega de HLS | Firma por segmento · **Cookie firmada de CDN** | Cookie firmada, con endpoint `media-sessions` en el OpenAPI desde ya | **El OpenAPI y los módulos `media` y `enrollment`** | **Antes de congelar el OpenAPI** |
-| **D1** | Cliente de objetos en GCP | Interoperabilidad S3 (claves HMAC) · **Adaptador GCS nativo** | Adaptador nativo; el S3 se queda para MinIO | El puerto `objectstore` y, con él, ADR-0005 | Antes de la Entrega 3; conviene fijarlo ya porque justifica D3 |
-| **D3** | Credenciales hacia GCP | Claves JSON · **Workload Identity Federation** | WIF, y prohibición explícita de claves JSON | Nada del código, pero sí la higiene del repositorio | **Ya**: es gratis y evita un accidente |
+| **D2** | Entrega de HLS | Firma por segmento · Cookie firmada de CDN | **✅ Aceptado 2026-09-05: cookie firmada.** El endpoint `media-sessions` ya está en el OpenAPI | El OpenAPI y los módulos `media` y `enrollment` | Resuelto |
+| **D3** | Credenciales hacia GCP | Claves JSON · Workload Identity Federation | **✅ Aceptado 2026-09-05: WIF. Prohibidas las claves JSON de cuenta de servicio** | La higiene del repositorio | Resuelto |
+| **D1** | Cliente de objetos en GCP | Interoperabilidad S3 (claves HMAC) · **Adaptador GCS nativo** | Propuesto. **D3 lo implica casi por completo**: las claves HMAC son también una credencial estática de larga vida | El puerto `objectstore` y, con él, ADR-0005 | Antes de la Entrega 3 |
 | **D4** | Cómputo de `worker-media` | Cloud Run · Grupo de instancias gestionado | Decidir en la Entrega 3, midiendo | Nada | Entrega 3 |
 | **D5** | Estructura de Terraform y estado remoto | Módulos + entornos · Un solo directorio | Módulos + entornos, estado en GCS | Nada | Entrega 3 |
 | **D6** | Tamaño de Cloud SQL y pool | Ajustar `MaxConns` · Intermediario de conexiones | Ajustar por variable; medir antes | Nada | Entrega 3 |
 | **D7** | Entornos | Solo `prod` · `dev` + `prod` | `dev` + `prod`: sin un sitio donde equivocarse, se prueba en producción | Coste en GCP | Entrega 3 |
 
-**Solo D2 y D3 son urgentes.** Las demás están aquí para que no se decidan por
-omisión.
+**D2 y D3 quedaron resueltas.** Las demás están aquí para que no se decidan por
+omisión; ninguna bloquea la Entrega 1.
+
+### Consecuencia abierta de D2: alcance de la credencial
+
+Aceptar la cookie firmada deja una sub-decisión que **no afecta al contrato de
+la API** —la respuesta es la misma en ambos casos— pero sí al diseño de claves
+de objeto:
+
+- **Por asset** (`derived/{asset_id}/…`, como hoy en ADR-0005): una credencial
+  por video. Simple, y no duplica derivados cuando una versión nueva del curso
+  reutiliza el mismo asset (ADR-0007).
+- **Por versión de curso**: una sola credencial para todo el curso, menos idas y
+  vueltas. Pero obligaría a duplicar los derivados HLS por versión, que es justo
+  lo que ADR-0007 evita.
+
+La respuesta de `media-sessions` incluye el campo `scope` precisamente para que
+esto se pueda cambiar sin romper al cliente. Se decide al implementar `media`.
+
+## Estado de la implementación
+
+| Decisión | Qué se hizo al aceptarla |
+| --- | --- |
+| D2 | `POST /api/v1/enrollments/{enrollmentId}/media-sessions` añadido a `backend/openapi/openapi.yaml` y a `disenos/api-v1.md`. En la Entrega 1 devolverá `delivery: "signed_url"` con una URL firmada de MinIO; en la Entrega 3 pasará a `delivery: "signed_cookie"` **sin cambiar el contrato** |
+| D3 | Regla registrada en `CLAUDE.md`. El CI ya falla si aparece una credencial en el repositorio |
 
 ## Alternativas consideradas
 

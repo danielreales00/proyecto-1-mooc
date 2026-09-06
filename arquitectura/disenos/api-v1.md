@@ -89,8 +89,7 @@ equipo.
 | POST | `/assets/{id}:abort` | P A | |
 | GET | `/assets/{id}` | P A | Estado, MIME detectado, sha256, derivados |
 | GET | `/assets/{id}/content` | A P E* | `302` a URL firmada (15 min) tras verificar el derecho (`CA-06`) |
-| GET | `/assets/{id}/hls/master.m3u8` | A P E* | Manifiesto con URLs firmadas de las variantes |
-| GET | `/assets/{id}/hls/{variant}/{file}` | A P E* | Redirección firmada por segmento |
+| GET | `/assets/{id}/hls/master.m3u8` | A P E* | Manifiesto. La credencial la emite `media-sessions`, no este endpoint |
 
 `E*` = estudiante **con inscripción activa** en un curso que publica ese asset.
 
@@ -100,6 +99,7 @@ equipo.
 | --- | --- | --- | --- |
 | GET | `/catalog/courses` | — | Solo publicados. `?q=&category=&language=&cursor=`. Full-text |
 | GET | `/catalog/courses/{slug}` | — | Ficha pública: estructura sin contenido privado |
+| POST | `/enrollments/{id}/media-sessions` | E | **Abre una sesión de reproducción.** Emite la credencial una sola vez por sesión, en lugar de firmar cada segmento: detrás de un CDN eso no escala (ADR-0015, D2). Ya está en el OpenAPI |
 | POST | `/enrollments` **[IK]** | E | Inscribe. Reinscribir reactiva y **conserva progreso** |
 | GET | `/enrollments` | E | Propias |
 | GET | `/enrollments/{id}` | E | Progreso, estado, insignia |
@@ -142,12 +142,12 @@ equipo.
 
 ## Operación
 
-| Método | Ruta | Rol |
-| --- | --- | --- |
-| GET | `/healthz` | — |
-| GET | `/readyz` | — |
-| GET | `/metrics` | red interna |
-| GET | `/openapi.yaml` | — |
+| Método | Ruta | Rol | |
+| --- | --- | --- | --- |
+| GET | `/healthz` | — | **Implementado** |
+| GET | `/readyz` | — | **Implementado** |
+| GET | `/metrics` | red interna | |
+| GET | `/openapi.yaml` | — | **Implementado** |
 
 ## Catálogo de códigos de error
 

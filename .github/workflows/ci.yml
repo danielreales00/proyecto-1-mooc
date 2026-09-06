@@ -49,8 +49,14 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      - name: Compilar los cuatro binarios
+      - name: Compilar los binarios
         run: go build ./...
+
+      - name: Contrato OpenAPI válido
+        working-directory: backend/openapi
+        run: |
+          docker run --rm -v "$PWD":/spec -w /spec \
+            redocly/cli:latest lint openapi.yaml
 
   # --- pruebas unitarias ----------------------------------------------------
   test:
@@ -104,6 +110,19 @@ jobs:
           go install github.com/securego/gosec/v2/cmd/gosec@latest
           gosec -exclude-generated ./...
 
+      - name: Sin claves de cuenta de servicio de GCP (ADR-0015, D3)
+        working-directory: .
+        run: |
+          hallazgos=$(grep -rInE 'service_account.*key|credentials\.json|"type":[[:space:]]*"service_account"' \
+            --include='*.go' --include='*.yml' --include='*.yaml' \
+            --include='*.json' --include='*.tf' --include='*.env*' . || true)
+          if [ -n "$hallazgos" ]; then
+            echo "::error::posible credencial de GCP en el repositorio; ADR-0015 (D3) las prohíbe"
+            echo "$hallazgos"
+            exit 1
+          fi
+          echo "sin credenciales estáticas"
+
   # --- migraciones y extremo a extremo --------------------------------------
   # Levanta el stack real con Docker Compose y corre el smoke: es la misma
   # evidencia que se muestra en la demostración, no una simulación.
@@ -137,6 +156,11 @@ jobs:
 
       - name: Colección de la demostración (newman)
         run: make postman
+
+      - name: La API sirve su propio contrato
+        run: |
+          curl -fsS http://localhost:8090/openapi.yaml | head -1 | grep -q "^#" \
+            && echo "contrato servido"
 
       - name: Escalamiento horizontal (CE-01)
         run: |
