@@ -355,7 +355,9 @@ Convenciones: token opaco en `Authorization: Bearer`, errores uniformes en
 Trabajos asíncronos: `email.send`, `badge.issue` y el `reaper`. Faltan los de
 medios.
 
-El detalle, con lo que falta de plataforma y evidencia, está en
+El desglose completo módulo a módulo está en
+[`arquitectura/estado-modulos.md`](arquitectura/estado-modulos.md).
+El detalle de lo que falta de plataforma y evidencia, en
 [`arquitectura/pendientes.md`](arquitectura/pendientes.md).
 
 ## Estructura del proyecto
