@@ -32,6 +32,7 @@ import (
 	"mooc/backend/internal/platform/httpx"
 	"mooc/backend/internal/platform/jobs"
 	"mooc/backend/internal/platform/logging"
+	"mooc/backend/internal/platform/ratelimit"
 	"mooc/backend/openapi"
 )
 
@@ -67,6 +68,15 @@ func run() error {
 		return err
 	}
 	defer sessionRedis.Close()
+
+	// Base lógica propia: los contadores de tasa no comparten espacio de
+	// claves con las sesiones ni con la cola (ADR-0004).
+	limitRedis, err := rediscli.Open(ctx, cfg.RedisAddr, cfg.RedisPassword, cfg.RedisLimitDB)
+	if err != nil {
+		return err
+	}
+	defer limitRedis.Close()
+	limiter := ratelimit.New(limitRedis)
 
 	store, err := objectstore.Open(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey,
 		cfg.S3UseSSL, cfg.S3Buckets.Originals)
@@ -105,9 +115,21 @@ func run() error {
 	soloDocentes := identity.RequireRole(identity.RoleTeacher, identity.RoleAdmin)
 	soloAdmin := identity.RequireRole(identity.RoleAdmin)
 
-	identity.NewAPI(identitySvc).Routes(mux, auth)
+	identity.NewAPI(identitySvc).Routes(mux, auth, identity.Limitador{
+		PorIP: func(r ratelimit.Regla) httpx.Middleware {
+			return limiter.Middleware(r, ratelimit.PorIP, log)
+		},
+		PorCuenta: func(r ratelimit.Regla) httpx.Middleware {
+			return limiter.Middleware(r, ratelimit.PorCampoDelCuerpo("email"), log)
+		},
+	})
 	authoring.NewAPI(authoringSvc).Routes(mux, auth, soloDocentes)
-	learning.NewAPI(learningSvc, tamperAuditor{pool: pool, rec: recorder, log: log}).Routes(mux, auth)
+	learning.NewAPI(learningSvc, tamperAuditor{pool: pool, rec: recorder, log: log}).
+		Routes(mux, auth, func(r ratelimit.Regla) httpx.Middleware {
+			// Por sesión, no por IP: varios estudiantes tras el mismo NAT no
+			// deben estorbarse.
+			return limiter.Middleware(r, ratelimit.PorSesion, log)
+		})
 	badges.NewAPI(badgeSvc).Routes(mux, auth, soloAdmin)
 	assessment.NewAPI(assessmentSvc).Routes(mux, auth, soloDocentes)
 

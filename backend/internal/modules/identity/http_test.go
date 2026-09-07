@@ -173,7 +173,7 @@ func montar(t *testing.T) *banco {
 	}, log)
 
 	mux := http.NewServeMux()
-	NewAPI(svc).Routes(mux, Authenticate(svc))
+	NewAPI(svc).Routes(mux, Authenticate(svc), Limitador{})
 
 	return &banco{
 		handler:  httpx.Chain(mux, httpx.RequestID(), httpx.Recover(log)),

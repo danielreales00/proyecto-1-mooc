@@ -8,20 +8,44 @@ import (
 
 	"mooc/backend/internal/platform/httpx"
 	"mooc/backend/internal/platform/problem"
+	"mooc/backend/internal/platform/ratelimit"
 )
 
 type API struct {
 	svc *Service
 }
 
+// Limitador agrupa las formas de contar. Si sus campos son nil, las rutas se
+// registran sin límite (útil en pruebas).
+type Limitador struct {
+	PorIP     func(ratelimit.Regla) httpx.Middleware
+	PorCuenta func(ratelimit.Regla) httpx.Middleware
+}
+
 func NewAPI(svc *Service) *API { return &API{svc: svc} }
 
 // Routes registra los endpoints públicos y los autenticados. El ruteo por
 // método y comodín es el ServeMux de la stdlib (ADR-0002).
-func (a *API) Routes(mux *http.ServeMux, auth httpx.Middleware) {
-	mux.HandleFunc("POST /api/v1/auth/register", a.register)
-	mux.HandleFunc("POST /api/v1/auth/verify-email", a.verifyEmail)
-	mux.HandleFunc("POST /api/v1/auth/login", a.login)
+//
+// limitar aplica el límite de tasa correspondiente a cada endpoint sin sesión;
+// si es nil, se registran sin límite (útil en pruebas).
+func (a *API) Routes(mux *http.ServeMux, auth httpx.Middleware, lim Limitador) {
+	conLimite := func(regla ratelimit.Regla, h http.HandlerFunc) http.Handler {
+		if lim.PorIP == nil {
+			return h
+		}
+		return lim.PorIP(regla)(h)
+	}
+
+	mux.Handle("POST /api/v1/auth/register", conLimite(LimiteRegistro, a.register))
+	mux.Handle("POST /api/v1/auth/verify-email", conLimite(LimiteVerificacion, a.verifyEmail))
+
+	// El login lleva los dos niveles: estrecho por cuenta, ancho por IP.
+	login := http.Handler(http.HandlerFunc(a.login))
+	if lim.PorIP != nil && lim.PorCuenta != nil {
+		login = lim.PorCuenta(LimiteLoginCuenta)(lim.PorIP(LimiteLoginIP)(login))
+	}
+	mux.Handle("POST /api/v1/auth/login", login)
 
 	mux.Handle("POST /api/v1/auth/logout", auth(http.HandlerFunc(a.logout)))
 	mux.Handle("GET /api/v1/me", auth(http.HandlerFunc(a.me)))

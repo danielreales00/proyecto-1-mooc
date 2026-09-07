@@ -3,7 +3,7 @@
 Video de la Entrega 1. La interfaz es Postman y la línea de órdenes, como
 autorizó el profesor.
 
-**Duración objetivo: 18 minutos.** Un bloque por segmento de la §10.2 del
+**Duración objetivo: 19 minutos.** Un bloque por segmento de la §10.2 del
 enunciado, más apertura y cierre.
 
 **Índice:** [Antes de grabar](#antes-de-grabar) ·
@@ -117,7 +117,7 @@ docker compose ps | grep -c mooc-api
 
 ---
 
-### 2 · Identidad — 2,5 min · *SEG-1, CE-02*
+### 2 · Identidad — 3 min · *SEG-1, CE-02*
 
 **Postman → SEG-1**
 
@@ -147,6 +147,31 @@ docker compose ps | grep -c mooc-api
 
    > «La sesión se resuelve contra Redis en cada petición, así que revocarla
    > tiene efecto **inmediato**. No hay ventana de gracia.»
+
+6. **Límite de tasa.** En la terminal, seis intentos contra la misma cuenta:
+
+   ```bash
+   for i in $(seq 1 6); do
+     curl -s -o /dev/null -w "%{http_code} " -X POST localhost:8090/api/v1/auth/login \
+       -H 'Content-Type: application/json' \
+       -d '{"email":"profesor@mooc.local","password":"mala"}'
+   done; echo
+   ```
+
+   > «Cinco cuatrocientos uno y un **cuatrocientos veintinueve**.
+   >
+   > Y hay un detalle de diseño: el límite es por **cuenta**, no solo por IP.
+   > Limitar únicamente por IP castigaría a una universidad entera detrás de un
+   > NAT. Así que van dos niveles: uno estrecho por cuenta, cinco por minuto,
+   > y otro ancho por IP, sesenta, contra el rociado de contraseñas.»
+
+   Demuéstralo: otra cuenta desde la misma IP entra sin problema.
+
+   ```bash
+   curl -s -o /dev/null -w "%{http_code}\n" -X POST localhost:8090/api/v1/auth/login \
+     -H 'Content-Type: application/json' \
+     -d '{"email":"estudiante2@mooc.local","password":"Contrasena-Demo-2026"}'
+   ```
 
 **Acredita:** identidad, autorización y seguridad (CE-02).
 

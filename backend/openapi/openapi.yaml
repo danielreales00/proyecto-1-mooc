@@ -29,6 +29,9 @@ info:
     - **Concurrencia.** Los recursos editables devuelven `ETag`, y su `PATCH`
       exige `If-Match`. Si no coincide, `412` con el estado del servidor.
     - **Paginación.** Siempre por cursor opaco, nunca por desplazamiento.
+    - **Límites de tasa.** Los endpoints sensibles responden `429` con
+      `Retry-After`, y todos llevan las cabeceras `RateLimit-*`. El login se
+      limita por cuenta y por IP a la vez.
     - **Acciones.** Van como segmento final de la ruta
       (`POST .../versions/1/publish`), no con dos puntos. El `ServeMux` de la
       stdlib exige que un comodín ocupe el segmento entero, y elegimos la
@@ -220,8 +223,8 @@ paths:
       x-estado: planificado
       summary: Reenviar el correo de verificación
       description: |
-        Limitado a 3 por hora y por correo. Responde `202` exista o no la
-        cuenta, para no revelar qué correos están registrados.
+        Responde `202` exista o no la cuenta, para no revelar qué correos están
+        registrados. Limitado por IP.
       security: []
       requestBody:
         required: true
@@ -246,7 +249,14 @@ paths:
 
         El mismo `401` y el mismo mensaje para usuario inexistente, contraseña
         incorrecta, cuenta sin verificar y cuenta suspendida: no se revela qué
-        correos existen ni en qué estado están. Limitado a 5 por minuto e IP.
+        correos existen ni en qué estado están.
+
+        **Límite de tasa en dos niveles:** 5 por minuto y **cuenta**, y 60 por
+        minuto e IP. Limitar solo por IP castigaría a quienes comparten salida
+        a internet; limitar solo por cuenta dejaría rociar contraseñas contra
+        muchas cuentas desde una máquina. Las respuestas llevan
+        `RateLimit-Limit`, `RateLimit-Remaining` y `RateLimit-Reset`, y el 429
+        añade `Retry-After`.
       security: []
       requestBody:
         required: true

@@ -12,6 +12,7 @@ import (
 	"mooc/backend/internal/platform/httpx"
 	"mooc/backend/internal/platform/markdown"
 	"mooc/backend/internal/platform/problem"
+	"mooc/backend/internal/platform/ratelimit"
 )
 
 type API struct {
@@ -27,7 +28,13 @@ type auditor interface {
 
 func NewAPI(svc *Service, a auditor) *API { return &API{svc: svc, audit: a} }
 
-func (a *API) Routes(mux *http.ServeMux, auth httpx.Middleware) {
+// LimiteProgreso acota la ingesta de evidencias. El servidor ya rechaza los
+// heartbeats demasiado seguidos por cadencia (ADR-0012); esto es la segunda
+// barrera, contra quien inunde el endpoint sin esperar respuesta.
+var LimiteProgreso = ratelimit.Regla{Nombre: "progress", Limite: 120, Ventana: time.Minute}
+
+func (a *API) Routes(mux *http.ServeMux, auth httpx.Middleware,
+	limitar func(ratelimit.Regla) httpx.Middleware) {
 	// Catálogo: público.
 	mux.HandleFunc("GET /api/v1/catalog/courses", a.search)
 	mux.HandleFunc("GET /api/v1/catalog/courses/{slug}", a.bySlug)
@@ -37,7 +44,11 @@ func (a *API) Routes(mux *http.ServeMux, auth httpx.Middleware) {
 	mux.Handle("GET /api/v1/enrollments/{id}", auth(http.HandlerFunc(a.get)))
 	mux.Handle("POST /api/v1/enrollments/{id}/withdraw", auth(http.HandlerFunc(a.withdraw)))
 	mux.Handle("GET /api/v1/enrollments/{id}/content", auth(http.HandlerFunc(a.content)))
-	mux.Handle("POST /api/v1/enrollments/{id}/progress", auth(http.HandlerFunc(a.report)))
+	reportar := http.Handler(http.HandlerFunc(a.report))
+	if limitar != nil {
+		reportar = limitar(LimiteProgreso)(reportar)
+	}
+	mux.Handle("POST /api/v1/enrollments/{id}/progress", auth(reportar))
 	mux.Handle("GET /api/v1/enrollments/{id}/progress", auth(http.HandlerFunc(a.summary)))
 }
 

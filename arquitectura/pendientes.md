@@ -55,7 +55,7 @@ hechos, así que conviene antes de repartir el dominio.
 | Pieza | Estado | Por qué importa |
 | --- | --- | --- |
 | Middleware de `Idempotency-Key` | La tabla `platform.idempotency_keys` existe **vacía y sin usar** | `RT-05`; sin esto no hay envío idempotente de quiz (`CA-04`) ni inscripción segura |
-| Rate limiting en Redis | No existe | `CE-02`. La base lógica 3 está reservada y sin usar |
+| Rate limiting en Redis | **Hecho**: login en dos niveles (cuenta e IP), registro, verificación y progreso. Base lógica 3 | `CE-02` |
 | `ETag` / `If-Match` | No existe | El autosave de `RF-04` lo necesita para detectar escrituras concurrentes |
 | Paginación por cursor | No existe (no hay listas todavía) | `RT-05` |
 | OpenAPI 3.1 | **Completo**: las 88 operaciones del inventario, validadas con redocly sin advertencias. Las 80 que aún no responden llevan `x-estado: planificado`. La API lo sirve en `GET /openapi.yaml` y `make contrato` detecta la deriva | `RT-05` y entregable §8 |
@@ -116,7 +116,7 @@ Lo de arriba desbloquea lo de abajo.
 | # | Tarea | Quién | Estado |
 | --- | --- | --- | --- |
 | 1 | **Revisar el contrato entre los cuatro** y acordar el resto de las migraciones. El OpenAPI ya está escrito con las 88 operaciones: es un borrador para enmendar, no un acuerdo | Todos | Pendiente |
-| 2 | Plataforma transversal: idempotencia, rate limiting, `ETag`, cursores | — | Pendiente |
+| 2 | Plataforma transversal: idempotencia HTTP, `ETag`, cursores (el rate limiting ya está) | — | Pendiente |
 | 3 | Cerrar el `reaper` y las tareas programadas | — | Pendiente |
 | 4 | Normalizador de Markdown canónico y su prueba de ida y vuelta (§11 recomienda hacerlo primero) | — | Pendiente |
 | 5 | `authoring` con validación de publicación e inmutabilidad | — | Pendiente |

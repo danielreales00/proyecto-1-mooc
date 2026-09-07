@@ -226,6 +226,21 @@ publica en la cola después del commit. La insignia es única por inscripción, 
 dos barreras: la clave determinista del trabajo y una restricción `UNIQUE` en la
 base. Su URL pública **no expone el correo del estudiante**.
 
+## Límites de tasa
+
+El login lleva **dos niveles a la vez**: 5 por minuto y cuenta, y 60 por minuto
+e IP. Limitar solo por IP castigaría a una universidad entera detrás de un NAT;
+limitar solo por cuenta dejaría rociar contraseñas contra muchas cuentas desde
+una sola máquina. Con los dos, un ataque contra una cuenta se frena en cinco
+intentos y el vecino de al lado sigue entrando.
+
+También se limitan el registro, la verificación de correo y la ingesta de
+evidencias de progreso, esta última por sesión y no por IP.
+
+Las respuestas llevan `RateLimit-Limit`, `RateLimit-Remaining` y
+`RateLimit-Reset`; el `429` añade `Retry-After`. **Si Redis falla, la petición
+se permite**: un limitador caído no debe dejar el servicio inaccesible.
+
 ## Idempotencia y tolerancia a fallos
 
 ### El trabajo vive en PostgreSQL, no en Redis
