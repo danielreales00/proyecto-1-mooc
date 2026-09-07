@@ -349,7 +349,7 @@ Convenciones: token opaco en `Authorization: Bearer`, errores uniformes en
 | `learning` | Completo: catálogo, inscripción, progreso, aprobación |
 | `assessment` | Completo: quizzes, intentos, calificación |
 | `badges` | Completo: emisión, verificación pública, revocación |
-| `media` | **No implementado** — multipart, ClamAV, FFmpeg → HLS |
+| `media` | **No implementado.** Esquema, contrato y decisiones ya existen; ver [`media-plan.md`](arquitectura/media-plan.md) |
 | `admin` | **No implementado** — usuarios, roles, sesiones ajenas por API |
 
 Trabajos asíncronos: `email.send`, `badge.issue` y el `reaper`. Faltan los de

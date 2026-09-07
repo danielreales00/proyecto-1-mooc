@@ -10,6 +10,7 @@ Documentación de arquitectura del proyecto. Se lee en este orden.
 | [aclaraciones-profesor.md](aclaraciones-profesor.md) | Precisiones posteriores. **Prevalecen sobre el enunciado** |
 | [requisitos.md](requisitos.md) | Matriz con IDs trazables (`RF-`, `RO-`, `CA-`, `RT-`, `CE-`, `SEG-`, `RNF-`) |
 | [alcance-entrega-1.md](alcance-entrega-1.md) | Qué entra y qué no en esta entrega |
+| [media-plan.md](media-plan.md) | El módulo de multimedia: qué está diseñado, qué falta y en qué orden |
 
 ## Por qué se construye así
 

@@ -41,7 +41,7 @@ Ninguno de estos existe todavía, salvo lo indicado en `identity`.
 | ~~`authoring`~~ | **hecho** | El más grande. Cursos, versiones, módulos, unidades y recursos; reordenamiento; autosave; previsualización; validación de publicación con lista exhaustiva; versiones inmutables y `stable_id`. Incluye el normalizador de Markdown canónico | `RF-03`, `RF-04`, `CA-01`, `CE-03` |
 | ~~`assessment`~~ | **hecho** | Autoría de quizzes, snapshot del intento, guardado parcial, expiración, envío idempotente, calificación en servidor, retroalimentación por política | `RF-08`, `CA-04`, `CE-05` |
 | `admin` | 9 | Alta de profesores, roles, estados, sesiones ajenas, consulta de auditoría, listado de la cola y reencolado desde la DLQ. Protección del último administrador activo | `RF-02`, `CE-02` |
-| `media` | 9 | **Lo único grande que falta.** Multipart prefirmado, reanudación 24 h, checksum y MIME real, escaneo antimalware, transcodificación HLS, entrega firmada | `RF-05`, `RF-06`, `RF-07`, `CA-02` |
+| `media` | 9 | **Lo único grande que falta.** Esquema, contrato y decisiones ya existen; falta el código. Plan de implementación en [`media-plan.md`](media-plan.md) | `RF-05`, `RF-06`, `RF-07`, `CA-02` |
 | ~~`catalog` + `enrollment`~~ | **hecho** (módulo `learning`) | Catálogo con búsqueda, filtros y cursores; inscripción, retiro y reinscripción conservando progreso | `RF-10` |
 | ~~`badges`~~ | **hecho** | Emisión única por inscripción, imagen, URL pública de verificación sin correo, revocación auditada | `RF-09`, `CA-07` |
 | ~~`progress`~~ | **hecho** (módulo `learning`) | Pocos endpoints, mucha regla: ingesta de evidencias, rechazo y auditoría de manipulación, cálculo sobre obligatorios, transición a `completed` y `approved` | `RF-09`, `CA-05`, `CE-06` |

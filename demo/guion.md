@@ -454,11 +454,18 @@ docker compose exec postgres psql -U mooc -d mooc -c \
 > publicación, inscripción, consumo, evaluación, progreso e insignia, con los
 > workers funcionando y las condiciones de aceptación comprobadas.
 >
-> **Lo que falta**, y lo digo claro: el módulo de multimedia —carga multipart,
-> escaneo antimalware y transcodificación a HLS— y la administración de
-> usuarios por API. Cuarenta y cuatro de las ochenta y ocho operaciones del
-> contrato responden hoy; el contrato de las otras ya está escrito y validado,
-> con la marca de pendientes.
+> **Lo que falta**, y lo digo claro: el módulo de multimedia y la
+> administración de usuarios por API. Cuarenta y cuatro de las ochenta y ocho
+> operaciones responden hoy.
+>
+> Multimedia no es un hueco en blanco: su esquema está aplicado, sus nueve
+> operaciones están en el contrato y validadas, y las decisiones —carga
+> multipart directa, ClamAV, FFmpeg y la entrega por cookie firmada— están
+> tomadas en los ADR cinco, once y quince. En `arquitectura/media-plan.md` está
+> el plan de implementación paso a paso, y cada paso deja algo demostrable.
+>
+> La decisión fue anchura antes que profundidad: demostrar el flujo completo
+> pesaba más que dos módulos perfectos y siete ausentes.
 >
 > Todo lo demostrado es reproducible con `make up && make seed && make demo`.»
 
