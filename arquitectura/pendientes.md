@@ -14,17 +14,23 @@ que la API no guarda estado (CE-01).
 
 ## Dónde estamos
 
-Medido contra el inventario de `disenos/api-v1.md`: **7 de 84 endpoints**.
+Medido contra el contrato: **44 de 88 operaciones**.
 
 | | Hecho | Falta |
 | --- | --- | --- |
-| Endpoints | 7 | 77 |
-| Módulos de dominio | 2 de 10 (`identity` parcial, `audit`) | 8 |
-| Tipos de trabajo asíncrono | 1 de 11 | 10 |
-| Migraciones | 1 (`identity`, `audit`, `platform`) | El resto del esquema |
-| Pruebas automáticas | 0 | Todas |
+| Operaciones de la API | 44 | 44 |
+| Módulos de dominio | 6 (`identity` parcial, `audit`, `authoring`, `learning`, `assessment`, `badges`) | `admin`, `media` |
+| Tipos de trabajo asíncrono | 2 (`email.send`, `badge.issue`) + el `reaper` | 8 |
+| Migraciones | 2 (esquema completo del dominio) | Ninguna bloqueante |
+| Segmentos de la demostración | 6 de 9 verificados por `make demo` | SEG-3 y SEG-4 parciales; falta `media` |
 
-Está el esqueleto y una rebanada. Falta prácticamente todo el dominio.
+**El flujo de trabajo completo funciona de punta a punta**: registro →
+verificación por correo → autoría → publicación → catálogo → inscripción →
+consumo → quiz → progreso → aprobación → insignia verificable. `make demo` lo
+recorre entero y comprueba cada condición.
+
+Lo que falta es sobre todo **multimedia** (`media`: carga multipart, ClamAV,
+FFmpeg) y **administración** (`admin`).
 
 ## Qué falta — módulos de dominio
 
@@ -32,13 +38,13 @@ Ninguno de estos existe todavía, salvo lo indicado en `identity`.
 
 | Módulo | Endpoints | Qué implica | Requisitos |
 | --- | --- | --- | --- |
-| `authoring` | 24 | El más grande. Cursos, versiones, módulos, unidades y recursos; reordenamiento; autosave; previsualización; validación de publicación con lista exhaustiva; versiones inmutables y `stable_id`. Incluye el normalizador de Markdown canónico | `RF-03`, `RF-04`, `CA-01`, `CE-03` |
-| `assessment` | 10 | Autoría de quizzes, snapshot del intento, guardado parcial, expiración, envío idempotente, calificación en servidor, retroalimentación por política | `RF-08`, `CA-04`, `CE-05` |
+| ~~`authoring`~~ | **hecho** | El más grande. Cursos, versiones, módulos, unidades y recursos; reordenamiento; autosave; previsualización; validación de publicación con lista exhaustiva; versiones inmutables y `stable_id`. Incluye el normalizador de Markdown canónico | `RF-03`, `RF-04`, `CA-01`, `CE-03` |
+| ~~`assessment`~~ | **hecho** | Autoría de quizzes, snapshot del intento, guardado parcial, expiración, envío idempotente, calificación en servidor, retroalimentación por política | `RF-08`, `CA-04`, `CE-05` |
 | `admin` | 9 | Alta de profesores, roles, estados, sesiones ajenas, consulta de auditoría, listado de la cola y reencolado desde la DLQ. Protección del último administrador activo | `RF-02`, `CE-02` |
-| `media` | 9 | Multipart prefirmado, reanudación 24 h, verificación de checksum y MIME real, escaneo antimalware, entrega firmada de HLS y PDF | `RF-05`, `RF-06`, `RF-07`, `CA-02` |
-| `catalog` + `enrollment` | 8 | Catálogo con búsqueda, filtros y cursores; inscripción, retiro y reinscripción conservando progreso | `RF-10` |
-| `badges` | 5 | Emisión única por inscripción, imagen, URL pública de verificación sin correo, revocación auditada | `RF-09`, `CA-07` |
-| `progress` | 3 | Pocos endpoints, mucha regla: ingesta de evidencias, rechazo y auditoría de manipulación, cálculo sobre obligatorios, transición a `completed` y `approved` | `RF-09`, `CA-05`, `CE-06` |
+| `media` | 9 | **Lo único grande que falta.** Multipart prefirmado, reanudación 24 h, checksum y MIME real, escaneo antimalware, transcodificación HLS, entrega firmada | `RF-05`, `RF-06`, `RF-07`, `CA-02` |
+| ~~`catalog` + `enrollment`~~ | **hecho** (módulo `learning`) | Catálogo con búsqueda, filtros y cursores; inscripción, retiro y reinscripción conservando progreso | `RF-10` |
+| ~~`badges`~~ | **hecho** | Emisión única por inscripción, imagen, URL pública de verificación sin correo, revocación auditada | `RF-09`, `CA-07` |
+| ~~`progress`~~ | **hecho** (módulo `learning`) | Pocos endpoints, mucha regla: ingesta de evidencias, rechazo y auditoría de manipulación, cálculo sobre obligatorios, transición a `completed` y `approved` | `RF-09`, `CA-05`, `CE-06` |
 | `identity` | 7 de 12 | Faltan: reenvío de verificación, recuperación y restablecimiento de contraseña, `PATCH /me`, cambio de contraseña, listado y revocación de sesiones propias | `RF-01` |
 
 ## Qué falta — plataforma transversal
@@ -68,20 +74,20 @@ Solo corre `email.send`.
 | `media.scan` | Falta — ClamAV por INSTREAM, cuarentena y auditoría |
 | `media.transcode_hls` | Falta — FFmpeg, escalera sin *upscaling*, original intacto |
 | `media.poster` | Falta |
-| `badge.issue` | Falta |
+| `badge.issue` | **Hecho** |
 | `progress.recompute` | Falta |
-| `jobs.reaper` (programado) | Falta — **ver abajo** |
+| `jobs.reaper` (programado) | **Hecho**: recupera los `queued` huérfanos y los `running` sin heartbeat |
 | `assessment.expire_attempts` (programado) | Falta |
 | `media.sweep_uploads` (programado) | Falta |
 | Poda de `job_runs`, `progress_events` e `idempotency_keys` (programado) | Falta |
 | `doc.convert_pdf` | Opcional (`RO-01`) |
 
-> **El `reaper` merece mención aparte.** La mitad de la garantía del outbox está
-> escrita: el trabajo se registra en PostgreSQL en la misma transacción que el
-> cambio de dominio, antes de publicarse en asynq. Pero **nadie recupera todavía
-> las filas huérfanas**, así que la afirmación "perder Redis no pierde trabajo"
-> (ADR-0004, recomendación §11 del enunciado) hoy es cierta a medias. Es barato
-> de cerrar y conviene hacerlo antes de que se apoye más código en esa promesa.
+> **El `reaper` ya está.** Cierra la otra mitad de la garantía del outbox: el
+> trabajo se registra en PostgreSQL antes de publicarse, y si la publicación se
+> pierde, el reaper lo republica. `make demo` lo demuestra devolviendo un
+> trabajo a la cola y comprobando que el worker lo **reejecuta** (intento 2) sin
+> producir una segunda insignia. Sin el reaper, esa prueba habría pasado por el
+> motivo equivocado: porque nadie lo ejecutaba.
 
 ## Qué falta — infraestructura y evidencia
 

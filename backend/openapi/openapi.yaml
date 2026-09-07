@@ -644,7 +644,6 @@ paths:
     get:
       tags: [autoría]
       operationId: listCourses
-      x-estado: planificado
       summary: Listar los cursos de los que se es autor
       description: Un profesor ve los suyos; un administrador, todos.
       parameters:
@@ -661,7 +660,6 @@ paths:
     post:
       tags: [autoría]
       operationId: createCourse
-      x-estado: planificado
       summary: Crear un curso
       description: Crea el curso y su versión 1 en estado `draft`.
       parameters:
@@ -687,7 +685,6 @@ paths:
     get:
       tags: [autoría]
       operationId: getCourse
-      x-estado: planificado
       summary: Ver un curso
       responses:
         "200":
@@ -702,7 +699,6 @@ paths:
     patch:
       tags: [autoría]
       operationId: updateCourse
-      x-estado: planificado
       summary: Actualizar los metadatos del curso
       parameters:
         - $ref: "#/components/parameters/IfMatch"
@@ -741,7 +737,6 @@ paths:
     get:
       tags: [autoría]
       operationId: listCourseVersions
-      x-estado: planificado
       summary: Listar las versiones del curso
       responses:
         "200":
@@ -758,7 +753,6 @@ paths:
     post:
       tags: [autoría]
       operationId: createCourseVersion
-      x-estado: planificado
       summary: Crear una versión nueva a partir de la vigente
       description: |
         Clona la versión vigente a un borrador con `version_number + 1`,
@@ -790,7 +784,6 @@ paths:
     get:
       tags: [autoría]
       operationId: getCourseVersion
-      x-estado: planificado
       summary: Árbol completo de una versión
       responses:
         "200":
@@ -810,7 +803,6 @@ paths:
     get:
       tags: [autoría]
       operationId: previewCourseVersion
-      x-estado: planificado
       summary: Previsualizar la versión como la vería un estudiante
       description: |
         Devuelve el árbol con `content_html` ya renderizado desde el Markdown
@@ -831,7 +823,6 @@ paths:
     post:
       tags: [autoría]
       operationId: validateCourseVersion
-      x-estado: planificado
       summary: Comprobar si la versión se puede publicar, sin publicarla
       description: |
         Mismas reglas que `/publish`, pero sin efecto. Devuelve `200` con la
@@ -851,7 +842,6 @@ paths:
     post:
       tags: [autoría]
       operationId: publishCourseVersion
-      x-estado: planificado
       summary: Publicar la versión
       description: |
         **No falla al primer error**: recorre todas las reglas y devuelve la
@@ -889,7 +879,6 @@ paths:
     post:
       tags: [autoría]
       operationId: unpublishCourseVersion
-      x-estado: planificado
       summary: Despublicar la versión para poder editarla
       description: |
         En la Entrega 1, editar un curso publicado exige despublicarlo, como
@@ -914,7 +903,6 @@ paths:
     post:
       tags: [autoría]
       operationId: createModule
-      x-estado: planificado
       summary: Añadir un módulo a la versión
       requestBody:
         required: true
@@ -990,7 +978,6 @@ paths:
     post:
       tags: [autoría]
       operationId: createUnit
-      x-estado: planificado
       summary: Añadir una unidad al módulo
       requestBody:
         required: true
@@ -1064,7 +1051,6 @@ paths:
     post:
       tags: [autoría]
       operationId: createResource
-      x-estado: planificado
       summary: Añadir un recurso a la unidad
       requestBody:
         required: true
@@ -1105,7 +1091,6 @@ paths:
     patch:
       tags: [autoría]
       operationId: updateResource
-      x-estado: planificado
       summary: Actualizar los atributos de un recurso
       description: Título, visibilidad, obligatoriedad y posibilidad de descarga.
       parameters:
@@ -1140,7 +1125,6 @@ paths:
     patch:
       tags: [autoría]
       operationId: saveResourceContent
-      x-estado: planificado
       summary: Guardar el contenido del recurso (autosave)
       description: |
         El servidor **no guarda lo que recibe**: parsea el Markdown, lo valida
@@ -1461,7 +1445,6 @@ paths:
     get:
       tags: [catálogo]
       operationId: searchCatalog
-      x-estado: planificado
       summary: Buscar cursos publicados
       description: Público. Solo cursos con una versión publicada.
       security: []
@@ -1484,7 +1467,6 @@ paths:
     get:
       tags: [catálogo]
       operationId: getCatalogCourse
-      x-estado: planificado
       summary: Ficha pública de un curso
       description: |
         Devuelve la estructura (módulos y unidades) **sin el contenido
@@ -1505,7 +1487,6 @@ paths:
     get:
       tags: [inscripción]
       operationId: listOwnEnrollments
-      x-estado: planificado
       summary: Inscripciones propias
       parameters:
         - { name: status, in: query, schema: { type: string, enum: [active, withdrawn] } }
@@ -1521,7 +1502,6 @@ paths:
     post:
       tags: [inscripción]
       operationId: enroll
-      x-estado: planificado
       summary: Inscribirse en un curso
       description: |
         Si el estudiante ya estuvo inscrito y se retiró, **reactiva la
@@ -1557,7 +1537,6 @@ paths:
     get:
       tags: [inscripción]
       operationId: getEnrollment
-      x-estado: planificado
       summary: Ver una inscripción
       description: Incluye el estado, el porcentaje calculado y la insignia si la hay.
       responses:
@@ -1575,7 +1554,6 @@ paths:
     post:
       tags: [inscripción]
       operationId: withdrawEnrollment
-      x-estado: planificado
       summary: Retirarse del curso
       description: |
         Marca la inscripción como `withdrawn`. **No borra nada**: el progreso y
@@ -1594,7 +1572,6 @@ paths:
     get:
       tags: [inscripción]
       operationId: getEnrollmentContent
-      x-estado: planificado
       summary: Árbol del curso con el progreso del estudiante
       description: |
         Devuelve la versión vigente con el estado de cada recurso. Los recursos
@@ -1704,7 +1681,6 @@ paths:
     get:
       tags: [evaluación]
       operationId: getQuizForAuthoring
-      x-estado: planificado
       summary: Ver el quiz completo, con las claves correctas
       description: |
         **La única ruta por la que `is_correct` sale del servidor**, y solo para
@@ -1723,7 +1699,6 @@ paths:
     put:
       tags: [evaluación]
       operationId: putQuiz
-      x-estado: planificado
       summary: Configurar el quiz completo
       parameters:
         - $ref: "#/components/parameters/IfMatch"
@@ -1811,7 +1786,6 @@ paths:
     get:
       tags: [evaluación]
       operationId: listAttempts
-      x-estado: planificado
       summary: Historial de intentos del estudiante en este quiz
       responses:
         "200":
@@ -1831,7 +1805,6 @@ paths:
     post:
       tags: [evaluación]
       operationId: startAttempt
-      x-estado: planificado
       summary: Iniciar un intento
       description: |
         **Congela un snapshot** de las preguntas y opciones tal como están en
@@ -1864,7 +1837,6 @@ paths:
     get:
       tags: [evaluación]
       operationId: getAttempt
-      x-estado: planificado
       summary: Ver el intento con el snapshot y lo guardado
       description: |
         La respuesta **nunca contiene `is_correct`**. Una prueba de contrato
@@ -1886,7 +1858,6 @@ paths:
     patch:
       tags: [evaluación]
       operationId: saveAttemptAnswers
-      x-estado: planificado
       summary: Guardado parcial de respuestas
       description: |
         Naturalmente idempotente: guardar de nuevo sustituye la respuesta de esa
@@ -1927,7 +1898,6 @@ paths:
     post:
       tags: [evaluación]
       operationId: submitAttempt
-      x-estado: planificado
       summary: Enviar el intento y calificarlo
       description: |
         La calificación **se calcula en el servidor** contra el snapshot, nunca
@@ -1959,7 +1929,6 @@ paths:
     get:
       tags: [evaluación]
       operationId: getAttemptResult
-      x-estado: planificado
       summary: Resultado del intento, según la política de retroalimentación
       description: |
         Lo que se devuelve depende de `feedback_policy` del quiz:
@@ -1995,7 +1964,6 @@ paths:
     post:
       tags: [progreso]
       operationId: reportProgressEvidence
-      x-estado: planificado
       summary: Reportar una evidencia de avance
       description: |
         **El cliente reporta evidencias, nunca conclusiones.**
@@ -2041,7 +2009,6 @@ paths:
     get:
       tags: [progreso]
       operationId: getProgress
-      x-estado: planificado
       summary: Progreso calculado por el servidor
       description: |
         El porcentaje se calcula **solo sobre los recursos obligatorios y
@@ -2080,7 +2047,6 @@ paths:
     get:
       tags: [insignias]
       operationId: listOwnBadges
-      x-estado: planificado
       summary: Insignias propias
       responses:
         "200":
@@ -2118,7 +2084,6 @@ paths:
     post:
       tags: [insignias]
       operationId: revokeBadge
-      x-estado: planificado
       summary: Revocar una insignia
       description: |
         Queda auditado. Una insignia revocada **sigue siendo consultable** por
@@ -2150,7 +2115,6 @@ paths:
     get:
       tags: [insignias]
       operationId: verifyBadge
-      x-estado: planificado
       summary: Verificación pública de una insignia
       description: |
         **Pública, sin autenticación.** Devuelve nombre del estudiante, curso,

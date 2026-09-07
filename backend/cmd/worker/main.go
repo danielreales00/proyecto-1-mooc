@@ -52,6 +52,14 @@ func run() error {
 	defer pool.Close()
 
 	runner := queue.NewRunner(pool, log)
+
+	// El reaper recupera los trabajos que quedaron registrados en PostgreSQL
+	// pero nunca llegaron a la cola, y los que un worker dejó a medias
+	// (ADR-0004). Sin él, la promesa "perder Redis no pierde trabajo" solo se
+	// cumple a medias.
+	publisher := queue.NewPublisher(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisQueueDB)
+	defer publisher.Close()
+	queue.NewReaper(pool, publisher, log).Start(ctx, 30*time.Second)
 	emails := identity.NewEmailWorker(
 		mailer.New(cfg.SMTPAddr, cfg.MailFrom), cfg.PublicBaseURL, log)
 

@@ -7,10 +7,16 @@ objetos, ejecutado íntegramente en Docker.
 
 ## Estado
 
-**Entrega 1 en preparación.** Documentación de arquitectura completa. En
-`feat/esqueleto-backend` hay una rebanada vertical del backend: registro de
-estudiante → trabajo asíncrono → correo → verificación → login → `/me` →
-revocación de sesión.
+**Entrega 1.** El flujo de trabajo completo funciona de punta a punta:
+
+```
+registro → verificación por correo → autoría → publicación → catálogo →
+inscripción → consumo → quiz → progreso → aprobación → insignia verificable
+```
+
+`make demo` lo recorre entero y comprueba cada condición del enunciado.
+44 de las 88 operaciones del contrato responden; lo principal que falta es
+multimedia (`media`) y administración (`admin`).
 
 Para esta entrega, backend y workers van completos y funcionales; **no hay
 frontend**, y la demostración se hace con Postman.
@@ -33,7 +39,8 @@ make test        # pruebas unitarias
 make sec         # govulncheck y gosec, lo mismo que el CI
 make openapi     # valida el contrato con redocly
 make contrato    # comprueba que el contrato y la API no se hayan separado
-make smoke       # recorre el flujo de punta a punta y verifica las condiciones
+make demo        # RECORRIDO COMPLETO de la demostración (guion del video)
+make smoke       # comprobación rápida de identidad
 make postman     # ejecuta la colección de la demostración con newman
 make scale       # 3 instancias de api y 3 de worker (CE-01)
 ```
