@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"mooc/backend/internal/platform/problem"
@@ -53,12 +54,19 @@ func Decode(w http.ResponseWriter, r *http.Request, dst any) error {
 }
 
 // Fail traduce cualquier error a una respuesta uniforme. Un error que no sea
-// *problem.Problem se considera interno y no se filtra al cliente.
+// *problem.Problem se considera interno: al cliente se le da un mensaje
+// genérico, pero la causa **sí se registra** con el trace_id de la petición.
+// Sin eso, un 500 no deja rastro de por qué ocurrió.
 func Fail(w http.ResponseWriter, r *http.Request, err error) {
 	var p *problem.Problem
 	if errors.As(err, &p) {
 		problem.Write(w, r, p)
 		return
 	}
+	slog.Error("error interno no controlado",
+		"error", err,
+		"method", r.Method,
+		"path", r.URL.Path,
+		"trace_id", RequestIDFrom(r.Context()))
 	problem.Write(w, r, problem.Internal())
 }

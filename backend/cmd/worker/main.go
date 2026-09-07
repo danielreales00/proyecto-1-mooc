@@ -37,6 +37,9 @@ func run() error {
 		return err
 	}
 	log := logging.New(cfg.LogLevel)
+	// Para que los errores registrados fuera de un handler con logger propio
+	// (httpx.Fail) salgan en el mismo formato estructurado.
+	slog.SetDefault(log)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

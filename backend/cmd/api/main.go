@@ -20,6 +20,7 @@ import (
 	"mooc/backend/internal/adapters/rediscli"
 	"mooc/backend/internal/adapters/sessions"
 	"mooc/backend/internal/modules/audit"
+	"mooc/backend/internal/modules/authoring"
 	"mooc/backend/internal/modules/identity"
 	"mooc/backend/internal/platform/config"
 	"mooc/backend/internal/platform/httpx"
@@ -41,6 +42,9 @@ func run() error {
 		return err
 	}
 	log := logging.New(cfg.LogLevel)
+	// Para que los errores registrados fuera de un handler con logger propio
+	// (httpx.Fail) salgan en el mismo formato estructurado.
+	slog.SetDefault(log)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -84,9 +88,14 @@ func run() error {
 	)
 
 	// --- ruteo ------------------------------------------------------------
+	authoringSvc := authoring.NewService(postgres.NewAuthoringStore(pool), recorder, log)
+
 	mux := http.NewServeMux()
 	auth := identity.Authenticate(identitySvc)
+	soloDocentes := identity.RequireRole(identity.RoleTeacher, identity.RoleAdmin)
+
 	identity.NewAPI(identitySvc).Routes(mux, auth)
+	authoring.NewAPI(authoringSvc).Routes(mux, auth, soloDocentes)
 
 	health := &health{pool: pool, redis: sessionRedis, objects: store}
 	mux.HandleFunc("GET /healthz", health.live)

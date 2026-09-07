@@ -233,3 +233,26 @@ func translate(err error) error {
 		return err
 	}
 }
+
+// RequireRole restringe un endpoint a los roles indicados. Es el control de
+// acceso por rol que exige CA-06; la propiedad la comprueba cada módulo.
+func RequireRole(roles ...string) httpx.Middleware {
+	permitidos := make(map[string]bool, len(roles))
+	for _, r := range roles {
+		permitidos[r] = true
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			p, ok := httpx.PrincipalFrom(r.Context())
+			if !ok {
+				problem.Write(w, r, problem.Unauthorized("Se requiere una sesión activa."))
+				return
+			}
+			if !permitidos[p.Role] {
+				problem.Write(w, r, problem.Forbidden("Tu rol no permite esta operación."))
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}

@@ -29,6 +29,10 @@ info:
     - **Concurrencia.** Los recursos editables devuelven `ETag`, y su `PATCH`
       exige `If-Match`. Si no coincide, `412` con el estado del servidor.
     - **Paginación.** Siempre por cursor opaco, nunca por desplazamiento.
+    - **Acciones.** Van como segmento final de la ruta
+      (`POST .../versions/1/publish`), no con dos puntos. El `ServeMux` de la
+      stdlib exige que un comodín ocupe el segmento entero, y elegimos la
+      stdlib en el ADR-0002.
     - **Binarios.** No pasan por la API: se suben y descargan con credenciales
       firmadas contra el almacenamiento de objetos (ADR-0005).
 
@@ -605,7 +609,7 @@ paths:
               schema: { $ref: "#/components/schemas/JobRunPage" }
         "403": { $ref: "#/components/responses/Prohibido" }
 
-  /api/v1/admin/jobs/{jobId}:requeue:
+  /api/v1/admin/jobs/{jobId}/requeue:
     post:
       tags: [administración]
       operationId: requeueJob
@@ -820,7 +824,7 @@ paths:
               schema: { $ref: "#/components/schemas/CourseVersionTree" }
         "403": { $ref: "#/components/responses/Prohibido" }
 
-  /api/v1/courses/{courseId}/versions/{versionNumber}:validate:
+  /api/v1/courses/{courseId}/versions/{versionNumber}/validate:
     parameters:
       - $ref: "#/components/parameters/CourseId"
       - $ref: "#/components/parameters/VersionNumber"
@@ -830,7 +834,7 @@ paths:
       x-estado: planificado
       summary: Comprobar si la versión se puede publicar, sin publicarla
       description: |
-        Mismas reglas que `:publish`, pero sin efecto. Devuelve `200` con la
+        Mismas reglas que `/publish`, pero sin efecto. Devuelve `200` con la
         lista de incumplimientos, vacía si todo está en orden.
       responses:
         "200":
@@ -840,7 +844,7 @@ paths:
               schema: { $ref: "#/components/schemas/PublicationCheck" }
         "403": { $ref: "#/components/responses/Prohibido" }
 
-  /api/v1/courses/{courseId}/versions/{versionNumber}:publish:
+  /api/v1/courses/{courseId}/versions/{versionNumber}/publish:
     parameters:
       - $ref: "#/components/parameters/CourseId"
       - $ref: "#/components/parameters/VersionNumber"
@@ -878,7 +882,7 @@ paths:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
 
-  /api/v1/courses/{courseId}/versions/{versionNumber}:unpublish:
+  /api/v1/courses/{courseId}/versions/{versionNumber}/unpublish:
     parameters:
       - $ref: "#/components/parameters/CourseId"
       - $ref: "#/components/parameters/VersionNumber"
@@ -927,7 +931,7 @@ paths:
         "409": { $ref: "#/components/responses/VersionInmutable" }
         "422": { $ref: "#/components/responses/Validacion" }
 
-  /api/v1/versions/{versionId}/modules:reorder:
+  /api/v1/versions/{versionId}/modules/reorder:
     parameters:
       - $ref: "#/components/parameters/VersionId"
     post:
@@ -1002,7 +1006,7 @@ paths:
         "403": { $ref: "#/components/responses/Prohibido" }
         "409": { $ref: "#/components/responses/VersionInmutable" }
 
-  /api/v1/modules/{moduleId}/units:reorder:
+  /api/v1/modules/{moduleId}/units/reorder:
     parameters:
       - $ref: "#/components/parameters/ModuleId"
     post:
@@ -1077,7 +1081,7 @@ paths:
         "409": { $ref: "#/components/responses/VersionInmutable" }
         "422": { $ref: "#/components/responses/Validacion" }
 
-  /api/v1/units/{unitId}/resources:reorder:
+  /api/v1/units/{unitId}/resources/reorder:
     parameters:
       - $ref: "#/components/parameters/UnitId"
     post:
@@ -1200,7 +1204,7 @@ paths:
                     items: { $ref: "#/components/schemas/ContentRevision" }
         "403": { $ref: "#/components/responses/Prohibido" }
 
-  /api/v1/resources/{resourceId}/revisions/{revisionId}:restore:
+  /api/v1/resources/{resourceId}/revisions/{revisionId}/restore:
     parameters:
       - $ref: "#/components/parameters/ResourceId"
       - { name: revisionId, in: path, required: true, schema: { type: string, format: uuid } }
@@ -1317,7 +1321,7 @@ paths:
         "403": { $ref: "#/components/responses/Prohibido" }
         "409": { $ref: "#/components/responses/Conflicto" }
 
-  /api/v1/assets/{assetId}:complete:
+  /api/v1/assets/{assetId}/complete:
     parameters:
       - $ref: "#/components/parameters/AssetId"
     post:
@@ -1364,7 +1368,7 @@ paths:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
 
-  /api/v1/assets/{assetId}:abort:
+  /api/v1/assets/{assetId}/abort:
     parameters:
       - $ref: "#/components/parameters/AssetId"
     post:
@@ -1565,7 +1569,7 @@ paths:
         "403": { $ref: "#/components/responses/Prohibido" }
         "404": { $ref: "#/components/responses/NoEncontrado" }
 
-  /api/v1/enrollments/{enrollmentId}:withdraw:
+  /api/v1/enrollments/{enrollmentId}/withdraw:
     parameters:
       - $ref: "#/components/parameters/EnrollmentId"
     post:
@@ -1917,7 +1921,7 @@ paths:
               schema: { $ref: "#/components/schemas/Problem" }
         "412": { $ref: "#/components/responses/PrecondicionFallida" }
 
-  /api/v1/attempts/{attemptId}:submit:
+  /api/v1/attempts/{attemptId}/submit:
     parameters:
       - $ref: "#/components/parameters/AttemptId"
     post:
@@ -2108,7 +2112,7 @@ paths:
         "403": { $ref: "#/components/responses/Prohibido" }
         "404": { $ref: "#/components/responses/NoEncontrado" }
 
-  /api/v1/badges/{badgeId}:revoke:
+  /api/v1/badges/{badgeId}/revoke:
     parameters:
       - $ref: "#/components/parameters/BadgeId"
     post:

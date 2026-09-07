@@ -16,7 +16,7 @@ Prefijo `/api/v1`. Este documento es el mapa para repartir el trabajo entre las
 | Paginación | Cursor: `?limit=20&cursor=<opaco>`; respuesta `{ "items": [...], "next_cursor": "..." }`. Sin `offset` |
 | Concurrencia | `ETag` en `GET` de recursos editables; `If-Match` obligatorio en su `PATCH` → `412` si no coincide |
 | Idempotencia | `Idempotency-Key` obligatoria en los endpoints marcados **[IK]** (ADR-0008) |
-| Acciones | Verbo con dos puntos: `POST /courses/{id}/versions/{n}:publish` |
+| Acciones | Segmento final de la ruta: `POST /courses/{id}/versions/{n}/publish`. No se usan dos puntos: el `ServeMux` de la stdlib exige que un comodín ocupe el segmento entero (ADR-0002) |
 | Rate limiting | Por IP y por sesión; `429` con `Retry-After` |
 | Fechas | ISO 8601 en UTC |
 | Roles | `A` administrador · `P` profesor · `E` estudiante · `—` público |
@@ -50,7 +50,7 @@ Prefijo `/api/v1`. Este documento es el mapa para repartir el trabajo entre las
 | DELETE | `/admin/users/{id}/sessions` | A | Revocación inmediata de todas (SEG-1) |
 | GET | `/admin/audit` | A | Filtros por actor, acción, entidad, rango; cursor |
 | GET | `/admin/jobs` | A | Cola, DLQ, reintentos |
-| POST | `/admin/jobs/{id}:requeue` **[IK]** | A | Reencola con la **misma** `job_key` (SEG-4) |
+| POST | `/admin/jobs/{id}/requeue` **[IK]** | A | Reencola con la **misma** `job_key` (SEG-4) |
 
 ## Autoría — `authoring` (`RF-03`, `RF-04`)
 
@@ -64,22 +64,22 @@ Prefijo `/api/v1`. Este documento es el mapa para repartir el trabajo entre las
 | GET | `/courses/{id}/versions` | P A | |
 | POST | `/courses/{id}/versions` **[IK]** | P A | Clona la vigente a un `draft` nuevo |
 | GET | `/courses/{id}/versions/{n}` | P A | Árbol completo |
-| POST | `/courses/{id}/versions/{n}:validate` | P A | Lista exhaustiva de errores sin publicar |
-| POST | `/courses/{id}/versions/{n}:publish` **[IK]** | P A | `422` con **todos** los errores, o publica (`CA-01`) |
-| POST | `/courses/{id}/versions/{n}:unpublish` **[IK]** | P A | Requerido para editar en E1 (§5.1) |
+| POST | `/courses/{id}/versions/{n}/validate` | P A | Lista exhaustiva de errores sin publicar |
+| POST | `/courses/{id}/versions/{n}/publish` **[IK]** | P A | `422` con **todos** los errores, o publica (`CA-01`) |
+| POST | `/courses/{id}/versions/{n}/unpublish` **[IK]** | P A | Requerido para editar en E1 (§5.1) |
 | GET | `/courses/{id}/versions/{n}/preview` | P A | Previsualización con `content_html` sanitizado |
 | POST | `/versions/{vid}/modules` | P A | |
 | PATCH/DELETE | `/modules/{id}` | P A | |
-| POST | `/versions/{vid}/modules:reorder` | P A | `{"order": ["stable_id", ...]}` |
+| POST | `/versions/{vid}/modules/reorder` | P A | `{"order": ["stable_id", ...]}` |
 | POST | `/modules/{id}/units` | P A | |
 | PATCH/DELETE | `/units/{id}` | P A | |
-| POST | `/modules/{id}/units:reorder` | P A | |
+| POST | `/modules/{id}/units/reorder` | P A | |
 | POST | `/units/{id}/resources` | P A | |
 | PATCH/DELETE | `/resources/{id}` | P A | Título, visibilidad, obligatoriedad, descarga |
-| POST | `/units/{id}/resources:reorder` | P A | |
+| POST | `/units/{id}/resources/reorder` | P A | |
 | PATCH | `/resources/{id}/content` | P A | **Autosave.** `If-Match`, normaliza a Markdown canónico (ADR-0014) |
 | GET | `/resources/{id}/revisions` | P A | Últimas 20 (`RF-04`) |
-| POST | `/resources/{id}/revisions/{rid}:restore` | P A | Recuperación |
+| POST | `/resources/{id}/revisions/{rid}/restore` | P A | Recuperación |
 
 ## Medios — `media` (`RF-05`, `RF-06`)
 
@@ -88,8 +88,8 @@ Prefijo `/api/v1`. Este documento es el mapa para repartir el trabajo entre las
 | POST | `/assets:init` **[IK]** | P A | Crea el asset y la multipart. Devuelve `upload_id`, `part_size` y URLs por parte (24 h) |
 | GET | `/assets/{id}/upload` | P A | Partes ya recibidas: **esto es lo que permite reanudar** (SEG-3) |
 | POST | `/assets/{id}/upload/parts` | P A | Renueva URLs de las partes que faltan |
-| POST | `/assets/{id}:complete` **[IK]** | P A | Completa la multipart y encola `media.probe`. Responde `202` |
-| POST | `/assets/{id}:abort` | P A | |
+| POST | `/assets/{id}/complete` **[IK]** | P A | Completa la multipart y encola `media.probe`. Responde `202` |
+| POST | `/assets/{id}/abort` | P A | |
 | GET | `/assets/{id}` | P A | Estado, MIME detectado, sha256, derivados |
 | GET | `/assets/{id}/content` | A P E* | `302` a URL firmada (15 min) tras verificar el derecho (`CA-06`) |
 | GET | `/assets/{id}/hls/master.m3u8` | A P E* | Manifiesto. La credencial la emite `media-sessions`, no este endpoint |
@@ -106,7 +106,7 @@ Prefijo `/api/v1`. Este documento es el mapa para repartir el trabajo entre las
 | POST | `/enrollments` **[IK]** | E | Inscribe. Reinscribir reactiva y **conserva progreso** |
 | GET | `/enrollments` | E | Propias |
 | GET | `/enrollments/{id}` | E | Progreso, estado, insignia |
-| POST | `/enrollments/{id}:withdraw` | E | `withdrawn`, sin borrar nada |
+| POST | `/enrollments/{id}/withdraw` | E | `withdrawn`, sin borrar nada |
 | GET | `/enrollments/{id}/content` | E | Árbol de la versión vigente con estado de progreso por recurso |
 | GET | `/enrollments/{id}/resources/{stable_id}` | E | Detalle del recurso; para quiz, **sin claves** |
 
@@ -121,7 +121,7 @@ Prefijo `/api/v1`. Este documento es el mapa para repartir el trabajo entre las
 | POST | `/enrollments/{eid}/quizzes/{stable_id}/attempts` **[IK]** | E | Crea el intento y **congela el snapshot** (ADR-0013) |
 | GET | `/attempts/{id}` | E | Snapshot y respuestas guardadas. **Nunca `is_correct`** |
 | PATCH | `/attempts/{id}/answers` | E | Guardado parcial. `If-Match` |
-| POST | `/attempts/{id}:submit` **[IK]** | E | Califica en servidor. Idempotente (`CA-04`) |
+| POST | `/attempts/{id}/submit` **[IK]** | E | Califica en servidor. Idempotente (`CA-04`) |
 | GET | `/attempts/{id}/result` | E | Según `feedback_policy` |
 | GET | `/enrollments/{eid}/quizzes/{stable_id}/attempts` | E | Historial |
 
@@ -141,7 +141,7 @@ Prefijo `/api/v1`. Este documento es el mapa para repartir el trabajo entre las
 | GET | `/badges/{id}` | E A | |
 | GET | `/verify/{public_code}` | — | **Pública.** Sin correo del estudiante (`CA-07`) |
 | GET | `/verify/{public_code}/image` | — | `302` a la imagen en `mooc-badges` |
-| POST | `/badges/{id}:revoke` **[IK]** | A | Auditada (SEG-8) |
+| POST | `/badges/{id}/revoke` **[IK]** | A | Auditada (SEG-8) |
 
 ## Operación
 
