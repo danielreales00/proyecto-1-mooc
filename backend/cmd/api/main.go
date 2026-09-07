@@ -22,6 +22,7 @@ import (
 	"mooc/backend/internal/adapters/queue"
 	"mooc/backend/internal/adapters/rediscli"
 	"mooc/backend/internal/adapters/sessions"
+	"mooc/backend/internal/modules/assessment"
 	"mooc/backend/internal/modules/audit"
 	"mooc/backend/internal/modules/authoring"
 	"mooc/backend/internal/modules/badges"
@@ -97,6 +98,7 @@ func run() error {
 	learningSvc := learning.NewService(postgres.NewLearningStore(pool), recorder,
 		learningBridge{publisher}, learning.UmbralesPorDefecto(), log)
 	badgeSvc := badges.NewService(postgres.NewBadgeStore(pool), log)
+	assessmentSvc := assessment.NewService(postgres.NewAssessmentStore(pool), log)
 
 	mux := http.NewServeMux()
 	auth := identity.Authenticate(identitySvc)
@@ -107,6 +109,7 @@ func run() error {
 	authoring.NewAPI(authoringSvc).Routes(mux, auth, soloDocentes)
 	learning.NewAPI(learningSvc, tamperAuditor{pool: pool, rec: recorder, log: log}).Routes(mux, auth)
 	badges.NewAPI(badgeSvc).Routes(mux, auth, soloAdmin)
+	assessment.NewAPI(assessmentSvc).Routes(mux, auth, soloDocentes)
 
 	health := &health{pool: pool, redis: sessionRedis, objects: store}
 	mux.HandleFunc("GET /healthz", health.live)
