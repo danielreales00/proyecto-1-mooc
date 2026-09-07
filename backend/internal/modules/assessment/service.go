@@ -2,9 +2,10 @@ package assessment
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"log/slog"
-	"math/rand"
+	"math/big"
 	"time"
 
 	"github.com/google/uuid"
@@ -157,10 +158,8 @@ func (s *Service) Start(ctx context.Context, enrollmentID, quizStableID uuid.UUI
 		ID: ids.New(), QuizStableID: quizStableID, CourseID: courseID,
 		UserID: userID, EnrollmentID: enrollmentID,
 		AttemptNumber: len(previos) + 1,
-		Snapshot: Snapshot(q, func(qs []QuestionSnapshot) {
-			rand.Shuffle(len(qs), func(i, j int) { qs[i], qs[j] = qs[j], qs[i] })
-		}),
-		Status: StatusInProgress, StartedAt: ahora, GradingVersion: GradingVersion,
+		Snapshot:      Snapshot(q, barajar),
+		Status:        StatusInProgress, StartedAt: ahora, GradingVersion: GradingVersion,
 	}
 	if q.TimeLimitSeconds != nil {
 		exp := ahora.Add(time.Duration(*q.TimeLimitSeconds) * time.Second)
@@ -248,6 +247,24 @@ func (s *Service) Submit(ctx context.Context, attemptID uuid.UUID, a Actor) (Att
 		return Attempt{}, Quiz{}, err
 	}
 	return att, q, nil
+}
+
+// barajar mezcla con Fisher-Yates usando crypto/rand.
+//
+// Con math/rand la mezcla es predecible a partir de la semilla. Aquí el riesgo
+// concreto es bajo —las opciones se identifican por stable_id, no por
+// posición, así que adivinar el orden no revela nada— pero un generador
+// criptográfico no cuesta nada y evita tener que razonar sobre ello cada vez.
+func barajar(qs []QuestionSnapshot) {
+	for i := len(qs) - 1; i > 0; i-- {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(i+1)))
+		if err != nil {
+			// Sin entropía es preferible no barajar que barajar mal.
+			return
+		}
+		j := int(n.Int64())
+		qs[i], qs[j] = qs[j], qs[i]
+	}
 }
 
 func (s *Service) History(ctx context.Context, enrollmentID, quizStableID uuid.UUID, a Actor) ([]Attempt, int, error) {

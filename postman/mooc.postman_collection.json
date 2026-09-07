@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Plataforma MOOC — Entrega 1",
-    "description": "Colección de la demostración de aceptación. Una carpeta por segmento de la sección 10.2 del enunciado.\n\n**Uso:** importar junto con `mooc.postman_environment.json`, levantar el stack con `make up` y ejecutar las carpetas en orden con el Collection Runner.\n\nLas carpetas vacías son segmentos cuyo módulo todavía no existe: el hueco se deja visible a propósito, para que el avance se mida contra la demostración y no contra el número de endpoints.\n\nEstado: SEG-1 parcial (falta `admin`); SEG-2 a SEG-8 pendientes; SEG-9 parcial.",
+    "description": "Colección de la demostración de aceptación. Una carpeta por segmento de la §10.2.\n\n**Uso:** `make up && make seed`, importar con el entorno, y ejecutar las carpetas EN ORDEN.\n\nSEG-1, 2, 5, 6, 7 y 8 están completas. SEG-3 y SEG-4 esperan al módulo `media`; SEG-9 se demuestra con `make demo` y `make scale`.\n\n**Aviso sobre SEG-7:** los heartbeats exigen 10 s de separación, a propósito. Con el Collection Runner hace falta `--delay-request 11000`, o ejecutar esas peticiones a mano. El equivalente automático es `make demo`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -573,8 +573,520 @@
     },
     {
       "name": "SEG-2 · Autoría y publicación",
-      "description": "Borrador, módulos, unidades y recursos; previsualización; lista exhaustiva de errores; versión inmutable.\n\nCriterio: autoría y publicación (CE-03). Requisitos: RF-03, RF-04, CA-01.\n\nPendiente: el módulo `authoring` aún no existe.",
-      "item": []
+      "description": "Borrador, jerarquía, previsualización, lista exhaustiva de errores y versión inmutable.\n\nCriterio: autoría y publicación (CE-03). Requisitos: RF-03, RF-04, CA-01.",
+      "item": [
+        {
+          "name": "Login como profesor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Guarda el token en `prof_token` para las peticiones siguientes.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"profesor@mooc.local\",\n  \"password\": \"{{demo_password}}\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('prof_token', pm.response.json().token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear curso",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/courses",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses"
+              ]
+            },
+            "description": "Crea el curso y su versión 1 en borrador.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Fundamentos de Cloud\",\n  \"summary\": \"Curso de la demostración.\",\n  \"category\": \"cloud\",\n  \"language\": \"es\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('nonce', Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json();",
+                  "pm.collectionVariables.set('course_id', d.course.id);",
+                  "pm.collectionVariables.set('version_id', d.version.id);",
+                  "pm.test('nace en borrador', () => pm.expect(d.version.status).to.eql('draft'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Publicar un curso vacío — lista exhaustiva de errores",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/courses/{{course_id}}/versions/1/publish",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "{{course_id}}",
+                "versions",
+                "1",
+                "publish"
+              ]
+            },
+            "description": "No falla al primer error: devuelve TODOS los incumplimientos (CA-01)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));",
+                  "const d = pm.response.json();",
+                  "pm.test('problem+json', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json'));",
+                  "pm.test('lista los incumplimientos', () => pm.expect(d.errors).to.have.length.above(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Añadir módulo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/versions/{{version_id}}/modules",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "versions",
+                "{{version_id}}",
+                "modules"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Módulo 1: Contenedores\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('module_id', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Añadir unidad",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/modules/{{module_id}}/units",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "modules",
+                "{{module_id}}",
+                "units"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Unidad 1: Docker\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('unit_id', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Añadir recurso de texto",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/units/{{unit_id}}/resources",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "units",
+                "{{unit_id}}",
+                "resources"
+              ]
+            },
+            "description": "El Markdown se guarda NORMALIZADO: viñetas canónicas y una sola línea en blanco (ADR-0014).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Introducción\",\n  \"type\": \"rich_text\",\n  \"content_md\": \"# Contenedores\\n\\n*  Aislamiento\\n\\n\\n*  Portabilidad   \\n\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json();",
+                  "pm.collectionVariables.set('text_stable_id', d.stable_id);",
+                  "pm.test('markdown normalizado', () => pm.expect(d.content_md).to.not.include('*  Aislamiento'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Añadir recurso de quiz",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/units/{{unit_id}}/resources",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "units",
+                "{{unit_id}}",
+                "resources"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Evaluación final\",\n  \"type\": \"quiz\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json();",
+                  "pm.collectionVariables.set('quiz_resource_id', d.id);",
+                  "pm.collectionVariables.set('quiz_stable_id', d.stable_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Configurar el quiz",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/resources/{{quiz_resource_id}}/quiz",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "resources",
+                "{{quiz_resource_id}}",
+                "quiz"
+              ]
+            },
+            "description": "Esta es la ÚNICA ruta por la que `is_correct` sale del servidor, y solo para el profesor dueño.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"max_attempts\": 2,\n  \"pass_score\": 70,\n  \"feedback_policy\": \"correctness\",\n  \"questions\": [\n    {\n      \"statement_md\": \"¿Qué aísla un contenedor?\",\n      \"kind\": \"single\",\n      \"points\": 1,\n      \"options\": [\n        {\n          \"text_md\": \"Procesos y sistema de archivos\",\n          \"is_correct\": true\n        },\n        {\n          \"text_md\": \"El hardware físico\",\n          \"is_correct\": false\n        }\n      ]\n    }\n  ]\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('el profesor SÍ ve las claves', () =>",
+                  "  pm.expect(pm.response.text()).to.include('is_correct'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Previsualizar (HTML saneado)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/courses/{{course_id}}/versions/1/preview",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "{{course_id}}",
+                "versions",
+                "1",
+                "preview"
+              ]
+            },
+            "description": "El Markdown se renderiza y se sanea con lista blanca."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('sin script', () => pm.expect(pm.response.text()).to.not.include('<script'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Publicar la versión",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/courses/{{course_id}}/versions/1/publish",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "{{course_id}}",
+                "versions",
+                "1",
+                "publish"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('publicada', () => pm.expect(pm.response.json().status).to.eql('published'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INMUTABILIDAD: mutar la versión publicada",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/versions/{{version_id}}/modules",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "versions",
+                "{{version_id}}",
+                "modules"
+              ]
+            },
+            "description": "Un trigger de PostgreSQL rechaza la mutación. La regla vive donde están los datos (ADR-0007).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"No debería entrar\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('version_immutable', () => pm.expect(pm.response.json().type).to.include('version_immutable'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "name": "SEG-3 · Carga multimedia",
@@ -587,24 +1099,683 @@
       "item": []
     },
     {
-      "name": "SEG-5 · Consumo de contenido",
-      "description": "Inscripción, streaming adaptativo, reanudación y entrega autorizada.\n\nCriterio: multimedia y progreso. Requisitos: RF-07, RF-10, CA-06.\n\nPendiente: `enrollment` y la entrega firmada. Las partes de interfaz quedan para la Entrega 2.",
-      "item": []
+      "name": "SEG-5 · Catálogo, inscripción y consumo",
+      "description": "Catálogo público, inscripción y árbol del curso con progreso.\n\nRequisito: RF-10.",
+      "item": [
+        {
+          "name": "Catálogo público (sin sesión)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/catalog/courses?q=Cloud",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "catalog",
+                "courses?q=Cloud"
+              ]
+            },
+            "description": "Público: solo cursos con una versión publicada."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('devuelve cursos', () => pm.expect(pm.response.json().items).to.have.length.above(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login como estudiante",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Guarda el token en `session_token` para las peticiones siguientes.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"estudiante1@mooc.local\",\n  \"password\": \"{{demo_password}}\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('session_token', pm.response.json().token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Inscribirse",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/enrollments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments"
+              ]
+            },
+            "description": "Reinscribirse reactiva y conserva el progreso (RF-10).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"course_id\": \"{{course_id}}\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('enrollment_id', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Contenido con progreso",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/enrollments/{{enrollment_id}}/content",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "{{enrollment_id}}",
+                "content"
+              ]
+            },
+            "description": "El contenido textual llega ya renderizado y saneado."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('sin claves de quiz', () => pm.expect(pm.response.text()).to.not.include('is_correct'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "name": "SEG-6 · Quiz",
-      "description": "Snapshot, guardados parciales, ausencia de claves en el cliente, envío idempotente, expiración y cálculo de la nota.\n\nCriterio: evaluación académica (CE-05). Requisitos: RF-08, CA-04.\n\nPendiente: el módulo `assessment` aún no existe.",
-      "item": []
+      "description": "Snapshot sin claves, guardado parcial, calificación en servidor y envío idempotente.\n\nRequisito: CA-04.",
+      "item": [
+        {
+          "name": "Iniciar intento (congela el snapshot)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/enrollments/{{enrollment_id}}/quizzes/{{quiz_stable_id}}/attempts",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "{{enrollment_id}}",
+                "quizzes",
+                "{{quiz_stable_id}}",
+                "attempts"
+              ]
+            },
+            "description": "El snapshot se congela al iniciar: el profesor puede editar el quiz sin alterar este intento."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json();",
+                  "pm.collectionVariables.set('attempt_id', d.id);",
+                  "pm.test('CA-04: NINGUNA clave en el snapshot', () =>",
+                  "  pm.expect(pm.response.text()).to.not.include('is_correct'));",
+                  "const opt = d.questions[0].options[0];",
+                  "pm.test('la opción solo trae stable_id y text_md', () =>",
+                  "  pm.expect(Object.keys(opt).sort()).to.eql(['stable_id','text_md']));",
+                  "pm.collectionVariables.set('question_stable_id', d.questions[0].stable_id);",
+                  "const correcta = d.questions[0].options.find(o => o.text_md.includes('Procesos'));",
+                  "pm.collectionVariables.set('option_stable_id', correcta.stable_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Guardado parcial",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/attempts/{{attempt_id}}/answers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "attempts",
+                "{{attempt_id}}",
+                "answers"
+              ]
+            },
+            "description": "Naturalmente idempotente: guardar de nuevo sustituye la respuesta.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answers\": [\n    {\n      \"question_stable_id\": \"{{question_stable_id}}\",\n      \"selected_option_stable_ids\": [\n        \"{{option_stable_id}}\"\n      ]\n    }\n  ]\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Enviar (calificación en servidor)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/attempts/{{attempt_id}}/submit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "attempts",
+                "{{attempt_id}}",
+                "submit"
+              ]
+            },
+            "description": "La nota se calcula en el servidor contra las claves de la base, no contra el snapshot."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.collectionVariables.set('score', d.score);",
+                  "pm.test('calificado', () => pm.expect(d.score).to.be.a('number'));",
+                  "pm.test('la política correctness no revela las claves', () =>",
+                  "  pm.expect(pm.response.text()).to.not.include('correct_option_stable_ids'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reenviar: idempotente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/attempts/{{attempt_id}}/submit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "attempts",
+                "{{attempt_id}}",
+                "submit"
+              ]
+            },
+            "description": "Reenviar devuelve la misma nota sin recalcular (CA-04)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('misma nota', () =>",
+                  "  pm.expect(pm.response.json().score).to.eql(Number(pm.collectionVariables.get('score'))));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "name": "SEG-7 · Progreso y aprobación",
-      "description": "Heartbeats, permanencia mínima, rechazo de manipulación, porcentaje de obligatorios y transición a completed y approved.\n\nCriterio: progreso e insignias (CE-06). Requisitos: RF-09, CA-05.\n\nPendiente: el módulo `progress` aún no existe.",
-      "item": []
+      "description": "Señales legítimas y fraudulentas. El progreso lo calcula el servidor.\n\nRequisito: CA-05.\n\nOJO: los heartbeats exigen 10 s entre sí. Con el Collection Runner, usar `--delay-request 11000` o ejecutar a mano.",
+      "item": [
+        {
+          "name": "SEÑAL FRAUDULENTA: enviar el porcentaje",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/enrollments/{{enrollment_id}}/progress",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "{{enrollment_id}}",
+                "progress"
+              ]
+            },
+            "description": "El cliente reporta evidencias, nunca conclusiones. El intento queda AUDITADO (CA-05).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource_stable_id\": \"{{text_stable_id}}\",\n  \"kind\": \"heartbeat\",\n  \"progress_percent\": 100\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));",
+                  "pm.test('progress.client_computed_value', () =>",
+                  "  pm.expect(pm.response.json().type).to.include('progress.client_computed_value'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Evidencia legítima: apertura",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/enrollments/{{enrollment_id}}/progress",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "{{enrollment_id}}",
+                "progress"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource_stable_id\": \"{{text_stable_id}}\",\n  \"kind\": \"open\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202', () => pm.response.to.have.status(202));",
+                  "pm.test('aceptada', () => pm.expect(pm.response.json().accepted).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Heartbeat inmediato: rechazado por cadencia",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/enrollments/{{enrollment_id}}/progress",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "{{enrollment_id}}",
+                "progress"
+              ]
+            },
+            "description": "Inundar de heartbeats no simula permanencia: el reloj lo pone el servidor.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource_stable_id\": \"{{text_stable_id}}\",\n  \"kind\": \"heartbeat\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202', () => pm.response.to.have.status(202));",
+                  "const d = pm.response.json();",
+                  "pm.test('rechazada por cadencia', () => pm.expect(d.reject_reason).to.eql('cadence'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Heartbeat espaciado (esperar >10 s)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/enrollments/{{enrollment_id}}/progress",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "{{enrollment_id}}",
+                "progress"
+              ]
+            },
+            "description": "Ejecutar esta petición dos veces con más de 10 s entre medias para acumular permanencia.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource_stable_id\": \"{{text_stable_id}}\",\n  \"kind\": \"heartbeat\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json();",
+                  "pm.test('202', () => pm.response.to.have.status(202));",
+                  "console.log('aceptada:', d.accepted, '· motivo:', d.reject_reason, '· pct:', d.progress_pct);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Progreso calculado por el servidor",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/enrollments/{{enrollment_id}}/progress",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "{{enrollment_id}}",
+                "progress"
+              ]
+            },
+            "description": "El porcentaje sale de los recursos obligatorios y visibles. Los opcionales no cuentan."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "console.log('estado:', d.state, '·', d.required_completed + '/' + d.required_total);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     },
     {
-      "name": "SEG-8 · Insignia y actualización",
-      "description": "Emisión única, URL sin correo, revocación auditada, stable_id y conservación del progreso.\n\nCriterio: autoría, progreso e insignias. Requisito: CA-07.\n\nPendiente: el módulo `badges` aún no existe.",
-      "item": []
+      "name": "SEG-8 · Insignia",
+      "description": "Emisión única por worker y verificación pública sin correo.\n\nRequisito: CA-07.",
+      "item": [
+        {
+          "name": "Mis insignias",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/me/badges",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "me",
+                "badges"
+              ]
+            },
+            "description": "La insignia la emite el worker tras la aprobación.\n\n**Requiere haber completado SEG-7 de verdad**, es decir, con más de 10 s entre heartbeats. Si se ejecuta con el Collection Runner sin `--delay-request 11000`, la inscripción no llega a aprobada y aquí no habrá insignia. El equivalente automático es `make demo`."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json().items;",
+                  "const b = items.find(x => x.enrollment_id === pm.collectionVariables.get('enrollment_id'));",
+                  "if (!b) {",
+                  "  console.warn('Sin insignia para esta inscripción: SEG-7 no llegó a aprobada.');",
+                  "  console.warn('Ejecuta con --delay-request 11000, o usa `make demo`.');",
+                  "}",
+                  "pm.test('hay insignia para esta inscripción', () => pm.expect(b, ",
+                  "  'la inscripción no llegó a approved; ver la descripción de esta petición').to.not.be.undefined);",
+                  "if (b) pm.collectionVariables.set('badge_code', b.public_code);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verificación PÚBLICA (sin sesión)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/verify/{{badge_code}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "verify",
+                "{{badge_code}}"
+              ]
+            },
+            "description": "Pública. NO expone el correo del estudiante, y el código no deriva de su identidad (CA-07)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('CA-07: no expone el correo', () =>",
+                  "  pm.expect(pm.response.text()).to.not.match(/@|\"email\"/));",
+                  "const d = pm.response.json();",
+                  "pm.test('trae nombre, curso y estado', () => {",
+                  "  pm.expect(d.student_name).to.be.a('string');",
+                  "  pm.expect(d.course_title).to.be.a('string');",
+                  "  pm.expect(d.status).to.eql('valid');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "name": "SEG-9 · Operación",
@@ -651,6 +1822,81 @@
     {
       "key": "mailpit_intento",
       "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "prof_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "course_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "version_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "module_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "unit_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "text_stable_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "quiz_resource_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "quiz_stable_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "enrollment_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "attempt_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "question_stable_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "option_stable_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "score",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "badge_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "nonce",
+      "value": "",
       "type": "string"
     }
   ]

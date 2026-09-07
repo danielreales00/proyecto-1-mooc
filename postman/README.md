@@ -21,8 +21,15 @@ ejecutar las carpetas en orden con el Collection Runner.
 Sin Postman, la colección también se ejecuta desde la línea de órdenes:
 
 ```bash
-make postman     # newman en un contenedor; es lo que corre el CI
+make postman           # segmentos rápidos; es lo que corre el CI
+make postman-completo  # todo, con 11 s entre peticiones (~8 min)
 ```
+
+**Por qué hay dos.** El servidor exige 10 s entre heartbeats a propósito
+(ADR-0012): inundar de heartbeats no debe simular permanencia. Ejecutar la
+colección entera respetando esa regla tarda varios minutos, así que el CI corre
+los segmentos que no dependen del tiempo, y el recorrido completo automático es
+`make demo`.
 
 ## Estructura
 
@@ -30,15 +37,15 @@ Una carpeta por segmento, en el orden en que se graba el video:
 
 | Carpeta | Estado |
 | --- | --- |
-| SEG-1 · Identidad y administración | Parcial — falta `admin` |
-| SEG-2 · Autoría y publicación | Pendiente |
-| SEG-3 · Carga multimedia | Pendiente |
-| SEG-4 · Procesamiento y fallos | Pendiente |
-| SEG-5 · Consumo de contenido | Pendiente |
-| SEG-6 · Quiz | Pendiente |
-| SEG-7 · Progreso y aprobación | Pendiente |
-| SEG-8 · Insignia y actualización | Pendiente |
-| SEG-9 · Operación | Parcial — el escalamiento ya está verificado |
+| SEG-1 · Identidad y administración | **Completa** — falta `admin` |
+| SEG-2 · Autoría y publicación | **Completa** |
+| SEG-3 · Carga multimedia | Pendiente (falta el módulo `media`) |
+| SEG-4 · Procesamiento y fallos | Se demuestra con `make demo` |
+| SEG-5 · Catálogo, inscripción y consumo | **Completa** |
+| SEG-6 · Quiz | **Completa** |
+| SEG-7 · Progreso y aprobación | **Completa** — necesita 10 s entre heartbeats |
+| SEG-8 · Insignia | **Completa** — depende de que SEG-7 llegue a aprobada |
+| SEG-9 · Operación | `make demo` y `make scale` |
 
 **Las carpetas vacías se dejan a propósito.** Miden el avance contra la
 demostración, que es como se califica, en lugar de contra el número de

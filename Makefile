@@ -102,20 +102,29 @@ smoke: ## Prueba de extremo a extremo: registro, verificación, login y /me
 	MAILPIT="http://localhost:$${MAILPIT_UI_PORT:-8026}" ./scripts/smoke.sh
 
 .PHONY: postman
-postman: ## Ejecuta la colección de la demostración con newman
+postman: ## Colección de Postman, segmentos rápidos (lo que corre el CI)
 	@source .env; \
 	docker run --rm --network host -v "$(PWD)/postman":/etc/newman \
 		postman/newman:alpine run mooc.postman_collection.json \
 		-e mooc.postman_environment.json \
 		--env-var base_url=http://localhost:$${API_PORT:-8090} \
 		--env-var mailpit_url=http://localhost:$${MAILPIT_UI_PORT:-8026} \
+		--folder "SEG-1 · Identidad y administración" \
+		--folder "SEG-2 · Autoría y publicación" \
+		--folder "SEG-5 · Catálogo, inscripción y consumo" \
+		--folder "SEG-6 · Quiz" \
 		--delay-request 300
 
-.PHONY: demo
-demo: ## Recorre el flujo completo de la demostración (guion del video)
+.PHONY: postman-completo
+postman-completo: ## Colección entera, incluidos progreso e insignia (tarda ~8 min)
+	@echo "Los heartbeats exigen 10 s de separación, a propósito: esto tarda."
 	@source .env; \
-	API="http://localhost:$${API_PORT:-8090}" \
-	MAILPIT="http://localhost:$${MAILPIT_UI_PORT:-8026}" ./scripts/demo.sh
+	docker run --rm --network host -v "$(PWD)/postman":/etc/newman \
+		postman/newman:alpine run mooc.postman_collection.json \
+		-e mooc.postman_environment.json \
+		--env-var base_url=http://localhost:$${API_PORT:-8090} \
+		--env-var mailpit_url=http://localhost:$${MAILPIT_UI_PORT:-8026} \
+		--delay-request 11000
 
 .PHONY: scale
 scale: ## Levanta 3 instancias de api y 3 de worker (CE-01)
