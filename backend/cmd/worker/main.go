@@ -18,6 +18,7 @@ import (
 	"mooc/backend/internal/adapters/mailer"
 	"mooc/backend/internal/adapters/postgres"
 	"mooc/backend/internal/adapters/queue"
+	"mooc/backend/internal/modules/badges"
 	"mooc/backend/internal/modules/identity"
 	"mooc/backend/internal/platform/config"
 	"mooc/backend/internal/platform/jobs"
@@ -54,8 +55,11 @@ func run() error {
 	emails := identity.NewEmailWorker(
 		mailer.New(cfg.SMTPAddr, cfg.MailFrom), cfg.PublicBaseURL, log)
 
+	badgeSvc := badges.NewService(postgres.NewBadgeStore(pool), log)
+
 	mux := asynq.NewServeMux()
 	mux.HandleFunc(jobs.TypeEmailSend, runner.Wrap(jobs.TypeEmailSend, emails.Handle))
+	mux.HandleFunc(jobs.TypeBadgeIssue, runner.Wrap(jobs.TypeBadgeIssue, badgeSvc.Handle))
 
 	srv := asynq.NewServer(
 		asynq.RedisClientOpt{Addr: cfg.RedisAddr, Password: cfg.RedisPassword, DB: cfg.RedisQueueDB},

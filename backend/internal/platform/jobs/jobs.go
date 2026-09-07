@@ -26,7 +26,12 @@ const (
 
 // Catálogo de tipos de trabajo. Ver disenos/trabajos-asincronos.md.
 const (
-	TypeEmailSend = "email.send"
+	TypeEmailSend         = "email.send"
+	TypeBadgeIssue        = "badge.issue"
+	TypeMediaProbe        = "media.probe"
+	TypeMediaScan         = "media.scan"
+	TypeMediaTranscode    = "media.transcode_hls"
+	TypeProgressRecompute = "progress.recompute"
 )
 
 // Estados de platform.job_runs.

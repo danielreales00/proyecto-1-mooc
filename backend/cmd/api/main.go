@@ -14,6 +14,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"mooc/backend/internal/adapters/objectstore"
 	"mooc/backend/internal/adapters/postgres"
 	"mooc/backend/internal/adapters/queue"
@@ -21,7 +24,9 @@ import (
 	"mooc/backend/internal/adapters/sessions"
 	"mooc/backend/internal/modules/audit"
 	"mooc/backend/internal/modules/authoring"
+	"mooc/backend/internal/modules/badges"
 	"mooc/backend/internal/modules/identity"
+	"mooc/backend/internal/modules/learning"
 	"mooc/backend/internal/platform/config"
 	"mooc/backend/internal/platform/httpx"
 	"mooc/backend/internal/platform/jobs"
@@ -89,13 +94,19 @@ func run() error {
 
 	// --- ruteo ------------------------------------------------------------
 	authoringSvc := authoring.NewService(postgres.NewAuthoringStore(pool), recorder, log)
+	learningSvc := learning.NewService(postgres.NewLearningStore(pool), recorder,
+		learningBridge{publisher}, learning.UmbralesPorDefecto(), log)
+	badgeSvc := badges.NewService(postgres.NewBadgeStore(pool), log)
 
 	mux := http.NewServeMux()
 	auth := identity.Authenticate(identitySvc)
 	soloDocentes := identity.RequireRole(identity.RoleTeacher, identity.RoleAdmin)
+	soloAdmin := identity.RequireRole(identity.RoleAdmin)
 
 	identity.NewAPI(identitySvc).Routes(mux, auth)
 	authoring.NewAPI(authoringSvc).Routes(mux, auth, soloDocentes)
+	learning.NewAPI(learningSvc, tamperAuditor{pool: pool, rec: recorder, log: log}).Routes(mux, auth)
+	badges.NewAPI(badgeSvc).Routes(mux, auth, soloAdmin)
 
 	health := &health{pool: pool, redis: sessionRedis, objects: store}
 	mux.HandleFunc("GET /healthz", health.live)
@@ -154,4 +165,35 @@ func (b queueBridge) Publish(ctx context.Context, j identity.JobRef, traceID str
 	return b.p.Publish(ctx, jobs.Job{
 		Key: j.Key, Type: j.Type, Queue: j.Queue, Payload: j.Payload,
 	}, traceID)
+}
+
+// learningBridge adapta el mismo publicador a la firma que declara learning.
+// Son dos puertos distintos porque cada módulo define el suyo; el adaptador
+// vive aquí, en la composición (ADR-0001).
+type learningBridge struct{ p *queue.Publisher }
+
+func (b learningBridge) Publish(ctx context.Context, key, tipo, cola string,
+	payload map[string]any, traceID string) error {
+	return b.p.Publish(ctx, jobs.Job{Key: key, Type: tipo, Queue: cola, Payload: payload}, traceID)
+}
+
+// tamperAuditor registra el intento de enviar un progreso calculado por el
+// cliente. Es la evidencia que exige CA-05 y que el segmento 7 debe mostrar.
+type tamperAuditor struct {
+	pool *pgxpool.Pool
+	rec  *audit.Recorder
+	log  *slog.Logger
+}
+
+func (t tamperAuditor) TamperingAttempt(r *http.Request, enrollmentID uuid.UUID, cuerpo map[string]any) {
+	p, _ := httpx.PrincipalFrom(r.Context())
+	t.rec.RecordBestEffort(r.Context(), t.pool, audit.Event{
+		ActorID: &p.UserID, ActorRole: p.Role,
+		Action: "progress.tampering_attempt", EntityType: "enrollment", EntityID: &enrollmentID,
+		IP: httpx.ClientIP(r), UserAgent: r.UserAgent(),
+		TraceID:  httpx.RequestIDFrom(r.Context()),
+		Metadata: map[string]any{"body": cuerpo},
+	})
+	t.log.Warn("intento de enviar progreso calculado por el cliente",
+		"enrollment_id", enrollmentID, "user_id", p.UserID, "body", cuerpo)
 }
