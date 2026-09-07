@@ -375,6 +375,60 @@ func (s *Service) registrarEvidencia(ctx context.Context, enrollmentID uuid.UUID
 	}
 }
 
+// MarcarRecursoAprobado completa un recurso porque otro módulo verificó su
+// criterio propio — hoy, que un quiz se aprobó con la nota mínima.
+//
+// La regla de qué cuenta como completado sigue viviendo aquí: quien llama dice
+// "esto se superó", no "escribe este estado". Y el porcentaje se recalcula con
+// las reglas de este módulo, no con las del que llama.
+func (s *Service) MarcarRecursoAprobado(ctx context.Context, enrollmentID, resourceStableID uuid.UUID) error {
+	e, err := s.store.EnrollmentByID(ctx, s.store.DB(), enrollmentID)
+	if err != nil {
+		return err
+	}
+	versionID, _, criterioPct, notaMin, err := s.store.CurrentPublishedVersion(ctx, s.store.DB(), e.CourseID)
+	if err != nil {
+		return err
+	}
+
+	ahora := time.Now().UTC()
+	previo, err := s.store.ProgressOne(ctx, s.store.DB(), enrollmentID, resourceStableID)
+	if err != nil && !errors.Is(err, ErrNotFound) {
+		return err
+	}
+	previo.EnrollmentID = enrollmentID
+	previo.ResourceStableID = resourceStableID
+	previo.State = ProgressCompleted
+	previo.UpdatedAt = ahora
+	if previo.OpenedAt == nil {
+		previo.OpenedAt = &ahora
+	}
+	if previo.CompletedAt == nil {
+		previo.CompletedAt = &ahora
+	}
+
+	var res Resultado
+	err = s.store.WithinTx(ctx, func(ctx context.Context, tx dbx.DB) error {
+		if err := s.store.UpsertProgress(ctx, tx, previo); err != nil {
+			return err
+		}
+		res, err = s.recalcular(ctx, tx, e, versionID, criterioPct, notaMin, Actor{UserID: e.UserID, Role: "student"})
+		return err
+	})
+	if err != nil {
+		return err
+	}
+
+	if res.badgeJobKey != "" {
+		if err := s.queue.Publish(ctx, res.badgeJobKey, jobs.TypeBadgeIssue, jobs.QueueCritical,
+			map[string]any{"enrollment_id": res.badgeEnrollment.String()}, ""); err != nil {
+			s.log.Warn("no se pudo publicar la emisión de insignia",
+				"job_key", res.badgeJobKey, "error", err)
+		}
+	}
+	return nil
+}
+
 // Summary devuelve el progreso calculado por el servidor.
 func (s *Service) Summary(ctx context.Context, id uuid.UUID, a Actor) (Enrollment, []ContentResource, int, int, error) {
 	e, recursos, err := s.Content(ctx, id, a)

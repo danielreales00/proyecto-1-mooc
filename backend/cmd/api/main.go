@@ -113,7 +113,7 @@ func run() error {
 	learningSvc := learning.NewService(postgres.NewLearningStore(pool), recorder,
 		learningBridge{publisher}, learning.UmbralesPorDefecto(), log)
 	badgeSvc := badges.NewService(postgres.NewBadgeStore(pool), log)
-	assessmentSvc := assessment.NewService(postgres.NewAssessmentStore(pool), log)
+	assessmentSvc := assessment.NewService(postgres.NewAssessmentStore(pool), learningSvc, log)
 	adminSvc := admin.NewService(postgres.NewAdminStore(pool), sessionStore,
 		learningBridge{publisher}, recorder, log)
 	mediaSvc := media.NewService(postgres.NewMediaStore(pool), almacenBridge{store},

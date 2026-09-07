@@ -1,6 +1,6 @@
 # ADR-0001 — Monolito modular en Go con workers independientes
 
-- **Estado:** Aceptado
+- **Estado:** Aceptado — **enmendado el 2026-09-07**, ver «Enmienda» al final
 - **Fecha:** 2026-09-05
 - **Requisitos:** `RT-01`, `CE-01`
 
@@ -40,8 +40,9 @@ Reglas:
 2. **El dominio no importa `net/http`, ni `pgx`, ni el SDK de S3.** Define
    interfaces; `adapters/` las implementa; `cmd/` las cablea.
 3. Los módulos se comunican **por llamada directa a la interfaz de servicio del
-   otro módulo**, nunca tocando sus tablas. Prohibido `authoring` leyendo tablas
-   de `assessment`.
+   otro módulo**. Ningún módulo **escribe** en el esquema de otro.
+   *(Regla enmendada el 2026-09-07; la redacción original prohibía también las
+   lecturas. Ver «Enmienda».)*
 4. Cuando el acoplamiento sería circular, se rompe con un **evento asíncrono**
    publicado en la cola.
 5. Los dos binarios comparten `internal/` completo. El worker no tiene servidor
@@ -69,6 +70,58 @@ Reglas:
 
 ## Cómo se verifica
 
-- `make arch-test`: falla si un paquete bajo `modules/*/domain.go` importa algo
-  de `adapters/` o de la stdlib de red.
+- `make arch` (`scripts/arquitectura.sh`): falla si un `domain.go` importa
+  infraestructura, si un módulo **escribe** en el esquema de otro fuera de las
+  excepciones documentadas, si entra una dependencia que no está en el
+  ADR-0002, o si aparece código específico de un proveedor cloud dentro de los
+  módulos. Corre en CI.
 - `docker compose up --scale api=3 --scale worker=3` y la suite E2E pasa igual.
+
+## Enmienda · 2026-09-07
+
+La regla 3 decía que un módulo no podía **tocar** las tablas de otro. Al
+escribir la comprobación que este mismo ADR prometía, resultó que el código la
+incumplía en **39 sitios**: 5 escrituras y 34 lecturas.
+
+Merecía la pena mirar cada caso antes de decidir si arreglar el código o la
+regla.
+
+**Las escrituras sí eran el problema.** `assessment` escribía directamente en
+`progress.resource_progress` para marcar completado el recurso de un quiz
+aprobado, saltándose las reglas de `learning` sobre qué cuenta como completado
+y su recálculo del porcentaje. Eso se corrigió: ahora `assessment` declara un
+puerto `Progreso` y le pide a `learning` que lo marque; la decisión sigue
+viviendo donde vive la regla.
+
+**Las lecturas no lo eran.** En un monolito con una sola base, un `JOIN` en la
+capa de adaptadores es más simple, más rápido y más fácil de leer que reunir en
+memoria lo que la base sabe reunir. Prohibirlas obligaría a N+1 consultas y a
+un mapa de identificadores en cada listado, a cambio de una pureza que las
+otras dos reglas —el dominio no importa infraestructura, y la frontera está en
+los esquemas— ya sostienen.
+
+La regla queda así:
+
+| | Permitido |
+| --- | --- |
+| Leer el esquema de otro módulo desde un adaptador | **Sí**, con un `JOIN` explícito y legible |
+| Escribir en el esquema de otro módulo | **No**, salvo las excepciones de abajo |
+| Que el dominio importe infraestructura | **No** |
+
+### Excepciones documentadas
+
+`admin` escribe en `identity.users`, `identity.sessions` y
+`identity.one_time_tokens`. No es una fuga: **`admin` e `identity` son el mismo
+contexto con dos caras** —la del propio usuario y la administrativa— y comparten
+el agregado. Separarlos obligaría a `identity` a exponer una interfaz de
+administración que solo usaría `admin`, sin ganar frontera real.
+
+Está enumerada en `scripts/arquitectura.sh` para que sea una excepción
+consciente y no un descuido que se propaga.
+
+### Lo que esto cuesta al extraer un módulo
+
+Las 34 lecturas cruzadas son el precio: extraer `authoring` a un servicio
+propio obligaría a sustituirlas por llamadas. El script las cuenta y las
+imprime justamente para que ese precio esté a la vista y no se descubra el día
+de la extracción.

@@ -54,7 +54,7 @@ hechos, así que conviene antes de repartir el dominio.
 
 | Pieza | Estado | Por qué importa |
 | --- | --- | --- |
-| Middleware de `Idempotency-Key` | La tabla `platform.idempotency_keys` existe **vacía y sin usar** | `RT-05`; sin esto no hay envío idempotente de quiz (`CA-04`) ni inscripción segura |
+| Middleware de `Idempotency-Key` | La tabla `platform.idempotency_keys` existe **vacía y sin usar**. El `submit` del quiz es idempotente por su máquina de estados, no por la cabecera | `RT-05` |
 | Rate limiting en Redis | **Hecho**: login en dos niveles (cuenta e IP), registro, verificación y progreso. Base lógica 3 | `CE-02` |
 | `ETag` / `If-Match` | No existe | El autosave de `RF-04` lo necesita para detectar escrituras concurrentes |
 | Paginación por cursor | No existe (no hay listas todavía) | `RT-05` |
@@ -149,6 +149,34 @@ final. Un módulo sin prueba no está terminado (ver la definición de terminado
 | Contrato OpenAPI | Las 88 operaciones, validadas con redocly sin advertencias, servidas por la API. `scripts/contrato.sh` comprueba en CI que lo declarado como implementado exista de verdad |
 | ADR-0015, D2 y D3 | Aceptadas: cookie firmada con endpoint `media-sessions` (ya en el contrato) y prohibición de claves JSON (comprobada en el CI) |
 | Andamiaje de evidencia | Pruebas unitarias y de capa HTTP, `make seed`, colección de Postman por segmentos, CI con 4 trabajos y plantilla de PR |
+
+## Revisión del 7 de septiembre de 2026
+
+Se revisaron todos los módulos contra lo que los ADR **prometen verificar**, no
+contra lo que parecía funcionar. Dos hallazgos.
+
+**El ADR-0001 anunciaba un `make arch-test` que nunca se escribió.** Al
+escribirlo, el código incumplía su regla 3 en 39 sitios: 5 escrituras y 34
+lecturas del esquema de otro módulo.
+
+- La escritura de `assessment` en `progress.resource_progress` era el problema
+  real: marcaba completado el recurso de un quiz saltándose las reglas de
+  `learning`. **Corregida**: ahora se pide por interfaz de servicio.
+- Las de `admin` sobre `identity` quedan como **excepción documentada**: son el
+  mismo contexto con dos caras y comparten el agregado.
+- Las 34 lecturas llevaron a **enmendar el ADR-0001**: en un monolito con una
+  sola base, un `JOIN` en la capa de adaptadores es más simple y más rápido que
+  reunir en memoria lo que la base sabe reunir. La regla pasa a prohibir
+  escrituras, no lecturas, y el script las cuenta para que el coste de extraer
+  un módulo esté a la vista.
+
+**El invariante más citado no estaba probado.** «El progreso sobrevive a una
+versión nueva» aparece en el ADR-0007, en el README y en el guion, y nunca se
+había verificado de punta a punta. Ahora sí: `make invariantes` publica una
+versión 2, comprueba que el `stable_id` se conserva y el `id` de fila cambia, y
+que el estudiante conserva su 100 % y su aprobación.
+
+`make arch` y `make invariantes` corren en `make ci` y en el CI.
 
 ## Decisiones abiertas
 

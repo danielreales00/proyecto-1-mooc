@@ -288,18 +288,3 @@ func (s *AssessmentStore) EnrollmentOf(ctx context.Context, db dbx.DB, enrollmen
 	}
 	return userID, courseID, estado, nil
 }
-
-// MarkQuizResourceCompleted deja el recurso del quiz como completado. El
-// recálculo del porcentaje lo hace el módulo learning con la evidencia
-// siguiente, o el propio estudiante al consultar su progreso.
-func (s *AssessmentStore) MarkQuizResourceCompleted(ctx context.Context, db dbx.DB, enrollmentID, stableID uuid.UUID) error {
-	_, err := db.Exec(ctx, `
-		INSERT INTO progress.resource_progress
-		    (enrollment_id, resource_stable_id, state, opened_at, completed_at, updated_at)
-		VALUES ($1,$2,'completed', now(), now(), now())
-		ON CONFLICT (enrollment_id, resource_stable_id) DO UPDATE
-		   SET state='completed',
-		       completed_at = coalesce(progress.resource_progress.completed_at, now()),
-		       updated_at = now()`, enrollmentID, stableID)
-	return err
-}

@@ -126,11 +126,21 @@ postman-completo: ## Colección entera, incluidos progreso e insignia (tarda ~8 
 		--env-var mailpit_url=http://localhost:$${MAILPIT_UI_PORT:-8026} \
 		--delay-request 11000
 
+.PHONY: invariantes
+invariantes: ## Comprueba los invariantes de los ADR que no cubre `make demo`
+	@source .env; API="http://localhost:$${API_PORT:-8090}" ./scripts/invariantes.sh
+
+.PHONY: arch
+arch: ## Comprueba las reglas de arquitectura de los ADR 0001, 0002 y 0010
+	@./scripts/arquitectura.sh
+
 .PHONY: ci
 ci: ## Corre TODO lo que corre el CI, en local. Úsalo antes de empujar.
 	@echo "── formato ──────────────────────────────────────────"
 	@docker run --rm -v "$(PWD)/backend":/src -w /src $(GO_IMAGE) gofmt -l . | tee /tmp/mooc-fmt
 	@test ! -s /tmp/mooc-fmt || { echo "hay archivos sin formatear; ejecuta 'make fmt'"; exit 1; }
+	@echo "── arquitectura ─────────────────────────────────────"
+	@$(MAKE) --no-print-directory arch
 	@echo "── go vet ───────────────────────────────────────────"
 	@$(MAKE) --no-print-directory vet
 	@echo "── pruebas ──────────────────────────────────────────"
@@ -143,6 +153,7 @@ ci: ## Corre TODO lo que corre el CI, en local. Úsalo antes de empujar.
 	@$(MAKE) --no-print-directory contrato
 	@echo "── extremo a extremo ────────────────────────────────"
 	@$(MAKE) --no-print-directory smoke
+	@$(MAKE) --no-print-directory invariantes
 	@$(MAKE) --no-print-directory postman
 	@echo
 	@echo "Todo en verde. Se puede empujar."

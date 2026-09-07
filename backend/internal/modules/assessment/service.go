@@ -43,17 +43,27 @@ type Store interface {
 
 	// EnrollmentOf comprueba la inscripción activa del estudiante.
 	EnrollmentOf(ctx context.Context, db dbx.DB, enrollmentID uuid.UUID) (uuid.UUID, uuid.UUID, string, error)
-	// MarkQuizResourceCompleted marca el recurso del quiz como completado
-	// cuando el estudiante alcanza la nota mínima.
-	MarkQuizResourceCompleted(ctx context.Context, db dbx.DB, enrollmentID, stableID uuid.UUID) error
+}
+
+// Progreso es el puerto hacia el módulo que lleva el avance del estudiante.
+//
+// Aprobar un quiz completa su recurso, pero esa decisión es de `learning`, no
+// de aquí: escribir directamente en su tabla saltaría sus reglas de completado
+// y su recálculo del porcentaje. Los módulos se hablan por interfaz de
+// servicio, no por la base (ADR-0001).
+type Progreso interface {
+	MarcarRecursoAprobado(ctx context.Context, enrollmentID, resourceStableID uuid.UUID) error
 }
 
 type Service struct {
-	store Store
-	log   *slog.Logger
+	store    Store
+	progreso Progreso
+	log      *slog.Logger
 }
 
-func NewService(store Store, log *slog.Logger) *Service { return &Service{store: store, log: log} }
+func NewService(store Store, p Progreso, log *slog.Logger) *Service {
+	return &Service{store: store, progreso: p, log: log}
+}
 
 type Actor struct {
 	UserID uuid.UUID
@@ -233,18 +243,21 @@ func (s *Service) Submit(ctx context.Context, attemptID uuid.UUID, a Actor) (Att
 		att.Status = StatusSubmitted
 	}
 
-	err = s.store.WithinTx(ctx, func(ctx context.Context, tx dbx.DB) error {
-		if err := s.store.FinishAttempt(ctx, tx, att); err != nil {
-			return err
-		}
-		// Aprobar el quiz completa su recurso, y eso alimenta el progreso.
-		if nota >= q.PassScore {
-			return s.store.MarkQuizResourceCompleted(ctx, tx, att.EnrollmentID, att.QuizStableID)
-		}
-		return nil
-	})
-	if err != nil {
+	if err := s.store.WithinTx(ctx, func(ctx context.Context, tx dbx.DB) error {
+		return s.store.FinishAttempt(ctx, tx, att)
+	}); err != nil {
 		return Attempt{}, Quiz{}, err
+	}
+
+	// Aprobar el quiz completa su recurso. La decisión de qué significa
+	// "completado" es de learning, así que se le pide a él.
+	if nota >= q.PassScore {
+		if err := s.progreso.MarcarRecursoAprobado(ctx, att.EnrollmentID, att.QuizStableID); err != nil {
+			// La nota ya está guardada; no se pierde. El recálculo del
+			// porcentaje ocurrirá con la evidencia siguiente.
+			s.log.Error("no se pudo marcar el recurso del quiz como completado",
+				"enrollment_id", att.EnrollmentID, "quiz", att.QuizStableID, "error", err)
+		}
 	}
 	return att, q, nil
 }

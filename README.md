@@ -320,6 +320,16 @@ make sec        # govulncheck, gosec y credenciales
 `make demo` sondea en vez de esperar un tiempo fijo: el worker tarda lo que
 tarde, y con un `sleep` la prueba fallaría sin que falle nada.
 
+`make arch` comprueba sobre el propio código que el dominio no importa
+infraestructura, que ningún módulo escribe en el esquema de otro, y que no ha
+entrado ninguna dependencia fuera de la lista del ADR-0002.
+
+`make invariantes` prueba contra el sistema en marcha lo que los ADR prometen y
+`make demo` no cubre: que el `stable_id` sobreviva a una versión nueva del
+curso, que la clave del quiz no salga por ninguna ruta del estudiante, que el
+token de sesión no esté en claro en Redis, y que los buckets privados no
+respondan sin firma.
+
 `make contrato` comprueba dos cosas contra la API en marcha: que sirva
 exactamente el contrato del repositorio, y que **toda ruta declarada como
 implementada exista de verdad en el router**.

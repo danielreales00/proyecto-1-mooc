@@ -49,6 +49,10 @@ jobs:
       - name: go vet
         run: go vet ./...
 
+      - name: Reglas de arquitectura (ADR-0001, 0002, 0010)
+        working-directory: .
+        run: ./scripts/arquitectura.sh
+
       - name: Compilar los binarios
         run: go build ./...
 
@@ -144,6 +148,9 @@ jobs:
 
       - name: Smoke de extremo a extremo
         run: make smoke
+
+      - name: Invariantes de los ADR
+        run: make invariantes
 
       - name: Colección de la demostración (newman)
         run: make postman
