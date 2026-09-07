@@ -629,6 +629,10 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{prof_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
               }
             ],
             "url": {
@@ -655,7 +659,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.collectionVariables.set('nonce', Date.now());"
+                  "pm.collectionVariables.set('nonce', Date.now());",
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
                 ]
               }
             },
@@ -682,6 +687,10 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{prof_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
               }
             ],
             "url": {
@@ -703,6 +712,15 @@
           },
           "response": [],
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -1006,6 +1024,10 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{prof_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
               }
             ],
             "url": {
@@ -1027,6 +1049,15 @@
           },
           "response": [],
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -1189,6 +1220,10 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{session_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
               }
             ],
             "url": {
@@ -1210,6 +1245,15 @@
           },
           "response": [],
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -1275,6 +1319,10 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{session_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
               }
             ],
             "url": {
@@ -1296,6 +1344,15 @@
           },
           "response": [],
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -1371,6 +1428,10 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{session_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
               }
             ],
             "url": {
@@ -1391,10 +1452,20 @@
           "response": [],
           "event": [
             {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
+            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "// La clave se conserva para que 'Reenviar' use la MISMA y demuestre la idempotencia.",
                   "pm.test('200', () => pm.response.to.have.status(200));",
                   "const d = pm.response.json();",
                   "pm.collectionVariables.set('score', d.score);",
@@ -1414,6 +1485,10 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{session_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
               }
             ],
             "url": {
@@ -1434,13 +1509,24 @@
           "response": [],
           "event": [
             {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Se reutiliza a propósito la clave del envío anterior."
+                ]
+              }
+            },
+            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('200', () => pm.response.to.have.status(200));",
                   "pm.test('misma nota', () =>",
-                  "  pm.expect(pm.response.json().score).to.eql(Number(pm.collectionVariables.get('score'))));"
+                  "  pm.expect(pm.response.json().score).to.eql(Number(pm.collectionVariables.get('score'))));",
+                  "pm.test('la respuesta se repitió, no se recalculó', () =>",
+                  "  pm.expect(pm.response.headers.get('Idempotency-Replayed')).to.eql('true'));"
                 ]
               }
             }
@@ -1464,6 +1550,10 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{session_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
               }
             ],
             "url": {
@@ -1487,6 +1577,15 @@
           },
           "response": [],
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -1512,6 +1611,10 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{session_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
               }
             ],
             "url": {
@@ -1536,6 +1639,15 @@
           "response": [],
           "event": [
             {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
+            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
@@ -1559,6 +1671,10 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{session_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
               }
             ],
             "url": {
@@ -1582,6 +1698,15 @@
           },
           "response": [],
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -1607,6 +1732,10 @@
               {
                 "key": "Authorization",
                 "value": "Bearer {{session_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
               }
             ],
             "url": {
@@ -1630,6 +1759,15 @@
           },
           "response": [],
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -1896,6 +2034,11 @@
     },
     {
       "key": "nonce",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "idem_key",
       "value": "",
       "type": "string"
     }
