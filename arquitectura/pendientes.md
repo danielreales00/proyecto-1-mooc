@@ -185,3 +185,7 @@ Cuando se resuelvan, cada una se convierte en un ADR.
 - Commits en español, con el ID del requisito: `feat(media): carga multipart reanudable (RF-05)`.
 - Un PR por módulo o por tarea de esta lista, no por sesión de trabajo.
 - Nadie hace merge de un PR propio sin revisión de otro del equipo.
+- **`make ci` en verde antes de empujar.** Corre lo mismo que el CI: formato,
+  vet, pruebas, contrato, seguridad, smoke y Postman. Empujar y dejar que el CI
+  encuentre el fallo llena de correos a todo el equipo, y el fallo se descubre
+  diez minutos más tarde.

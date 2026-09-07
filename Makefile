@@ -126,6 +126,27 @@ postman-completo: ## Colección entera, incluidos progreso e insignia (tarda ~8 
 		--env-var mailpit_url=http://localhost:$${MAILPIT_UI_PORT:-8026} \
 		--delay-request 11000
 
+.PHONY: ci
+ci: ## Corre TODO lo que corre el CI, en local. Úsalo antes de empujar.
+	@echo "── formato ──────────────────────────────────────────"
+	@docker run --rm -v "$(PWD)/backend":/src -w /src $(GO_IMAGE) gofmt -l . | tee /tmp/mooc-fmt
+	@test ! -s /tmp/mooc-fmt || { echo "hay archivos sin formatear; ejecuta 'make fmt'"; exit 1; }
+	@echo "── go vet ───────────────────────────────────────────"
+	@$(MAKE) --no-print-directory vet
+	@echo "── pruebas ──────────────────────────────────────────"
+	@$(MAKE) --no-print-directory test
+	@echo "── contrato OpenAPI ─────────────────────────────────"
+	@$(MAKE) --no-print-directory openapi
+	@echo "── seguridad ────────────────────────────────────────"
+	@$(MAKE) --no-print-directory sec
+	@echo "── contrato contra la API en marcha ─────────────────"
+	@$(MAKE) --no-print-directory contrato
+	@echo "── extremo a extremo ────────────────────────────────"
+	@$(MAKE) --no-print-directory smoke
+	@$(MAKE) --no-print-directory postman
+	@echo
+	@echo "Todo en verde. Se puede empujar."
+
 .PHONY: obs
 obs: ## Levanta Prometheus y Grafana (perfil observability)
 	$(COMPOSE) --profile observability up -d

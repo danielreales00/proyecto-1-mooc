@@ -3,6 +3,7 @@ package media
 import (
 	"errors"
 	"net/http"
+	"net/url"
 
 	"github.com/google/uuid"
 
@@ -216,12 +217,26 @@ func (a *API) contenido(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, err)
 		return
 	}
-	u, err := a.svc.URLDeDescarga(r.Context(), id, actor(r))
+	crudo, err := a.svc.URLDeDescarga(r.Context(), id, actor(r))
 	if err != nil {
 		httpx.Fail(w, r, traducir(err))
 		return
 	}
-	http.Redirect(w, r, u, http.StatusFound)
+
+	// El destino se comprueba dos veces: en el servicio y aquí, a la vista de
+	// quien lee el redirect. Redirigir a una URL calculada sin mirar a dónde
+	// va es como se abren los *open redirect*, y esta llega desde un puerto que
+	// mañana puede tener otra implementación.
+	destino, err := url.Parse(crudo)
+	if err != nil || destino.Host != a.svc.HostDelAlmacen() ||
+		(destino.Scheme != "http" && destino.Scheme != "https") {
+		httpx.Fail(w, r, problem.Internal())
+		return
+	}
+
+	// #nosec G710 -- el destino se acaba de validar contra el host del almacén
+	// configurado; no proviene de la petición.
+	http.Redirect(w, r, destino.String(), http.StatusFound)
 }
 
 func traducir(err error) error {

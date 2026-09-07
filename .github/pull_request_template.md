@@ -17,6 +17,10 @@ Marca lo que aplique; si algo no aplica, dilo y por qué.
 - [ ] Reflejado en el OpenAPI
 - [ ] El ID del requisito figura en el mensaje del commit
 
+## Antes de empujar
+
+- [ ] `make ci` en verde en local
+
 ## Cómo se verifica
 
 <!-- El comando o la petición que lo demuestra. El enunciado §10 es explícito:

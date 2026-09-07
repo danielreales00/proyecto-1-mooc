@@ -118,7 +118,8 @@ func run() error {
 		learningBridge{publisher}, recorder, log)
 	mediaSvc := media.NewService(postgres.NewMediaStore(pool), almacenBridge{store},
 		learningBridge{publisher}, recorder,
-		media.Buckets{Originales: cfg.S3Buckets.Originals, Cuarentena: cfg.S3Buckets.Quarantine}, log)
+		media.Buckets{Originales: cfg.S3Buckets.Originals, Cuarentena: cfg.S3Buckets.Quarantine},
+		cfg.S3PublicEndpoint, log)
 
 	metrics.Inicializar(jobs.TypeEmailSend, jobs.TypeBadgeIssue)
 

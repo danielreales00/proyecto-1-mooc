@@ -22,7 +22,13 @@ var (
 
 	// LimiteRegistro evita que alguien llene la tabla de usuarios y sature el
 	// envío de correo.
-	LimiteRegistro = ratelimit.Regla{Nombre: "register", Limite: 10, Ventana: time.Hour}
+	//
+	// Es holgado a propósito. El registro solo se puede contar por IP —todavía
+	// no hay cuenta contra la que contar—, y una universidad entera puede salir
+	// por una sola: diez por hora bloquearía a un curso completo el día de la
+	// matrícula. El abuso ya está acotado por otro lado: una cuenta sin
+	// verificar no puede hacer nada.
+	LimiteRegistro = ratelimit.Regla{Nombre: "register", Limite: 60, Ventana: time.Hour}
 
 	// LimiteVerificacion protege el token de verificación, que son 32 bytes
 	// aleatorios: adivinarlo es inviable, pero no hay razón para dejar que lo

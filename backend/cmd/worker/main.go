@@ -77,7 +77,8 @@ func run() error {
 	}
 	mediaSvc := media.NewService(postgres.NewMediaStore(pool), almacenBridge{almacen},
 		publicadorBridge{publisher}, audit.NewRecorder(log),
-		media.Buckets{Originales: cfg.S3Buckets.Originals, Cuarentena: cfg.S3Buckets.Quarantine}, log)
+		media.Buckets{Originales: cfg.S3Buckets.Originals, Cuarentena: cfg.S3Buckets.Quarantine},
+		cfg.S3PublicEndpoint, log)
 
 	// Los contadores deben existir en cero antes del primer suceso, o
 	// increase() no verá el salto y la alerta de DLQ nunca disparará.

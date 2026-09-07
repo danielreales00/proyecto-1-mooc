@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/url"
 	"time"
 
 	"github.com/google/uuid"
@@ -65,11 +66,15 @@ type Service struct {
 	queue   Publicador
 	audit   *audit.Recorder
 	buckets Buckets
-	log     *slog.Logger
+	// hostPermitido es el único destino al que se puede redirigir.
+	hostPermitido string
+	log           *slog.Logger
 }
 
-func NewService(s Store, a Almacen, q Publicador, rec *audit.Recorder, b Buckets, log *slog.Logger) *Service {
-	return &Service{store: s, almacen: a, queue: q, audit: rec, buckets: b, log: log}
+func NewService(s Store, a Almacen, q Publicador, rec *audit.Recorder, b Buckets,
+	hostAlmacen string, log *slog.Logger) *Service {
+	return &Service{store: s, almacen: a, queue: q, audit: rec, buckets: b,
+		hostPermitido: hostAlmacen, log: log}
 }
 
 type Actor struct {
@@ -301,6 +306,12 @@ func (s *Service) Asset(ctx context.Context, id uuid.UUID, a Actor) (Asset, erro
 
 // URLDeDescarga emite una URL firmada de lectura, después de comprobar el
 // derecho de acceso (CA-06).
+//
+// El destino se comprueba antes de devolverlo. Hoy la URL la construye nuestro
+// propio adaptador, así que no puede apuntar a otro sitio; la comprobación
+// existe para que siga siendo verdad si mañana el endpoint sale de una
+// configuración equivocada o de un adaptador nuevo. Redirigir a una URL
+// calculada sin mirar a dónde va es como se abren los *open redirect*.
 func (s *Service) URLDeDescarga(ctx context.Context, id uuid.UUID, a Actor) (string, error) {
 	asset, err := s.guard(ctx, id, a)
 	if err != nil {
@@ -309,7 +320,28 @@ func (s *Service) URLDeDescarga(ctx context.Context, id uuid.UUID, a Actor) (str
 	if asset.Status != EstadoListo && asset.Status != EstadoLimpio {
 		return "", ErrEstado
 	}
-	return s.almacen.PresignGet(ctx, s.buckets.Originales, asset.OriginalKey, TTLDescarga)
+	u, err := s.almacen.PresignGet(ctx, s.buckets.Originales, asset.OriginalKey, TTLDescarga)
+	if err != nil {
+		return "", err
+	}
+	if !s.destinoPermitido(u) {
+		return "", fmt.Errorf("la URL firmada apunta fuera del almacén configurado")
+	}
+	return u, nil
+}
+
+// HostDelAlmacen expone el único destino al que la API puede redirigir, para
+// que la capa HTTP lo compruebe a la vista de quien lea el redirect.
+func (s *Service) HostDelAlmacen() string { return s.hostPermitido }
+
+// destinoPermitido comprueba que la URL vaya al almacén de objetos y a ningún
+// otro sitio.
+func (s *Service) destinoPermitido(crudo string) bool {
+	u, err := url.Parse(crudo)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return false
+	}
+	return u.Host == s.hostPermitido
 }
 
 // ---------------------------------------------------------------- worker ---
