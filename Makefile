@@ -126,6 +126,12 @@ postman-completo: ## Colección entera, incluidos progreso e insignia (tarda ~8 
 		--env-var mailpit_url=http://localhost:$${MAILPIT_UI_PORT:-8026} \
 		--delay-request 11000
 
+.PHONY: demo
+demo: ## Recorre el flujo completo de la demostración (guion del video)
+	@source .env; \
+	API="http://localhost:$${API_PORT:-8090}" \
+	MAILPIT="http://localhost:$${MAILPIT_UI_PORT:-8026}" ./scripts/demo.sh
+
 .PHONY: scale
 scale: ## Levanta 3 instancias de api y 3 de worker (CE-01)
 	$(COMPOSE) up -d --scale api=3 --scale worker=3 --no-recreate
