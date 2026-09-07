@@ -14,11 +14,11 @@ que la API no guarda estado (CE-01).
 
 ## Dónde estamos
 
-Medido contra el contrato: **54 de 88 operaciones**.
+Medido contra el contrato: **61 de 88 operaciones**.
 
 | | Hecho | Falta |
 | --- | --- | --- |
-| Operaciones de la API | 54 | 34 |
+| Operaciones de la API | 61 | 27 |
 | Módulos de dominio | 7 (`identity` parcial, `audit`, `authoring`, `learning`, `assessment`, `badges`, `admin`) | `media` |
 | Tipos de trabajo asíncrono | 2 (`email.send`, `badge.issue`) + el `reaper` | 8 |
 | Migraciones | 2 (esquema completo del dominio) | Ninguna bloqueante |

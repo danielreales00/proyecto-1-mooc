@@ -1,8 +1,9 @@
 # Módulo `media` — estado y plan
 
-Multimedia es la pieza del alcance mínimo que **no** entra en la Entrega 1. No
-es un olvido: está diseñada, contratada y con su esquema aplicado. Lo que falta
-es el código, y este documento dice exactamente cuál y en qué orden.
+**El paso 1 está hecho.** Multimedia entra en la Entrega 1 con la carga
+multipart reanudable y la verificación en servidor; el escaneo antimalware y la
+transcodificación quedan para después. Este documento dice qué falta y en qué
+orden.
 
 Sirve para dos cosas: que el tribunal vea que la ausencia es una decisión con
 fecha, y que quien lo implemente no tenga que rehacer el diseño.
@@ -42,7 +43,7 @@ maquinaria que ya funciona, no una maquinaria nueva.
 
 Cada paso deja algo demostrable. No hace falta llegar al final para que sume.
 
-### Paso 1 · Carga y verificación — desbloquea SEG-3 casi entero
+### ~~Paso 1 · Carga y verificación~~ — **HECHO**
 
 `assets:init` → subida directa a MinIO con URLs prefirmadas → `GET /upload`
 para reanudar → `complete` → worker `media.probe`.
@@ -51,7 +52,9 @@ Al terminar este paso se puede demostrar: URLs prefirmadas, **reanudación tras
 una interrupción**, verificación de checksum contra lo declarado, detección del
 MIME real por los bytes, y rechazo del asset cuando algo no cuadra.
 
-Es el paso con mejor relación entre esfuerzo y criterio ganado.
+Comprobado en vivo: subida de 2 de 3 partes, consulta de lo que falta, subida
+solo de la tercera, completado y verificación. Y los tres negativos: checksum
+falso, PDF disfrazado de vídeo, y ambos a cuarentena con el original intacto.
 
 ### Paso 2 · Antimalware — completa SEG-3
 

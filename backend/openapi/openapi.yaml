@@ -1210,11 +1210,10 @@ paths:
   # ==========================================================================
   # Medios (RF-05, RF-06, RF-07)
   # ==========================================================================
-  /api/v1/assets:init:
+  /api/v1/assets/init:
     post:
       tags: [medios]
       operationId: initAssetUpload
-      x-estado: planificado
       summary: Iniciar una carga multipart directa al almacenamiento
       description: |
         Crea el asset y la carga multipart, y devuelve **URLs prefirmadas por
@@ -1257,7 +1256,6 @@ paths:
     get:
       tags: [medios]
       operationId: getUploadState
-      x-estado: planificado
       summary: Partes ya recibidas de una carga en curso
       description: |
         **Esto es lo que permite reanudar.** Tras una interrupción, el cliente
@@ -1278,7 +1276,6 @@ paths:
     post:
       tags: [medios]
       operationId: refreshUploadParts
-      x-estado: planificado
       summary: Renovar las URLs firmadas de las partes que faltan
       requestBody:
         required: true
@@ -1311,7 +1308,6 @@ paths:
     post:
       tags: [medios]
       operationId: completeAssetUpload
-      x-estado: planificado
       summary: Completar la carga y encolar el procesamiento
       description: |
         Cierra la multipart y encola `media.probe`. Responde `202`: la API no
@@ -1358,7 +1354,6 @@ paths:
     post:
       tags: [medios]
       operationId: abortAssetUpload
-      x-estado: planificado
       summary: Abortar una carga en curso
       responses:
         "204": { description: Carga abortada }
@@ -1370,7 +1365,6 @@ paths:
     get:
       tags: [medios]
       operationId: getAsset
-      x-estado: planificado
       summary: Estado y metadatos del asset
       description: |
         Incluye el MIME **detectado por el servidor** a partir de los bytes, no
@@ -1390,7 +1384,6 @@ paths:
     get:
       tags: [medios]
       operationId: getAssetContent
-      x-estado: planificado
       summary: Descargar el asset por URL firmada
       description: |
         Responde `302` hacia una URL firmada de 15 minutos, emitida **después**

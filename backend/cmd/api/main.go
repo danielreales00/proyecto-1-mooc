@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -29,6 +30,7 @@ import (
 	"mooc/backend/internal/modules/badges"
 	"mooc/backend/internal/modules/identity"
 	"mooc/backend/internal/modules/learning"
+	"mooc/backend/internal/modules/media"
 	"mooc/backend/internal/platform/config"
 	"mooc/backend/internal/platform/httpx"
 	"mooc/backend/internal/platform/jobs"
@@ -80,7 +82,7 @@ func run() error {
 	defer limitRedis.Close()
 	limiter := ratelimit.New(limitRedis)
 
-	store, err := objectstore.Open(cfg.S3Endpoint, cfg.S3AccessKey, cfg.S3SecretKey,
+	store, err := objectstore.Open(cfg.S3Endpoint, cfg.S3PublicEndpoint, cfg.S3AccessKey, cfg.S3SecretKey,
 		cfg.S3UseSSL, cfg.S3Buckets.Originals)
 	if err != nil {
 		return err
@@ -114,6 +116,9 @@ func run() error {
 	assessmentSvc := assessment.NewService(postgres.NewAssessmentStore(pool), log)
 	adminSvc := admin.NewService(postgres.NewAdminStore(pool), sessionStore,
 		learningBridge{publisher}, recorder, log)
+	mediaSvc := media.NewService(postgres.NewMediaStore(pool), almacenBridge{store},
+		learningBridge{publisher}, recorder,
+		media.Buckets{Originales: cfg.S3Buckets.Originals, Cuarentena: cfg.S3Buckets.Quarantine}, log)
 
 	metrics.Inicializar(jobs.TypeEmailSend, jobs.TypeBadgeIssue)
 
@@ -140,6 +145,7 @@ func run() error {
 	badges.NewAPI(badgeSvc).Routes(mux, auth, soloAdmin)
 	assessment.NewAPI(assessmentSvc).Routes(mux, auth, soloDocentes)
 	admin.NewAPI(adminSvc).Routes(mux, auth, soloAdmin)
+	media.NewAPI(mediaSvc).Routes(mux, auth, soloDocentes)
 
 	health := &health{pool: pool, redis: sessionRedis, objects: store}
 	mux.HandleFunc("GET /healthz", health.live)
@@ -211,6 +217,61 @@ type learningBridge struct{ p *queue.Publisher }
 func (b learningBridge) Publish(ctx context.Context, key, tipo, cola string,
 	payload map[string]any, traceID string) error {
 	return b.p.Publish(ctx, jobs.Job{Key: key, Type: tipo, Queue: cola, Payload: payload}, traceID)
+}
+
+// almacenBridge adapta el adaptador de objetos al puerto que declara media.
+// Los tipos Parte son distintos a propósito: el dominio no importa el
+// adaptador (ADR-0001).
+type almacenBridge struct{ s *objectstore.Store }
+
+func (b almacenBridge) CrearMultipart(ctx context.Context, bucket, key, ct string) (string, error) {
+	return b.s.CrearMultipart(ctx, bucket, key, ct)
+}
+
+func (b almacenBridge) PresignPart(ctx context.Context, bucket, key, uploadID string,
+	parte int, ttl time.Duration) (string, error) {
+	return b.s.PresignPart(ctx, bucket, key, uploadID, parte, ttl)
+}
+
+func (b almacenBridge) PartesSubidas(ctx context.Context, bucket, key, uploadID string) ([]media.Parte, error) {
+	ps, err := b.s.PartesSubidas(ctx, bucket, key, uploadID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]media.Parte, 0, len(ps))
+	for _, p := range ps {
+		out = append(out, media.Parte{Numero: p.Numero, ETag: p.ETag, Bytes: p.Bytes})
+	}
+	return out, nil
+}
+
+func (b almacenBridge) CompletarMultipart(ctx context.Context, bucket, key, uploadID string,
+	partes []media.Parte) error {
+	out := make([]objectstore.Parte, 0, len(partes))
+	for _, p := range partes {
+		out = append(out, objectstore.Parte{Numero: p.Numero, ETag: p.ETag, Bytes: p.Bytes})
+	}
+	return b.s.CompletarMultipart(ctx, bucket, key, uploadID, out)
+}
+
+func (b almacenBridge) AbortarMultipart(ctx context.Context, bucket, key, uploadID string) error {
+	return b.s.AbortarMultipart(ctx, bucket, key, uploadID)
+}
+
+func (b almacenBridge) PresignGet(ctx context.Context, bucket, key string, ttl time.Duration) (string, error) {
+	return b.s.PresignGet(ctx, bucket, key, ttl)
+}
+
+func (b almacenBridge) Abrir(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
+	return b.s.Abrir(ctx, bucket, key)
+}
+
+func (b almacenBridge) Info(ctx context.Context, bucket, key string) (int64, error) {
+	return b.s.Info(ctx, bucket, key)
+}
+
+func (b almacenBridge) Mover(ctx context.Context, ob, ok, db, dk string) error {
+	return b.s.Mover(ctx, ob, ok, db, dk)
 }
 
 // tamperAuditor registra el intento de enviar un progreso calculado por el

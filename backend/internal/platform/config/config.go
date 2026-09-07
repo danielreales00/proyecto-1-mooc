@@ -29,11 +29,16 @@ type Config struct {
 	RedisCacheDB   int
 	RedisLimitDB   int
 
-	S3Endpoint  string
-	S3AccessKey string
-	S3SecretKey string
-	S3UseSSL    bool
-	S3Buckets   Buckets
+	S3Endpoint string
+	// S3PublicEndpoint es el que se usa para FIRMAR. Dentro de Compose la API
+	// habla con `minio:9000`, pero una URL firmada la abre el navegador o
+	// Postman desde fuera, donde ese nombre no resuelve. En GCP pasa lo mismo:
+	// se firma contra el endpoint público, no contra el interno.
+	S3PublicEndpoint string
+	S3AccessKey      string
+	S3SecretKey      string
+	S3UseSSL         bool
+	S3Buckets        Buckets
 
 	SMTPAddr string
 	MailFrom string
@@ -81,10 +86,11 @@ func Load() (Config, error) {
 		RedisCacheDB:   optInt("REDIS_CACHE_DB", 2),
 		RedisLimitDB:   optInt("REDIS_LIMIT_DB", 3),
 
-		S3Endpoint:  req("S3_ENDPOINT"),
-		S3AccessKey: req("S3_ACCESS_KEY"),
-		S3SecretKey: req("S3_SECRET_KEY"),
-		S3UseSSL:    optBool("S3_USE_SSL", false),
+		S3Endpoint:       req("S3_ENDPOINT"),
+		S3PublicEndpoint: opt("S3_PUBLIC_ENDPOINT", os.Getenv("S3_ENDPOINT")),
+		S3AccessKey:      req("S3_ACCESS_KEY"),
+		S3SecretKey:      req("S3_SECRET_KEY"),
+		S3UseSSL:         optBool("S3_USE_SSL", false),
 		S3Buckets: Buckets{
 			Originals:  opt("S3_BUCKET_ORIGINALS", "mooc-originals"),
 			Derived:    opt("S3_BUCKET_DERIVED", "mooc-derived"),

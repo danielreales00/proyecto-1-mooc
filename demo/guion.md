@@ -3,7 +3,7 @@
 Video de la Entrega 1. La interfaz es Postman y la línea de órdenes, como
 autorizó el profesor.
 
-**Duración objetivo: 21 minutos.** Un bloque por segmento de la §10.2 del
+**Duración objetivo: 24 minutos.** Un bloque por segmento de la §10.2 del
 enunciado, más apertura y cierre.
 
 **Índice:** [Antes de grabar](#antes-de-grabar) ·
@@ -219,6 +219,57 @@ docker compose ps | grep -c mooc-api
    *(Opcional, si hay tiempo: abrir `psql` e intentar el UPDATE a mano.)*
 
 **Acredita:** autoría y publicación (CE-03), CA-01.
+
+---
+
+### 3b · Carga multimedia — 2,5 min · *SEG-3, CE-04*
+
+Va en la terminal: la subida por partes se ve mejor con `curl` que en Postman.
+
+1. **Iniciar la carga** de un vídeo de 20 MiB. Señala la respuesta:
+
+   > «Tres partes de ocho megas, y una URL firmada por parte. Fíjense en que
+   > **los bytes no pasan por la API**: el cliente sube directamente al
+   > almacén. La API solo firma.»
+
+2. **Subir dos de las tres partes** y parar.
+
+   > «Simulo que se corta la conexión a mitad.»
+
+3. **Preguntar qué falta** — `GET /assets/{id}/upload`:
+
+   > «El servidor pregunta al almacén qué partes tiene ya. Recibidas: uno y
+   > dos. Falta: tres. **Esto es lo que hace reanudable la carga**, y hay
+   > veinticuatro horas para completarla.»
+
+4. **Subir solo la parte que falta** y completar → `202`.
+
+5. **El worker verifica.** Consulta el asset:
+
+   > «El estado pasa a `clean`. Y aquí está lo importante: el servidor
+   > **recalculó el SHA-256 leyendo del bucket** y **detectó el MIME por los
+   > bytes**. Lo que el cliente declaró es informativo; lo que manda es lo que
+   > el servidor comprueba.»
+
+6. **Los dos negativos.** Son rápidos y valen más que los positivos:
+
+   ```bash
+   # checksum falso
+   # un PDF renombrado a .mp4 y declarado como vídeo
+   ```
+
+   > «El primero se rechaza porque el checksum no cuadra. El segundo porque el
+   > tipo real es `application/pdf` y se declaró vídeo: un ejecutable
+   > renombrado no entra.
+   >
+   > Y los dos van a **cuarentena**, no a la papelera: si hay que revisarlos,
+   > están.»
+
+**Lo que falta aquí**, y conviene decirlo en el momento: el escaneo antimalware
+con ClamAV y la transcodificación a HLS. Son los pasos 2 y 3 del plan que está
+en `arquitectura/media-plan.md`.
+
+**Acredita:** parte de multimedia y distribución (CE-04), RF-05.
 
 ---
 
@@ -454,14 +505,14 @@ docker compose exec postgres psql -U mooc -d mooc -c \
 > publicación, inscripción, consumo, evaluación, progreso e insignia, con los
 > workers funcionando y las condiciones de aceptación comprobadas.
 >
-> **Lo que falta**, y lo digo claro: el módulo de multimedia. Cincuenta y
-> cuatro de las ochenta y ocho operaciones responden hoy.
+> **Lo que falta**, y lo digo claro: de multimedia, el antimalware y la
+> transcodificación. Sesenta y una de las ochenta y ocho operaciones responden
+> hoy.
 >
-> Multimedia no es un hueco en blanco: su esquema está aplicado, sus nueve
-> operaciones están en el contrato y validadas, y las decisiones —carga
-> multipart directa, ClamAV, FFmpeg y la entrega por cookie firmada— están
-> tomadas en los ADR cinco, once y quince. En `arquitectura/media-plan.md` está
-> el plan de implementación paso a paso, y cada paso deja algo demostrable.
+> De multimedia han visto la carga reanudable y la verificación; falta el
+> escaneo antimalware y la transcodificación a HLS. Las decisiones están
+> tomadas en los ADR cinco, once y quince, y el plan paso a paso está en
+> `arquitectura/media-plan.md`.
 >
 > La decisión fue anchura antes que profundidad: demostrar el flujo completo
 > pesaba más que dos módulos perfectos y siete ausentes.

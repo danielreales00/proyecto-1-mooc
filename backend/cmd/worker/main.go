@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -16,10 +17,13 @@ import (
 	"github.com/hibiken/asynq"
 
 	"mooc/backend/internal/adapters/mailer"
+	"mooc/backend/internal/adapters/objectstore"
 	"mooc/backend/internal/adapters/postgres"
 	"mooc/backend/internal/adapters/queue"
+	"mooc/backend/internal/modules/audit"
 	"mooc/backend/internal/modules/badges"
 	"mooc/backend/internal/modules/identity"
+	"mooc/backend/internal/modules/media"
 	"mooc/backend/internal/platform/config"
 	"mooc/backend/internal/platform/jobs"
 	"mooc/backend/internal/platform/logging"
@@ -66,13 +70,23 @@ func run() error {
 
 	badgeSvc := badges.NewService(postgres.NewBadgeStore(pool), log)
 
+	almacen, err := objectstore.Open(cfg.S3Endpoint, cfg.S3PublicEndpoint, cfg.S3AccessKey, cfg.S3SecretKey,
+		cfg.S3UseSSL, cfg.S3Buckets.Originals)
+	if err != nil {
+		return err
+	}
+	mediaSvc := media.NewService(postgres.NewMediaStore(pool), almacenBridge{almacen},
+		publicadorBridge{publisher}, audit.NewRecorder(log),
+		media.Buckets{Originales: cfg.S3Buckets.Originals, Cuarentena: cfg.S3Buckets.Quarantine}, log)
+
 	// Los contadores deben existir en cero antes del primer suceso, o
 	// increase() no verá el salto y la alerta de DLQ nunca disparará.
-	metrics.Inicializar(jobs.TypeEmailSend, jobs.TypeBadgeIssue)
+	metrics.Inicializar(jobs.TypeEmailSend, jobs.TypeBadgeIssue, jobs.TypeMediaProbe)
 
 	mux := asynq.NewServeMux()
 	mux.HandleFunc(jobs.TypeEmailSend, runner.Wrap(jobs.TypeEmailSend, emails.Handle))
 	mux.HandleFunc(jobs.TypeBadgeIssue, runner.Wrap(jobs.TypeBadgeIssue, badgeSvc.Handle))
+	mux.HandleFunc(jobs.TypeMediaProbe, runner.Wrap(jobs.TypeMediaProbe, mediaSvc.Verificar))
 
 	srv := asynq.NewServer(
 		asynq.RedisClientOpt{Addr: cfg.RedisAddr, Password: cfg.RedisPassword, DB: cfg.RedisQueueDB},
@@ -129,6 +143,67 @@ func startHealth(log *slog.Logger) *http.Server {
 		}
 	}()
 	return srv
+}
+
+// almacenBridge y publicadorBridge adaptan los adaptadores a los puertos que
+// declara media. Viven aquí porque la composición es quien conoce ambos lados.
+type almacenBridge struct{ s *objectstore.Store }
+
+func (b almacenBridge) CrearMultipart(ctx context.Context, bucket, key, ct string) (string, error) {
+	return b.s.CrearMultipart(ctx, bucket, key, ct)
+}
+
+func (b almacenBridge) PresignPart(ctx context.Context, bucket, key, uploadID string,
+	parte int, ttl time.Duration) (string, error) {
+	return b.s.PresignPart(ctx, bucket, key, uploadID, parte, ttl)
+}
+
+func (b almacenBridge) PartesSubidas(ctx context.Context, bucket, key, uploadID string) ([]media.Parte, error) {
+	ps, err := b.s.PartesSubidas(ctx, bucket, key, uploadID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]media.Parte, 0, len(ps))
+	for _, p := range ps {
+		out = append(out, media.Parte{Numero: p.Numero, ETag: p.ETag, Bytes: p.Bytes})
+	}
+	return out, nil
+}
+
+func (b almacenBridge) CompletarMultipart(ctx context.Context, bucket, key, uploadID string,
+	partes []media.Parte) error {
+	out := make([]objectstore.Parte, 0, len(partes))
+	for _, p := range partes {
+		out = append(out, objectstore.Parte{Numero: p.Numero, ETag: p.ETag, Bytes: p.Bytes})
+	}
+	return b.s.CompletarMultipart(ctx, bucket, key, uploadID, out)
+}
+
+func (b almacenBridge) AbortarMultipart(ctx context.Context, bucket, key, uploadID string) error {
+	return b.s.AbortarMultipart(ctx, bucket, key, uploadID)
+}
+
+func (b almacenBridge) PresignGet(ctx context.Context, bucket, key string, ttl time.Duration) (string, error) {
+	return b.s.PresignGet(ctx, bucket, key, ttl)
+}
+
+func (b almacenBridge) Abrir(ctx context.Context, bucket, key string) (io.ReadCloser, error) {
+	return b.s.Abrir(ctx, bucket, key)
+}
+
+func (b almacenBridge) Info(ctx context.Context, bucket, key string) (int64, error) {
+	return b.s.Info(ctx, bucket, key)
+}
+
+func (b almacenBridge) Mover(ctx context.Context, ob, ok, db, dk string) error {
+	return b.s.Mover(ctx, ob, ok, db, dk)
+}
+
+type publicadorBridge struct{ p *queue.Publisher }
+
+func (b publicadorBridge) Publish(ctx context.Context, key, tipo, cola string,
+	payload map[string]any, traceID string) error {
+	return b.p.Publish(ctx, jobs.Job{Key: key, Type: tipo, Queue: cola, Payload: payload}, traceID)
 }
 
 // asynqLogger traduce los logs de asynq al logger estructurado del proyecto.
