@@ -13,6 +13,7 @@ import (
 	"mooc/backend/internal/platform/dbx"
 	"mooc/backend/internal/platform/ids"
 	"mooc/backend/internal/platform/jobs"
+	"mooc/backend/internal/platform/metrics"
 )
 
 type Service struct {
@@ -191,6 +192,7 @@ func (s *Service) ReportEvidence(ctx context.Context, id uuid.UUID, ev Evidence,
 		return Resultado{}, err
 	}
 	if !e.Activa() {
+		metrics.ProgressRejected.WithLabelValues(RejectNotEnrolled).Inc()
 		s.registrarEvidencia(ctx, e.ID, ev, false, RejectNotEnrolled)
 		return Resultado{Aceptada: false, Motivo: RejectNotEnrolled}, nil
 	}
@@ -212,6 +214,7 @@ func (s *Service) ReportEvidence(ctx context.Context, id uuid.UUID, ev Evidence,
 		}
 	}
 	if ref == nil {
+		metrics.ProgressRejected.WithLabelValues(RejectUnknownResource).Inc()
 		s.registrarEvidencia(ctx, e.ID, ev, false, RejectUnknownResource)
 		return Resultado{Aceptada: false, Motivo: RejectUnknownResource}, nil
 	}
@@ -229,6 +232,7 @@ func (s *Service) ReportEvidence(ctx context.Context, id uuid.UUID, ev Evidence,
 	v := ValidarEvidencia(ev, previo, ref.Duration, ahora, s.umbrales)
 
 	if !v.Aceptada {
+		metrics.ProgressRejected.WithLabelValues(v.Motivo).Inc()
 		s.registrarEvidencia(ctx, e.ID, ev, false, v.Motivo)
 		return Resultado{Aceptada: false, Motivo: v.Motivo,
 			EstadoRecurso: previo.State, ProgresoPct: e.ProgressPct, Estado: e.State}, nil

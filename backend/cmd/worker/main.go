@@ -23,6 +23,7 @@ import (
 	"mooc/backend/internal/platform/config"
 	"mooc/backend/internal/platform/jobs"
 	"mooc/backend/internal/platform/logging"
+	"mooc/backend/internal/platform/metrics"
 )
 
 func main() {
@@ -64,6 +65,10 @@ func run() error {
 		mailer.New(cfg.SMTPAddr, cfg.MailFrom), cfg.PublicBaseURL, log)
 
 	badgeSvc := badges.NewService(postgres.NewBadgeStore(pool), log)
+
+	// Los contadores deben existir en cero antes del primer suceso, o
+	// increase() no verá el salto y la alerta de DLQ nunca disparará.
+	metrics.Inicializar(jobs.TypeEmailSend, jobs.TypeBadgeIssue)
 
 	mux := asynq.NewServeMux()
 	mux.HandleFunc(jobs.TypeEmailSend, runner.Wrap(jobs.TypeEmailSend, emails.Handle))
@@ -114,6 +119,9 @@ func startHealth(log *slog.Logger) *http.Server {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
+	// El worker también expone sus métricas: jobs_dead_letter_total sale de
+	// aquí, y es la que dispara la alerta del §6.
+	mux.Handle("GET /metrics", metrics.Handler())
 	srv := &http.Server{Addr: ":8081", Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

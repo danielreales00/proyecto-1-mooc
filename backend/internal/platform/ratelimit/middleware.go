@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"mooc/backend/internal/platform/httpx"
+	"mooc/backend/internal/platform/metrics"
 	"mooc/backend/internal/platform/problem"
 )
 
@@ -86,6 +87,7 @@ func (l *Limiter) Middleware(regla Regla, sujeto Sujeto, log *slog.Logger) httpx
 					segundos = 1
 				}
 				w.Header().Set("Retry-After", strconv.Itoa(segundos))
+				metrics.RateLimited.WithLabelValues(regla.Nombre).Inc()
 				log.Warn("límite de tasa superado",
 					"regla", regla.Nombre, "sujeto", s,
 					"path", r.URL.Path, "trace_id", httpx.RequestIDFrom(r.Context()))

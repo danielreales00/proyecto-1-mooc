@@ -11,6 +11,7 @@ import (
 
 	"mooc/backend/internal/platform/httpx"
 	"mooc/backend/internal/platform/markdown"
+	"mooc/backend/internal/platform/metrics"
 	"mooc/backend/internal/platform/problem"
 	"mooc/backend/internal/platform/ratelimit"
 )
@@ -250,6 +251,7 @@ func (a *API) report(w http.ResponseWriter, r *http.Request) {
 
 	for _, campo := range camposCalculados {
 		if _, presente := libre[campo]; presente {
+			metrics.ProgressRejected.WithLabelValues("client_computed_value").Inc()
 			if a.audit != nil {
 				a.audit.TamperingAttempt(r, id, libre)
 			}

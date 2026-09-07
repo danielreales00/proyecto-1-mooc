@@ -273,6 +273,26 @@ ejecutó.
 Tres intentos con backoff exponencial. Al agotarse, el trabajo pasa a `dead` y
 se emite una alerta. Un reencolado administrativo conserva la misma `job_key`.
 
+## Observabilidad
+
+```bash
+make obs    # Prometheus en :9091, Grafana en :3002
+```
+
+El panel «MOOC · Operación» trae ocho gráficas, y ninguna está de adorno: cada
+una sostiene un objetivo concreto. Latencia p95 por ruta, entregas duplicadas
+descartadas, evidencias de progreso rechazadas por motivo, peticiones frenadas
+por límite de tasa, y la dead-letter queue.
+
+Cuatro reglas de alerta. La que importa es `TrabajoEnDeadLetterQueue`, que
+implementa literalmente el §6 del enunciado: *tras tres reintentos fallidos, el
+trabajo llega a la DLQ y emite una alerta*.
+
+**Los contadores se declaran en cero al arrancar.** Sin eso, `increase()` no
+detecta el salto de una serie que no existía a su primer valor, y la alerta se
+quedaría muda justo el día que hace falta. Se descubrió probándola: la primera
+versión no disparaba.
+
 ## Escalamiento horizontal
 
 ```bash

@@ -32,6 +32,7 @@ import (
 	"mooc/backend/internal/platform/httpx"
 	"mooc/backend/internal/platform/jobs"
 	"mooc/backend/internal/platform/logging"
+	"mooc/backend/internal/platform/metrics"
 	"mooc/backend/internal/platform/ratelimit"
 	"mooc/backend/openapi"
 )
@@ -110,6 +111,8 @@ func run() error {
 	badgeSvc := badges.NewService(postgres.NewBadgeStore(pool), log)
 	assessmentSvc := assessment.NewService(postgres.NewAssessmentStore(pool), log)
 
+	metrics.Inicializar(jobs.TypeEmailSend, jobs.TypeBadgeIssue)
+
 	mux := http.NewServeMux()
 	auth := identity.Authenticate(identitySvc)
 	soloDocentes := identity.RequireRole(identity.RoleTeacher, identity.RoleAdmin)
@@ -136,6 +139,8 @@ func run() error {
 	health := &health{pool: pool, redis: sessionRedis, objects: store}
 	mux.HandleFunc("GET /healthz", health.live)
 	mux.HandleFunc("GET /readyz", health.ready)
+	// Solo red interna: Compose no publica este puerto fuera.
+	mux.Handle("GET /metrics", metrics.Handler())
 
 	// La API sirve su propio contrato (RT-05, entregable §8).
 	mux.HandleFunc("GET /openapi.yaml", func(w http.ResponseWriter, r *http.Request) {
@@ -147,6 +152,7 @@ func run() error {
 	handler := httpx.Chain(mux,
 		httpx.RequestID(),
 		httpx.Recover(log),
+		metrics.Middleware(),
 		httpx.AccessLog(log),
 	)
 

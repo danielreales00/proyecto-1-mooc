@@ -126,6 +126,13 @@ postman-completo: ## Colección entera, incluidos progreso e insignia (tarda ~8 
 		--env-var mailpit_url=http://localhost:$${MAILPIT_UI_PORT:-8026} \
 		--delay-request 11000
 
+.PHONY: obs
+obs: ## Levanta Prometheus y Grafana (perfil observability)
+	$(COMPOSE) --profile observability up -d
+	@source .env; \
+	echo "  Prometheus  http://localhost:$${PROMETHEUS_PORT:-9091}"; \
+	echo "  Grafana     http://localhost:$${GRAFANA_PORT:-3002}  (panel: MOOC · Operación)"
+
 .PHONY: demo
 demo: ## Recorre el flujo completo de la demostración (guion del video)
 	@source .env; \

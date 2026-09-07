@@ -3,7 +3,7 @@
 Video de la Entrega 1. La interfaz es Postman y la línea de órdenes, como
 autorizó el profesor.
 
-**Duración objetivo: 19 minutos.** Un bloque por segmento de la §10.2 del
+**Duración objetivo: 21 minutos.** Un bloque por segmento de la §10.2 del
 enunciado, más apertura y cierre.
 
 **Índice:** [Antes de grabar](#antes-de-grabar) ·
@@ -21,6 +21,7 @@ cd proyecto-1-mooc
 make clean          # borra volúmenes: la demo empieza de cero
 make up             # construye e inicia; la primera vez tarda
 make seed           # 8 cuentas sintéticas
+make obs            # Prometheus y Grafana
 make demo           # ENSAYO COMPLETO: comprueba que todo pasa
 ```
 
@@ -40,6 +41,8 @@ make clean && make up && make seed
 - [ ] `docker compose ps` — los 9 servicios en `healthy`
 - [ ] http://localhost:8090/readyz — los tres en `ok`
 - [ ] http://localhost:8026 — Mailpit abierto y **vacío**
+- [ ] http://localhost:3002 — Grafana, panel «MOOC · Operación»
+- [ ] http://localhost:9091/alerts — Prometheus, las 4 reglas en verde
 - [ ] Postman con la colección y el entorno **MOOC local** importados
 - [ ] Terminal con fuente grande (≥ 16 pt) y ventana ancha
 - [ ] Silenciar notificaciones
@@ -50,7 +53,7 @@ Tres, y solo tres. Cambiar entre más de tres marea a quien mira.
 
 1. **Postman** — la interfaz principal
 2. **Terminal** — para `make`, `psql` y los logs
-3. **Navegador** — Mailpit y la URL pública de la insignia
+3. **Navegador** — Mailpit, Grafana y la URL pública de la insignia
 
 ---
 
@@ -360,6 +363,58 @@ docker compose exec postgres psql -U mooc -d mooc -c \
 > ejecutado, es que ejecutarlo dos veces no produce dos salidas.»
 
 **Acredita:** CA-03, tolerancia a fallos.
+
+---
+
+### 8b · Observabilidad y la alerta — 2,5 min · *SEG-4, CE-07*
+
+**Antes de grabar este bloque:** `make obs` (Prometheus y Grafana tardan ~20 s).
+
+1. **Grafana** → panel «MOOC · Operación». Enseña las filas.
+
+   > «Ocho gráficas, y ninguna está de adorno: cada una sostiene un objetivo
+   > concreto del enunciado. Latencia p95, entregas duplicadas descartadas,
+   > evidencias de progreso rechazadas por motivo, y esta de aquí arriba, la
+   > dead-letter queue.»
+
+2. **Forzar un trabajo a la DLQ.** En la terminal:
+
+   ```bash
+   docker compose exec postgres psql -U mooc -d mooc -c \
+     "INSERT INTO platform.job_runs (job_key, type, queue, status, payload)
+      VALUES ('email.send:demo-dlq','email.send','critical','queued',
+              '{\"template\":\"inexistente\",\"to\":\"x@mooc.local\"}'::jsonb)
+      ON CONFLICT (job_key) DO UPDATE SET status='queued', attempt=0,
+              created_at = now() - interval '1 hour';"
+   ```
+
+   > «Una plantilla de correo que no existe. El worker va a fallar las tres
+   > veces.»
+
+3. **Los reintentos, en vivo:**
+
+   ```bash
+   docker compose logs -f worker | grep -E "trabajo fallido|ALERTA"
+   ```
+
+   > «Ahí está el backoff: los reintentos se van separando. Y al tercero…»
+
+   Espera al `ALERTA: trabajo en la dead-letter queue`. Son unos dos minutos:
+   aprovecha para explicar que el backoff exponencial existe para no castigar
+   un servicio que ya está caído.
+
+4. **La alerta en Prometheus** — http://localhost:9091/alerts
+
+   > «`TrabajoEnDeadLetterQueue`, en estado *firing*. Esta es literalmente la
+   > condición del enunciado: tras tres reintentos fallidos, el trabajo llega a
+   > la DLQ y **emite una alerta**.»
+
+   **Detalle que vale la pena contar:** los contadores se declaran en cero al
+   arrancar el worker. Sin eso, `increase()` no ve el salto de una serie que no
+   existía a su primer valor, y la alerta se quedaría muda justo el día que
+   hace falta.
+
+**Acredita:** CA-03 y calidad operativa (CE-07).
 
 ---
 

@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mooc/backend/internal/platform/jobs"
+	"mooc/backend/internal/platform/metrics"
 )
 
 // Reaper cierra la otra mitad de la garantía del outbox (ADR-0004).
@@ -102,6 +103,7 @@ func (r *Reaper) Run(ctx context.Context) (int, error) {
 			continue
 		}
 		recuperados++
+		metrics.JobsReaped.Inc()
 		r.log.Info("trabajo huérfano recuperado", "job_key", h.key, "type", h.tipo)
 	}
 	return recuperados, nil

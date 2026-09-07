@@ -1,0 +1,52 @@
+# La alerta que exige el §6 del enunciado: "tras tres reintentos fallidos, el
+# trabajo llega a la DLQ y emite una alerta".
+
+groups:
+  - name: trabajos
+    rules:
+      - alert: TrabajoEnDeadLetterQueue
+        expr: increase(jobs_dead_letter_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          resumen: "Un trabajo agotó sus reintentos y llegó a la DLQ"
+          detalle: >-
+            El trabajo de tipo {{ $labels.type }} falló tres veces con backoff
+            y está en la dead-letter queue. Revisar con `make jobs` y reencolar
+            desde administración cuando se corrija la causa.
+
+      - alert: ColaAcumulandoTrabajos
+        expr: increase(jobs_processed_total[10m]) == 0 and increase(jobs_reaped_total[10m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          resumen: "El reaper recupera trabajos pero ninguno se procesa"
+          detalle: >-
+            Señal de que los workers no están consumiendo. Revisar
+            `docker compose logs worker`.
+
+  - name: api
+    rules:
+      - alert: LatenciaAlta
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          resumen: "p95 por encima de 1 s en {{ $labels.route }}"
+          detalle: "El objetivo documentado está en disenos/objetivos-de-servicio.md."
+
+      - alert: TasaDeErroresAlta
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+            / sum(rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          resumen: "Más del 5 % de las respuestas son 5xx"

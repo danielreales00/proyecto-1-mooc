@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mooc/backend/internal/platform/jobs"
+	"mooc/backend/internal/platform/metrics"
 )
 
 // Handler es lo que escribe cada módulo: recibe los datos del trabajo y hace
@@ -45,6 +46,7 @@ func (r *Runner) Wrap(jobType string, h Handler) asynq.HandlerFunc {
 		if !claimed {
 			// Otro worker lo tiene, o ya terminó. Entrega duplicada: se descarta
 			// sin producir una segunda salida (CA-03).
+			metrics.JobsDuplicateSkipped.WithLabelValues(jobType).Inc()
 			log.Info("trabajo duplicado descartado")
 			return nil
 		}
@@ -55,6 +57,8 @@ func (r *Runner) Wrap(jobType string, h Handler) asynq.HandlerFunc {
 		start := time.Now()
 		if err := h(ctx, p.Data); err != nil {
 			_ = jobs.Fail(context.WithoutCancel(ctx), r.db, p.JobKey, err.Error())
+			metrics.JobsProcessed.WithLabelValues(jobType, "error").Inc()
+			metrics.JobDuration.WithLabelValues(jobType).Observe(time.Since(start).Seconds())
 			log.Error("trabajo fallido", "error", err, "duration_ms", time.Since(start).Milliseconds())
 			return err
 		}
@@ -62,6 +66,8 @@ func (r *Runner) Wrap(jobType string, h Handler) asynq.HandlerFunc {
 		if err := jobs.Succeed(context.WithoutCancel(ctx), r.db, p.JobKey); err != nil {
 			log.Error("no se pudo marcar como exitoso", "error", err)
 		}
+		metrics.JobsProcessed.WithLabelValues(jobType, "ok").Inc()
+		metrics.JobDuration.WithLabelValues(jobType).Observe(time.Since(start).Seconds())
 		log.Info("trabajo completado", "duration_ms", time.Since(start).Milliseconds())
 		return nil
 	}
@@ -104,7 +110,10 @@ func (r *Runner) OnRetriesExhausted() asynq.ErrorHandlerFunc {
 		if killErr := jobs.Kill(context.WithoutCancel(ctx), r.db, p.JobKey, err.Error()); killErr != nil {
 			r.log.Error("no se pudo mover a la DLQ", "job_key", p.JobKey, "error", killErr)
 		}
-		// Esta línea es la alerta hasta que entre Alertmanager (ADR-0009).
+		// Esta métrica es la que dispara la alerta que exige el §6 del
+		// enunciado: "tras tres reintentos fallidos, el trabajo llega a la DLQ
+		// y emite una alerta".
+		metrics.JobsDeadLetter.WithLabelValues(t.Type()).Inc()
 		r.log.Error("ALERTA: trabajo en la dead-letter queue",
 			"job_key", p.JobKey,
 			"type", t.Type(),

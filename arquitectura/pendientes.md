@@ -59,7 +59,7 @@ hechos, así que conviene antes de repartir el dominio.
 | `ETag` / `If-Match` | No existe | El autosave de `RF-04` lo necesita para detectar escrituras concurrentes |
 | Paginación por cursor | No existe (no hay listas todavía) | `RT-05` |
 | OpenAPI 3.1 | **Completo**: las 88 operaciones del inventario, validadas con redocly sin advertencias. Las 80 que aún no responden llevan `x-estado: planificado`. La API lo sirve en `GET /openapi.yaml` y `make contrato` detecta la deriva | `RT-05` y entregable §8 |
-| `/metrics` (Prometheus) | No existe | Sin métricas no hay alerta de DLQ (`CA-03`) ni p95 (`RNF-05`) |
+| `/metrics` (Prometheus) | **Hecho**: API y worker, con Prometheus, Grafana y 4 reglas de alerta. La de DLQ verificada disparando | `CA-03`, `RNF-05` |
 | Trazas OpenTelemetry | Solo hay logs estructurados | `RT-06`, exigido explícitamente |
 | Protección del último administrador | No existe | `RF-02` |
 
@@ -95,7 +95,7 @@ Solo corre `email.send`.
 | --- | --- |
 | `clamav` en Compose | Falta |
 | `worker-media` (imagen con FFmpeg) | Falta |
-| Perfil `observability` (Prometheus, Grafana, Jaeger) | Falta |
+| Perfil `observability` | **Hecho** salvo Jaeger (trazas OTel siguen pendientes) |
 | Perfil `carga` (k6) | Falta |
 | Pruebas automáticas | **Andamiaje hecho**: dominio, contraseñas, capa HTTP con dobles y `ParseQueues`. Falta cubrir cada módulo nuevo |
 | Semilla de datos sintéticos (`make seed`) | **Hecho** — 8 cuentas, idempotente |
