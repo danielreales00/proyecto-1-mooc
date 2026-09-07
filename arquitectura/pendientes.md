@@ -14,12 +14,12 @@ que la API no guarda estado (CE-01).
 
 ## Dónde estamos
 
-Medido contra el contrato: **44 de 88 operaciones**.
+Medido contra el contrato: **54 de 88 operaciones**.
 
 | | Hecho | Falta |
 | --- | --- | --- |
-| Operaciones de la API | 44 | 44 |
-| Módulos de dominio | 6 (`identity` parcial, `audit`, `authoring`, `learning`, `assessment`, `badges`) | `admin`, `media` |
+| Operaciones de la API | 54 | 34 |
+| Módulos de dominio | 7 (`identity` parcial, `audit`, `authoring`, `learning`, `assessment`, `badges`, `admin`) | `media` |
 | Tipos de trabajo asíncrono | 2 (`email.send`, `badge.issue`) + el `reaper` | 8 |
 | Migraciones | 2 (esquema completo del dominio) | Ninguna bloqueante |
 | Segmentos de la demostración | 6 de 9 verificados por `make demo` | SEG-3 y SEG-4 parciales; falta `media` |
@@ -40,7 +40,7 @@ Ninguno de estos existe todavía, salvo lo indicado en `identity`.
 | --- | --- | --- | --- |
 | ~~`authoring`~~ | **hecho** | El más grande. Cursos, versiones, módulos, unidades y recursos; reordenamiento; autosave; previsualización; validación de publicación con lista exhaustiva; versiones inmutables y `stable_id`. Incluye el normalizador de Markdown canónico | `RF-03`, `RF-04`, `CA-01`, `CE-03` |
 | ~~`assessment`~~ | **hecho** | Autoría de quizzes, snapshot del intento, guardado parcial, expiración, envío idempotente, calificación en servidor, retroalimentación por política | `RF-08`, `CA-04`, `CE-05` |
-| `admin` | 9 | Alta de profesores, roles, estados, sesiones ajenas, consulta de auditoría, listado de la cola y reencolado desde la DLQ. Protección del último administrador activo | `RF-02`, `CE-02` |
+| ~~`admin`~~ | **hecho** | Alta de profesores con invitación, roles, estados, sesiones ajenas, auditoría, cola y reencolado. Protección del último administrador con prueba de tabla | `RF-02`, `CE-02` |
 | `media` | 9 | **Lo único grande que falta.** Esquema, contrato y decisiones ya existen; falta el código. Plan de implementación en [`media-plan.md`](media-plan.md) | `RF-05`, `RF-06`, `RF-07`, `CA-02` |
 | ~~`catalog` + `enrollment`~~ | **hecho** (módulo `learning`) | Catálogo con búsqueda, filtros y cursores; inscripción, retiro y reinscripción conservando progreso | `RF-10` |
 | ~~`badges`~~ | **hecho** | Emisión única por inscripción, imagen, URL pública de verificación sin correo, revocación auditada | `RF-09`, `CA-07` |
@@ -61,7 +61,7 @@ hechos, así que conviene antes de repartir el dominio.
 | OpenAPI 3.1 | **Completo**: las 88 operaciones del inventario, validadas con redocly sin advertencias. Las 80 que aún no responden llevan `x-estado: planificado`. La API lo sirve en `GET /openapi.yaml` y `make contrato` detecta la deriva | `RT-05` y entregable §8 |
 | `/metrics` (Prometheus) | **Hecho**: API y worker, con Prometheus, Grafana y 4 reglas de alerta. La de DLQ verificada disparando | `CA-03`, `RNF-05` |
 | Trazas OpenTelemetry | Solo hay logs estructurados | `RT-06`, exigido explícitamente |
-| Protección del último administrador | No existe | `RF-02` |
+| Protección del último administrador | **Hecho**, comprobada dentro de la transacción y con prueba de tabla | `RF-02` |
 
 ## Qué falta — workers
 

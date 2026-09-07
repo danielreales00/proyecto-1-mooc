@@ -454,9 +454,8 @@ docker compose exec postgres psql -U mooc -d mooc -c \
 > publicación, inscripción, consumo, evaluación, progreso e insignia, con los
 > workers funcionando y las condiciones de aceptación comprobadas.
 >
-> **Lo que falta**, y lo digo claro: el módulo de multimedia y la
-> administración de usuarios por API. Cuarenta y cuatro de las ochenta y ocho
-> operaciones responden hoy.
+> **Lo que falta**, y lo digo claro: el módulo de multimedia. Cincuenta y
+> cuatro de las ochenta y ocho operaciones responden hoy.
 >
 > Multimedia no es un hueco en blanco: su esquema está aplicado, sus nueve
 > operaciones están en el contrato y validadas, y las decisiones —carga

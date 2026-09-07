@@ -144,7 +144,6 @@ paths:
     get:
       tags: [operación]
       operationId: getMetrics
-      x-estado: planificado
       summary: Métricas en formato Prometheus
       description: |
         Expuesto solo a la red interna. Incluye `jobs_dead_letter_total`, que
@@ -443,7 +442,6 @@ paths:
     get:
       tags: [administración]
       operationId: listUsers
-      x-estado: planificado
       summary: Listar usuarios
       parameters:
         - { name: role, in: query, schema: { type: string, enum: [admin, teacher, student] } }
@@ -461,7 +459,6 @@ paths:
     post:
       tags: [administración]
       operationId: createUser
-      x-estado: planificado
       summary: Crear un profesor o administrador
       description: |
         La única vía para crear cuentas que no sean de estudiante (RF-01).
@@ -495,7 +492,6 @@ paths:
     get:
       tags: [administración]
       operationId: getUser
-      x-estado: planificado
       summary: Ver un usuario
       responses:
         "200":
@@ -510,7 +506,6 @@ paths:
     patch:
       tags: [administración]
       operationId: updateUser
-      x-estado: planificado
       summary: Cambiar el rol o el estado de un usuario
       description: |
         Responde `409 last_admin` al intentar suspender, eliminar o degradar al
@@ -547,7 +542,6 @@ paths:
     get:
       tags: [administración]
       operationId: listUserSessions
-      x-estado: planificado
       summary: Sesiones abiertas de un usuario
       responses:
         "200":
@@ -564,7 +558,6 @@ paths:
     delete:
       tags: [administración]
       operationId: revokeAllUserSessions
-      x-estado: planificado
       summary: Revocar todas las sesiones de un usuario
       description: |
         Efecto inmediato: la petición siguiente de ese usuario responde `401`,
@@ -578,7 +571,6 @@ paths:
     get:
       tags: [administración]
       operationId: listAuditEvents
-      x-estado: planificado
       summary: Consultar el rastro de auditoría
       description: |
         El rastro es inmutable: PostgreSQL rechaza cualquier `UPDATE` o
@@ -604,7 +596,6 @@ paths:
     get:
       tags: [administración]
       operationId: listJobs
-      x-estado: planificado
       summary: Estado de la cola, los reintentos y la DLQ
       parameters:
         - { name: status, in: query, schema: { type: string, enum: [queued, running, succeeded, failed, dead] } }
@@ -623,7 +614,6 @@ paths:
     post:
       tags: [administración]
       operationId: requeueJob
-      x-estado: planificado
       summary: Reencolar un trabajo desde la DLQ
       description: |
         Reencola **con la misma `job_key`** que tenía el trabajo original, que
