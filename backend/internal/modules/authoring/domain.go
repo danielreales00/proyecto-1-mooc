@@ -135,6 +135,16 @@ type Resource struct {
 	QuizAllOptionsOK bool
 }
 
+// ContenidoETag identifica la versión del contenido por su valor, no por
+// cuándo se guardó. Guardar dos veces lo mismo da el mismo ETag (ADR-0014).
+func (r Resource) ContenidoETag() string {
+	c := ""
+	if r.ContentMD != nil {
+		c = *r.ContentMD
+	}
+	return etagDeContenido(r.StableID.String(), c)
+}
+
 // ProcessingStatus traduce el estado del binario a lo que ve el cliente.
 func (r Resource) ProcessingStatus() string {
 	if !requiereAsset[r.Type] {
@@ -153,6 +163,12 @@ func (r Resource) ProcessingStatus() string {
 		return "pending"
 	}
 }
+
+// etagDeContenido lo inyecta la capa HTTP para no meter crypto en el dominio.
+var etagDeContenido = func(partes ...string) string { return "" }
+
+// UsarCalculoDeETag lo llama la composición al arrancar.
+func UsarCalculoDeETag(f func(...string) string) { etagDeContenido = f }
 
 // ---------------------------------------------------------------- errores --
 

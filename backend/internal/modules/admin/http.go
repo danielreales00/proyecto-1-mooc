@@ -16,18 +16,26 @@ type API struct{ svc *Service }
 func NewAPI(svc *Service) *API { return &API{svc: svc} }
 
 // Routes registra la administración. Todo exige rol de administrador.
-func (a *API) Routes(mux *http.ServeMux, auth httpx.Middleware, soloAdmin httpx.Middleware) {
+func (a *API) Routes(mux *http.ServeMux, auth httpx.Middleware,
+	soloAdmin httpx.Middleware, idem httpx.Middleware) {
+
 	p := func(h http.HandlerFunc) http.Handler { return auth(soloAdmin(h)) }
+	pi := func(h http.HandlerFunc) http.Handler {
+		if idem == nil {
+			return p(h)
+		}
+		return auth(soloAdmin(idem(h)))
+	}
 
 	mux.Handle("GET /api/v1/admin/users", p(a.listarUsuarios))
-	mux.Handle("POST /api/v1/admin/users", p(a.crearUsuario))
+	mux.Handle("POST /api/v1/admin/users", pi(a.crearUsuario))
 	mux.Handle("GET /api/v1/admin/users/{id}", p(a.verUsuario))
 	mux.Handle("PATCH /api/v1/admin/users/{id}", p(a.actualizarUsuario))
 	mux.Handle("GET /api/v1/admin/users/{id}/sessions", p(a.sesiones))
 	mux.Handle("DELETE /api/v1/admin/users/{id}/sessions", p(a.revocarSesiones))
 	mux.Handle("GET /api/v1/admin/audit", p(a.auditoria))
 	mux.Handle("GET /api/v1/admin/jobs", p(a.trabajos))
-	mux.Handle("POST /api/v1/admin/jobs/{id}/requeue", p(a.reencolar))
+	mux.Handle("POST /api/v1/admin/jobs/{id}/requeue", pi(a.reencolar))
 }
 
 func actor(r *http.Request) Actor {

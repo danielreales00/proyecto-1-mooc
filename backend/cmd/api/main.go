@@ -33,6 +33,7 @@ import (
 	"mooc/backend/internal/modules/media"
 	"mooc/backend/internal/platform/config"
 	"mooc/backend/internal/platform/httpx"
+	"mooc/backend/internal/platform/idempotency"
 	"mooc/backend/internal/platform/jobs"
 	"mooc/backend/internal/platform/logging"
 	"mooc/backend/internal/platform/metrics"
@@ -109,6 +110,9 @@ func run() error {
 	)
 
 	// --- ruteo ------------------------------------------------------------
+	// El dominio calcula ETags sin conocer crypto ni HTTP.
+	authoring.UsarCalculoDeETag(httpx.ETagDe)
+
 	authoringSvc := authoring.NewService(postgres.NewAuthoringStore(pool), recorder, log)
 	learningSvc := learning.NewService(postgres.NewLearningStore(pool), recorder,
 		learningBridge{publisher}, learning.UmbralesPorDefecto(), log)
@@ -123,6 +127,8 @@ func run() error {
 
 	metrics.Inicializar(jobs.TypeEmailSend, jobs.TypeBadgeIssue)
 
+	idem := idempotency.New(pool, log).Requerida()
+
 	mux := http.NewServeMux()
 	auth := identity.Authenticate(identitySvc)
 	soloDocentes := identity.RequireRole(identity.RoleTeacher, identity.RoleAdmin)
@@ -136,17 +142,17 @@ func run() error {
 			return limiter.Middleware(r, ratelimit.PorCampoDelCuerpo("email"), log)
 		},
 	})
-	authoring.NewAPI(authoringSvc).Routes(mux, auth, soloDocentes)
+	authoring.NewAPI(authoringSvc).Routes(mux, auth, soloDocentes, idem)
 	learning.NewAPI(learningSvc, tamperAuditor{pool: pool, rec: recorder, log: log}).
 		Routes(mux, auth, func(r ratelimit.Regla) httpx.Middleware {
 			// Por sesión, no por IP: varios estudiantes tras el mismo NAT no
 			// deben estorbarse.
 			return limiter.Middleware(r, ratelimit.PorSesion, log)
-		})
-	badges.NewAPI(badgeSvc).Routes(mux, auth, soloAdmin)
-	assessment.NewAPI(assessmentSvc).Routes(mux, auth, soloDocentes)
-	admin.NewAPI(adminSvc).Routes(mux, auth, soloAdmin)
-	media.NewAPI(mediaSvc).Routes(mux, auth, soloDocentes)
+		}, idem)
+	badges.NewAPI(badgeSvc).Routes(mux, auth, soloAdmin, idem)
+	assessment.NewAPI(assessmentSvc).Routes(mux, auth, soloDocentes, idem)
+	admin.NewAPI(adminSvc).Routes(mux, auth, soloAdmin, idem)
+	media.NewAPI(mediaSvc).Routes(mux, auth, soloDocentes, idem)
 
 	health := &health{pool: pool, redis: sessionRedis, objects: store}
 	mux.HandleFunc("GET /healthz", health.live)

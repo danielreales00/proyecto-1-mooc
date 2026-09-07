@@ -15,9 +15,14 @@ mal(){ echo "  ${ROJO}✗ $*${OFF}" >&2; fallos=$((fallos+1)); }
 ok(){ echo "  ${VERDE}✓${OFF} $*"; }
 bloque(){ echo; echo "${NEG}▐ $*${OFF}"; }
 jq(){ python3 -c "import json,sys;d=json.load(sys.stdin);print(eval(sys.argv[1],{'d':d}))" "$1"; }
+idem(){ echo "Idempotency-Key: $(cat /proc/sys/kernel/random/uuid)"; }
 lg(){ curl -s -X POST "$API/api/v1/auth/login" -H 'Content-Type: application/json' \
         -d "{\"email\":\"$1\",\"password\":\"$CLAVE\"}" | jq "d['token']"; }
 J="Content-Type: application/json"
+# Las operaciones no repetibles exigen `Idempotency-Key` (ADR-0008). Cada
+# llamada genera la suya; repetir una petición con la misma clave devuelve la
+# respuesta ya calculada en lugar de ejecutarla otra vez.
+idem(){ echo "Idempotency-Key: $(cat /proc/sys/kernel/random/uuid)"; }
 
 P=$(lg profesor@mooc.local); E=$(lg estudiante2@mooc.local)
 PA="Authorization: Bearer $P"; EA="Authorization: Bearer $E"
@@ -25,28 +30,28 @@ PA="Authorization: Bearer $P"; EA="Authorization: Bearer $E"
 # ─────────────────────────────────────────────────────────── ADR-0007 ──────
 bloque "ADR-0007 · el progreso sobrevive a una versión nueva del curso"
 
-R=$(curl -s -X POST "$API/api/v1/courses" -H "$PA" -H "$J" \
+R=$(curl -s -X POST "$API/api/v1/courses" -H "$(idem)" -H "$PA" -H "$J" \
   -d '{"title":"Versionado '"$RANDOM"'","summary":"Invariante de stable_id.","category":"cloud","language":"es"}')
 CID=$(echo "$R"|jq "d['course']['id']"); VID=$(echo "$R"|jq "d['version']['id']")
-MID=$(curl -s -X POST "$API/api/v1/versions/$VID/modules" -H "$PA" -H "$J" -d '{"title":"M1"}'|jq "d['id']")
+MID=$(curl -s -X POST "$API/api/v1/versions/$VID/modules" -H "$(idem)" -H "$PA" -H "$J" -d '{"title":"M1"}'|jq "d['id']")
 UID_=$(curl -s -X POST "$API/api/v1/modules/$MID/units" -H "$PA" -H "$J" -d '{"title":"U1"}'|jq "d['id']")
 RES=$(curl -s -X POST "$API/api/v1/units/$UID_/resources" -H "$PA" -H "$J" \
   -d '{"title":"Lección 1","type":"rich_text","content_md":"# Uno\n"}')
 SID=$(echo "$RES"|jq "d['stable_id']"); RID1=$(echo "$RES"|jq "d['id']")
-curl -fsS -X POST "$API/api/v1/courses/$CID/versions/1/publish" -H "$PA" >/dev/null
+curl -fsS -X POST "$API/api/v1/courses/$CID/versions/1/publish" -H "$(idem)" -H "$PA" >/dev/null
 
-EID=$(curl -s -X POST "$API/api/v1/enrollments" -H "$EA" -H "$J" -d "{\"course_id\":\"$CID\"}"|jq "d['id']")
-curl -fsS -X POST "$API/api/v1/enrollments/$EID/progress" -H "$EA" -H "$J" \
+EID=$(curl -s -X POST "$API/api/v1/enrollments" -H "$(idem)" -H "$EA" -H "$J" -d "{\"course_id\":\"$CID\"}"|jq "d['id']")
+curl -fsS -X POST "$API/api/v1/enrollments/$EID/progress" -H "$(idem)" -H "$EA" -H "$J" \
   -d "{\"resource_stable_id\":\"$SID\",\"kind\":\"open\"}" >/dev/null
 for _ in 1 2; do
-  until [ "$(curl -s -X POST "$API/api/v1/enrollments/$EID/progress" -H "$EA" -H "$J" \
+  until [ "$(curl -s -X POST "$API/api/v1/enrollments/$EID/progress" -H "$(idem)" -H "$EA" -H "$J" \
       -d "{\"resource_stable_id\":\"$SID\",\"kind\":\"heartbeat\"}"|jq "d['accepted']")" = True ]; do sleep 3; done
 done
 ANTES=$(curl -s "$API/api/v1/enrollments/$EID/progress" -H "$EA"|jq "round(d['progress_pct'])")
 [ "$ANTES" = "100" ] || mal "el estudiante no llegó al 100% antes de versionar (fue $ANTES%)"
 
-curl -fsS -X POST "$API/api/v1/courses/$CID/versions/1/unpublish" -H "$PA" >/dev/null
-curl -fsS -X POST "$API/api/v1/courses/$CID/versions" -H "$PA" >/dev/null
+curl -fsS -X POST "$API/api/v1/courses/$CID/versions/1/unpublish" -H "$(idem)" -H "$PA" >/dev/null
+curl -fsS -X POST "$API/api/v1/courses/$CID/versions" -H "$(idem)" -H "$PA" >/dev/null
 ARBOL=$(curl -s "$API/api/v1/courses/$CID/versions/2" -H "$PA")
 SID2=$(echo "$ARBOL"|jq "d['version']['modules'][0]['units'][0]['resources'][0]['stable_id']")
 RID2=$(echo "$ARBOL"|jq "d['version']['modules'][0]['units'][0]['resources'][0]['id']")
@@ -56,7 +61,7 @@ RID2=$(echo "$ARBOL"|jq "d['version']['modules'][0]['units'][0]['resources'][0][
 [ "$RID1" != "$RID2" ] && ok "el id de fila sí cambia, como debe" \
                        || mal "el id de fila no cambió; la versión no se clonó"
 
-curl -fsS -X POST "$API/api/v1/courses/$CID/versions/2/publish" -H "$PA" >/dev/null
+curl -fsS -X POST "$API/api/v1/courses/$CID/versions/2/publish" -H "$(idem)" -H "$PA" >/dev/null
 DESPUES=$(curl -s "$API/api/v1/enrollments/$EID/progress" -H "$EA"|jq "round(d['progress_pct'])")
 [ "$ANTES" = "$DESPUES" ] && ok "el progreso sobrevivió a la versión nueva ($DESPUES%)" \
                           || mal "el progreso se perdió: $ANTES% -> $DESPUES%"
@@ -100,11 +105,11 @@ bloque "ADR-0012 · el servidor descarta las evidencias imposibles"
 # Se espera a que pase la cadencia mínima: de lo contrario el heartbeat se
 # rechazaría por cadencia y no llegaríamos a evaluar el salto, que es lo que
 # esta comprobación quiere probar.
-until [ "$(curl -s -X POST "$API/api/v1/enrollments/$EID/progress" -H "$EA" -H "$J" \
+until [ "$(curl -s -X POST "$API/api/v1/enrollments/$EID/progress" -H "$(idem)" -H "$EA" -H "$J" \
       -d "{\"resource_stable_id\":\"$SID\",\"kind\":\"heartbeat\"}"|jq "d['accepted']")" = True ]; do
   sleep 3
 done
-SALTO=$(curl -s -X POST "$API/api/v1/enrollments/$EID/progress" -H "$EA" -H "$J" \
+SALTO=$(curl -s -X POST "$API/api/v1/enrollments/$EID/progress" -H "$(idem)" -H "$EA" -H "$J" \
   -d "{\"resource_stable_id\":\"$SID\",\"kind\":\"heartbeat\",\"position_seconds\":3000}"|jq "d['reject_reason']")
 [ "$SALTO" = "cadence" ] \
   && ok "el salto llegó demasiado pronto y lo frenó la cadencia (primera barrera)" \
@@ -112,7 +117,7 @@ SALTO=$(curl -s -X POST "$API/api/v1/enrollments/$EID/progress" -H "$EA" -H "$J"
        && ok "un salto de posición imposible se descarta" \
        || mal "el salto de posición se aceptó (motivo: ${SALTO:-ninguno})"; }
 
-NEGATIVA=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/api/v1/enrollments/$EID/progress" \
+NEGATIVA=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/api/v1/enrollments/$EID/progress" -H "$(idem)" \
   -H "$EA" -H "$J" -d "{\"resource_stable_id\":\"$SID\",\"kind\":\"heartbeat\",\"position_seconds\":-5}")
 [ "$NEGATIVA" = "202" ] && ok "una posición negativa no rompe la ingesta" \
                         || mal "posición negativa -> $NEGATIVA"

@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"mooc/backend/internal/platform/cursor"
 	"mooc/backend/internal/platform/httpx"
 	"mooc/backend/internal/platform/markdown"
 	"mooc/backend/internal/platform/metrics"
@@ -34,13 +35,22 @@ func NewAPI(svc *Service, a auditor) *API { return &API{svc: svc, audit: a} }
 // barrera, contra quien inunde el endpoint sin esperar respuesta.
 var LimiteProgreso = ratelimit.Regla{Nombre: "progress", Limite: 120, Ventana: time.Minute}
 
+// idem aplica la idempotencia por cabecera a las operaciones no repetibles.
+// Si es nil, se registran sin ella (útil en pruebas).
 func (a *API) Routes(mux *http.ServeMux, auth httpx.Middleware,
-	limitar func(ratelimit.Regla) httpx.Middleware) {
+	limitar func(ratelimit.Regla) httpx.Middleware, idem httpx.Middleware) {
+
+	conIdem := func(h http.HandlerFunc) http.Handler {
+		if idem == nil {
+			return h
+		}
+		return idem(h)
+	}
 	// Catálogo: público.
 	mux.HandleFunc("GET /api/v1/catalog/courses", a.search)
 	mux.HandleFunc("GET /api/v1/catalog/courses/{slug}", a.bySlug)
 
-	mux.Handle("POST /api/v1/enrollments", auth(http.HandlerFunc(a.enroll)))
+	mux.Handle("POST /api/v1/enrollments", auth(conIdem(a.enroll)))
 	mux.Handle("GET /api/v1/enrollments", auth(http.HandlerFunc(a.mine)))
 	mux.Handle("GET /api/v1/enrollments/{id}", auth(http.HandlerFunc(a.get)))
 	mux.Handle("POST /api/v1/enrollments/{id}/withdraw", auth(http.HandlerFunc(a.withdraw)))
@@ -71,11 +81,22 @@ func pathID(r *http.Request, nombre string) (uuid.UUID, error) {
 
 func (a *API) search(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	cursos, err := a.svc.Search(r.Context(), q.Get("q"), q.Get("category"), q.Get("language"), 50)
+	limite := cursor.Limite(entero(q.Get("limit")), 20, 100)
+
+	var desde *Cursor
+	if c, ok := cursor.Decodificar(q.Get("cursor")); ok {
+		desde = &Cursor{Fecha: c.Fecha, ID: c.ID}
+	}
+
+	cursos, err := a.svc.Search(r.Context(), q.Get("q"), q.Get("category"), q.Get("language"), limite, desde)
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
+
+	cursos, siguiente := cursor.Pagina(cursos, limite,
+		func(c CatalogCourse) (time.Time, string) { return c.CreatedAt, c.ID.String() })
+
 	items := make([]map[string]any, 0, len(cursos))
 	for _, c := range cursos {
 		items = append(items, map[string]any{
@@ -84,7 +105,18 @@ func (a *API) search(w http.ResponseWriter, r *http.Request) {
 			"version_number": c.VersionNumber, "enrolled_count": c.EnrolledCount,
 		})
 	}
-	httpx.JSON(w, http.StatusOK, map[string]any{"items": items, "next_cursor": nil})
+	httpx.JSON(w, http.StatusOK, map[string]any{"items": items, "next_cursor": siguiente})
+}
+
+func entero(s string) int {
+	n := 0
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return 0
+		}
+		n = n*10 + int(r-'0')
+	}
+	return n
 }
 
 func (a *API) bySlug(w http.ResponseWriter, r *http.Request) {

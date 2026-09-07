@@ -402,13 +402,23 @@ func (s *Service) AddResource(ctx context.Context, unitID uuid.UUID, in Resource
 }
 
 // SaveContent normaliza y guarda el Markdown, y deja una revisión (RF-04).
-func (s *Service) SaveContent(ctx context.Context, resourceID uuid.UUID, contenido string, a Actor) (Resource, error) {
+//
+// comprobarPrecondicion recibe el ETag actual y decide si la escritura procede.
+// Se pasa como función para que el dominio no conozca las cabeceras HTTP.
+func (s *Service) SaveContent(ctx context.Context, resourceID uuid.UUID, contenido string,
+	comprobarPrecondicion func(etagActual string) error, a Actor) (Resource, error) {
+
 	r, err := s.store.ResourceByID(ctx, s.store.DB(), resourceID)
 	if err != nil {
 		return Resource{}, err
 	}
 	if _, err := s.guardVersionEditable(ctx, r.CourseVersionID, a); err != nil {
 		return Resource{}, err
+	}
+	if comprobarPrecondicion != nil {
+		if err := comprobarPrecondicion(r.ContenidoETag()); err != nil {
+			return Resource{}, err
+		}
 	}
 
 	normalizado, refs, err := markdown.Canonicalizar(contenido)

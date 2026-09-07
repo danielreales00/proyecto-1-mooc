@@ -14,12 +14,20 @@ type API struct{ svc *Service }
 
 func NewAPI(svc *Service) *API { return &API{svc: svc} }
 
-func (a *API) Routes(mux *http.ServeMux, auth httpx.Middleware, soloAdmin httpx.Middleware) {
+func (a *API) Routes(mux *http.ServeMux, auth httpx.Middleware,
+	soloAdmin httpx.Middleware, idem httpx.Middleware) {
+
+	conIdem := func(h http.HandlerFunc) http.Handler {
+		if idem == nil {
+			return h
+		}
+		return idem(h)
+	}
 	// La verificación es PÚBLICA: es el punto de CA-07.
 	mux.HandleFunc("GET /api/v1/verify/{code}", a.verify)
 
 	mux.Handle("GET /api/v1/me/badges", auth(http.HandlerFunc(a.mine)))
-	mux.Handle("POST /api/v1/badges/{id}/revoke", auth(soloAdmin(http.HandlerFunc(a.revoke))))
+	mux.Handle("POST /api/v1/badges/{id}/revoke", auth(soloAdmin(conIdem(a.revoke))))
 }
 
 // vistaPrivada la ve el dueño de la insignia o un administrador.

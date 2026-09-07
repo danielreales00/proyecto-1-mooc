@@ -54,10 +54,10 @@ hechos, así que conviene antes de repartir el dominio.
 
 | Pieza | Estado | Por qué importa |
 | --- | --- | --- |
-| Middleware de `Idempotency-Key` | La tabla `platform.idempotency_keys` existe **vacía y sin usar**. El `submit` del quiz es idempotente por su máquina de estados, no por la cabecera | `RT-05` |
+| Middleware de `Idempotency-Key` | **Hecho**: 11 operaciones no repetibles lo exigen. Repetir con la misma clave devuelve la respuesta guardada con `Idempotency-Replayed`; con cuerpo distinto, `422` | `RT-05` |
 | Rate limiting en Redis | **Hecho**: login en dos niveles (cuenta e IP), registro, verificación y progreso. Base lógica 3 | `CE-02` |
-| `ETag` / `If-Match` | No existe | El autosave de `RF-04` lo necesita para detectar escrituras concurrentes |
-| Paginación por cursor | No existe (no hay listas todavía) | `RT-05` |
+| `ETag` / `If-Match` | **Hecho** en el autosave. El ETag sale del contenido, así que guardar lo mismo da el mismo ETag (ADR-0014) | `RF-04` |
+| Paginación por cursor | **Hecho** en el catálogo, con `limit` y `cursor` opaco. Los demás listados siguen devolviendo `next_cursor: null` | `RT-05` |
 | OpenAPI 3.1 | **Completo**: las 88 operaciones del inventario, validadas con redocly sin advertencias. Las 80 que aún no responden llevan `x-estado: planificado`. La API lo sirve en `GET /openapi.yaml` y `make contrato` detecta la deriva | `RT-05` y entregable §8 |
 | `/metrics` (Prometheus) | **Hecho**: API y worker, con Prometheus, Grafana y 4 reglas de alerta. La de DLQ verificada disparando | `CA-03`, `RNF-05` |
 | Trazas OpenTelemetry | Solo hay logs estructurados | `RT-06`, exigido explícitamente |

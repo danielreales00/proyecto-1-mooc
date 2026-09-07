@@ -46,9 +46,9 @@ Actualizado el 7 de septiembre de 2026.
 | Métricas Prometheus y panel de Grafana | ✅ |
 | Escalamiento horizontal | ✅ verificado con `api=3` |
 | Migraciones SQL versionadas | ✅ |
-| Middleware de `Idempotency-Key` | ❌ la tabla existe, el middleware no |
-| `ETag` / `If-Match` | ❌ |
-| Paginación por cursor | ❌ los listados devuelven `next_cursor: null` |
+| Middleware de `Idempotency-Key` | ✅ en 11 operaciones no repetibles |
+| `ETag` / `If-Match` | ✅ en el autosave |
+| Paginación por cursor | ⚠️ hecha en el catálogo; los demás listados aún devuelven `null` |
 | Trazas OpenTelemetry | ❌ solo hay logs y métricas |
 
 ## Evidencia

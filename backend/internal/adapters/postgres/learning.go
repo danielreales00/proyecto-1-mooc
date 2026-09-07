@@ -31,10 +31,20 @@ func nf(err error) error {
 }
 
 // SearchCatalog solo devuelve cursos con una versión publicada.
-func (s *LearningStore) SearchCatalog(ctx context.Context, db dbx.DB, q, categoria, idioma string, limit int) ([]learning.CatalogCourse, error) {
+// SearchCatalog pide un elemento MÁS del límite: si aparece, hay página
+// siguiente, y así se sabe sin contar el total (que en una tabla grande es la
+// consulta más cara).
+func (s *LearningStore) SearchCatalog(ctx context.Context, db dbx.DB, q, categoria, idioma string,
+	limit int, desde *learning.Cursor) ([]learning.CatalogCourse, error) {
+
+	var fechaDesde any
+	var idDesde any
+	if desde != nil {
+		fechaDesde, idDesde = desde.Fecha, desde.ID
+	}
 	rows, err := db.Query(ctx, `
 		SELECT c.id, c.slug, c.title, c.summary, coalesce(c.category,''), coalesce(c.language,''),
-		       v.version_number,
+		       v.version_number, c.created_at,
 		       (SELECT count(*) FROM progress.enrollments e
 		         WHERE e.course_id = c.id AND e.status='active')
 		  FROM authoring.courses c
@@ -43,8 +53,9 @@ func (s *LearningStore) SearchCatalog(ctx context.Context, db dbx.DB, q, categor
 		   AND ($1 = '' OR to_tsvector('spanish', c.title || ' ' || c.summary) @@ plainto_tsquery('spanish', $1))
 		   AND ($2 = '' OR c.category = $2)
 		   AND ($3 = '' OR c.language = $3)
-		 ORDER BY v.published_at DESC NULLS LAST
-		 LIMIT $4`, q, categoria, idioma, limit)
+		   AND ($5::timestamptz IS NULL OR (c.created_at, c.id) < ($5, $6::uuid))
+		 ORDER BY c.created_at DESC, c.id DESC
+		 LIMIT $4`, q, categoria, idioma, limit+1, fechaDesde, idDesde)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +64,7 @@ func (s *LearningStore) SearchCatalog(ctx context.Context, db dbx.DB, q, categor
 	for rows.Next() {
 		var c learning.CatalogCourse
 		if err := rows.Scan(&c.ID, &c.Slug, &c.Title, &c.Summary, &c.Category,
-			&c.Language, &c.VersionNumber, &c.EnrolledCount); err != nil {
+			&c.Language, &c.VersionNumber, &c.CreatedAt, &c.EnrolledCount); err != nil {
 			return nil, err
 		}
 		out = append(out, c)

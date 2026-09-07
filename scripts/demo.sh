@@ -20,6 +20,10 @@ jq()   { python3 -c "import json,sys;d=json.load(sys.stdin);print(eval(sys.argv[
 login(){ curl -s -X POST "$API/api/v1/auth/login" -H 'Content-Type: application/json' \
            -d "{\"email\":\"$1\",\"password\":\"$CLAVE\"}" | jq "d['token']"; }
 J="Content-Type: application/json"
+# Las operaciones no repetibles exigen `Idempotency-Key` (ADR-0008). Cada
+# llamada genera la suya; repetir una petición con la misma clave devuelve la
+# respuesta ya calculada en lugar de ejecutarla otra vez.
+idem(){ echo "Idempotency-Key: $(cat /proc/sys/kernel/random/uuid)"; }
 
 # ───────────────────────────────────────────────────────── SEG-1 ────────────
 seg "SEG-1 · Identidad y administración"
@@ -70,16 +74,16 @@ ok "control por rol: un estudiante no accede a la autoría (CA-06)"
 # ───────────────────────────────────────────────────────── SEG-2 ────────────
 seg "SEG-2 · Autoría y publicación"
 
-R=$(curl -s -X POST "$API/api/v1/courses" -H "$PA" -H "$J" \
+R=$(curl -s -X POST "$API/api/v1/courses" -H "$(idem)" -H "$PA" -H "$J" \
   -d '{"title":"Fundamentos de Cloud '"$RANDOM"'","summary":"Curso de la demostración.","category":"cloud","language":"es"}')
 CID=$(echo "$R" | jq "d['course']['id']"); VID=$(echo "$R" | jq "d['version']['id']")
 ok "curso creado con su versión 1 en borrador"
 
-ERRS=$(curl -s -X POST "$API/api/v1/courses/$CID/versions/1/publish" -H "$PA" | jq "len(d['errors'])")
+ERRS=$(curl -s -X POST "$API/api/v1/courses/$CID/versions/1/publish" -H "$(idem)" -H "$PA" | jq "len(d['errors'])")
 [ "$ERRS" -ge 1 ] || fallo "un curso vacío se pudo publicar"
 ok "publicar un curso vacío falla con la lista exhaustiva de errores (CA-01)"
 
-MID=$(curl -s -X POST "$API/api/v1/versions/$VID/modules" -H "$PA" -H "$J" -d '{"title":"Módulo 1"}' | jq "d['id']")
+MID=$(curl -s -X POST "$API/api/v1/versions/$VID/modules" -H "$(idem)" -H "$PA" -H "$J" -d '{"title":"Módulo 1"}' | jq "d['id']")
 UID_=$(curl -s -X POST "$API/api/v1/modules/$MID/units" -H "$PA" -H "$J" -d '{"title":"Unidad 1"}' | jq "d['id']")
 TXT=$(curl -s -X POST "$API/api/v1/units/$UID_/resources" -H "$PA" -H "$J" \
   -d '{"title":"Introducción","type":"rich_text","content_md":"# Contenedores\n\n*  Aislamiento\n\n\n*  Portabilidad   \n"}')
@@ -101,10 +105,10 @@ curl -fsS -X PUT "$API/api/v1/resources/$QRID/quiz" -H "$PA" -H "$J" -d '{
                {"text_md":"El hardware físico","is_correct":false}]}]}' >/dev/null
 ok "quiz configurado por el profesor"
 
-curl -fsS -X POST "$API/api/v1/courses/$CID/versions/1/publish" -H "$PA" >/dev/null
+curl -fsS -X POST "$API/api/v1/courses/$CID/versions/1/publish" -H "$(idem)" -H "$PA" >/dev/null
 ok "versión publicada"
 
-CODIGO=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/api/v1/versions/$VID/modules" \
+CODIGO=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/api/v1/versions/$VID/modules" -H "$(idem)" \
          -H "$PA" -H "$J" -d '{"title":"No debería entrar"}')
 [ "$CODIGO" = 409 ] || fallo "se pudo mutar una versión publicada (llegó $CODIGO)"
 ok "la versión publicada es INMUTABLE: 409 al intentar mutarla (ADR-0007)"
@@ -115,7 +119,7 @@ seg "SEG-5 · Catálogo y consumo de contenido"
 curl -fsS "$API/api/v1/catalog/courses" | jq "len(d['items'])" >/dev/null
 ok "el catálogo público responde sin sesión"
 
-EID=$(curl -s -X POST "$API/api/v1/enrollments" -H "$EA" -H "$J" -d "{\"course_id\":\"$CID\"}" | jq "d['id']")
+EID=$(curl -s -X POST "$API/api/v1/enrollments" -H "$(idem)" -H "$EA" -H "$J" -d "{\"course_id\":\"$CID\"}" | jq "d['id']")
 ok "el estudiante se inscribe"
 curl -fsS "$API/api/v1/enrollments/$EID/content" -H "$EA" >/dev/null
 ok "recibe el árbol del curso con su progreso"
@@ -123,7 +127,7 @@ ok "recibe el árbol del curso con su progreso"
 # ───────────────────────────────────────────────────────── SEG-6 ────────────
 seg "SEG-6 · Quiz"
 
-AT=$(curl -s -X POST "$API/api/v1/enrollments/$EID/quizzes/$QSID/attempts" -H "$EA" -H "$J")
+AT=$(curl -s -X POST "$API/api/v1/enrollments/$EID/quizzes/$QSID/attempts" -H "$(idem)" -H "$EA" -H "$J")
 AID=$(echo "$AT" | jq "d['id']")
 echo "$AT" | grep -qi "is_correct" && fallo "el snapshot contiene las claves correctas"
 ok "el snapshot del intento NO contiene ninguna clave correcta (CA-04)"
@@ -135,16 +139,16 @@ curl -fsS -X PATCH "$API/api/v1/attempts/$AID/answers" -H "$EA" -H "$J" \
   -d "{\"answers\":[{\"question_stable_id\":\"$Q\",\"selected_option_stable_ids\":[\"$O\"]}]}" >/dev/null
 ok "guardado parcial de respuestas"
 
-NOTA=$(curl -s -X POST "$API/api/v1/attempts/$AID/submit" -H "$EA" | jq "d['score']")
+NOTA=$(curl -s -X POST "$API/api/v1/attempts/$AID/submit" -H "$(idem)" -H "$EA" | jq "d['score']")
 ok "calificación en servidor: $NOTA"
-NOTA2=$(curl -s -X POST "$API/api/v1/attempts/$AID/submit" -H "$EA" | jq "d['score']")
+NOTA2=$(curl -s -X POST "$API/api/v1/attempts/$AID/submit" -H "$(idem)" -H "$EA" | jq "d['score']")
 [ "$NOTA" = "$NOTA2" ] || fallo "reenviar cambió la nota ($NOTA vs $NOTA2)"
 ok "reenviar el intento es idempotente: misma nota"
 
 # ───────────────────────────────────────────────────────── SEG-7 ────────────
 seg "SEG-7 · Progreso y aprobación"
 
-RESP=$(curl -s -X POST "$API/api/v1/enrollments/$EID/progress" -H "$EA" -H "$J" \
+RESP=$(curl -s -X POST "$API/api/v1/enrollments/$EID/progress" -H "$(idem)" -H "$EA" -H "$J" \
   -d "{\"resource_stable_id\":\"$TSID\",\"kind\":\"heartbeat\",\"progress_percent\":100}")
 echo "$RESP" | grep -q "progress.client_computed_value" || fallo "se aceptó un porcentaje del cliente"
 ok "SEÑAL FRAUDULENTA rechazada: el cliente no calcula el progreso (CA-05)"
@@ -154,16 +158,16 @@ AUD=$(docker compose exec -T postgres psql -U mooc -d mooc -tAc \
 [ "$AUD" -ge 1 ] || fallo "el intento de manipulación no quedó auditado"
 ok "el intento quedó auditado ($AUD en total)"
 
-curl -fsS -X POST "$API/api/v1/enrollments/$EID/progress" -H "$EA" -H "$J" \
+curl -fsS -X POST "$API/api/v1/enrollments/$EID/progress" -H "$(idem)" -H "$EA" -H "$J" \
   -d "{\"resource_stable_id\":\"$TSID\",\"kind\":\"open\"}" >/dev/null
-MOT=$(curl -s -X POST "$API/api/v1/enrollments/$EID/progress" -H "$EA" -H "$J" \
+MOT=$(curl -s -X POST "$API/api/v1/enrollments/$EID/progress" -H "$(idem)" -H "$EA" -H "$J" \
   -d "{\"resource_stable_id\":\"$TSID\",\"kind\":\"heartbeat\"}" | jq "d['reject_reason']")
 [ "$MOT" = "cadence" ] || fallo "no se rechazó el heartbeat por cadencia (motivo: $MOT)"
 ok "heartbeat inmediato rechazado por cadencia mínima"
 
 nota "acumulando permanencia con heartbeats espaciados…"
 for _ in 1 2; do
-  until [ "$(curl -s -X POST "$API/api/v1/enrollments/$EID/progress" -H "$EA" -H "$J" \
+  until [ "$(curl -s -X POST "$API/api/v1/enrollments/$EID/progress" -H "$(idem)" -H "$EA" -H "$J" \
         -d "{\"resource_stable_id\":\"$TSID\",\"kind\":\"heartbeat\"}" | jq "d['accepted']")" = True ]; do
     sleep 3
   done

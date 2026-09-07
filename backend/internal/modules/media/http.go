@@ -15,14 +15,22 @@ type API struct{ svc *Service }
 
 func NewAPI(svc *Service) *API { return &API{svc: svc} }
 
-func (a *API) Routes(mux *http.ServeMux, auth httpx.Middleware, soloDocentes httpx.Middleware) {
-	p := func(h http.HandlerFunc) http.Handler { return auth(soloDocentes(h)) }
+func (a *API) Routes(mux *http.ServeMux, auth httpx.Middleware,
+	soloDocentes httpx.Middleware, idem httpx.Middleware) {
 
-	mux.Handle("POST /api/v1/assets/init", p(a.iniciar))
+	p := func(h http.HandlerFunc) http.Handler { return auth(soloDocentes(h)) }
+	pi := func(h http.HandlerFunc) http.Handler {
+		if idem == nil {
+			return p(h)
+		}
+		return auth(soloDocentes(idem(h)))
+	}
+
+	mux.Handle("POST /api/v1/assets/init", pi(a.iniciar))
 	mux.Handle("GET /api/v1/assets/{id}", p(a.ver))
 	mux.Handle("GET /api/v1/assets/{id}/upload", p(a.estadoDeCarga))
 	mux.Handle("POST /api/v1/assets/{id}/upload/parts", p(a.renovarPartes))
-	mux.Handle("POST /api/v1/assets/{id}/complete", p(a.completar))
+	mux.Handle("POST /api/v1/assets/{id}/complete", pi(a.completar))
 	mux.Handle("POST /api/v1/assets/{id}/abort", p(a.abortar))
 	mux.Handle("GET /api/v1/assets/{id}/content", p(a.contenido))
 }

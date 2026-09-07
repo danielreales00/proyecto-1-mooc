@@ -3,6 +3,7 @@ package learning
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -25,7 +26,16 @@ type CatalogCourse struct {
 	Language      string
 	VersionNumber int
 	EnrolledCount int
+	CreatedAt     time.Time
 	Outline       []OutlineModule
+}
+
+// Cursor es el punto desde el que sigue una página. Lleva fecha e
+// identificador porque ordenar solo por fecha no es determinista: dos cursos
+// publicados en el mismo instante se perderían al paginar.
+type Cursor struct {
+	Fecha time.Time
+	ID    string
 }
 
 type OutlineModule struct {
@@ -50,7 +60,8 @@ type Store interface {
 	WithinTx(ctx context.Context, fn func(ctx context.Context, tx dbx.DB) error) error
 	DB() dbx.DB
 
-	SearchCatalog(ctx context.Context, db dbx.DB, q, categoria, idioma string, limit int) ([]CatalogCourse, error)
+	SearchCatalog(ctx context.Context, db dbx.DB, q, categoria, idioma string,
+		limit int, desde *Cursor) ([]CatalogCourse, error)
 	CatalogBySlug(ctx context.Context, db dbx.DB, slug string) (CatalogCourse, error)
 
 	// CurrentPublishedVersion devuelve la versión vigente publicada del curso.

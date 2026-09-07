@@ -14,15 +14,23 @@ type API struct{ svc *Service }
 
 func NewAPI(svc *Service) *API { return &API{svc: svc} }
 
-func (a *API) Routes(mux *http.ServeMux, auth httpx.Middleware, soloDocentes httpx.Middleware) {
+func (a *API) Routes(mux *http.ServeMux, auth httpx.Middleware,
+	soloDocentes httpx.Middleware, idem httpx.Middleware) {
+
+	conIdem := func(h http.HandlerFunc) http.Handler {
+		if idem == nil {
+			return h
+		}
+		return idem(h)
+	}
 	mux.Handle("GET /api/v1/resources/{resourceId}/quiz", auth(soloDocentes(http.HandlerFunc(a.getAuthoring))))
 	mux.Handle("PUT /api/v1/resources/{resourceId}/quiz", auth(soloDocentes(http.HandlerFunc(a.put))))
 
-	mux.Handle("POST /api/v1/enrollments/{eid}/quizzes/{stableId}/attempts", auth(http.HandlerFunc(a.start)))
+	mux.Handle("POST /api/v1/enrollments/{eid}/quizzes/{stableId}/attempts", auth(conIdem(a.start)))
 	mux.Handle("GET /api/v1/enrollments/{eid}/quizzes/{stableId}/attempts", auth(http.HandlerFunc(a.history)))
 	mux.Handle("GET /api/v1/attempts/{id}", auth(http.HandlerFunc(a.get)))
 	mux.Handle("PATCH /api/v1/attempts/{id}/answers", auth(http.HandlerFunc(a.save)))
-	mux.Handle("POST /api/v1/attempts/{id}/submit", auth(http.HandlerFunc(a.submit)))
+	mux.Handle("POST /api/v1/attempts/{id}/submit", auth(conIdem(a.submit)))
 	mux.Handle("GET /api/v1/attempts/{id}/result", auth(http.HandlerFunc(a.result)))
 }
 

@@ -17,19 +17,28 @@ type API struct{ svc *Service }
 func NewAPI(svc *Service) *API { return &API{svc: svc} }
 
 // Routes registra la autoría. Todo exige sesión de profesor o administrador.
-func (a *API) Routes(mux *http.ServeMux, auth httpx.Middleware, soloDocentes httpx.Middleware) {
+func (a *API) Routes(mux *http.ServeMux, auth httpx.Middleware,
+	soloDocentes httpx.Middleware, idem httpx.Middleware) {
+
 	p := func(h http.HandlerFunc) http.Handler { return auth(soloDocentes(h)) }
+	// Operaciones no repetibles: crear, versionar y publicar.
+	pi := func(h http.HandlerFunc) http.Handler {
+		if idem == nil {
+			return p(h)
+		}
+		return auth(soloDocentes(idem(h)))
+	}
 
 	mux.Handle("GET /api/v1/courses", p(a.listCourses))
-	mux.Handle("POST /api/v1/courses", p(a.createCourse))
+	mux.Handle("POST /api/v1/courses", pi(a.createCourse))
 	mux.Handle("GET /api/v1/courses/{courseId}", p(a.getCourse))
 	mux.Handle("PATCH /api/v1/courses/{courseId}", p(a.updateCourse))
 	mux.Handle("GET /api/v1/courses/{courseId}/versions", p(a.listVersions))
-	mux.Handle("POST /api/v1/courses/{courseId}/versions", p(a.newVersion))
+	mux.Handle("POST /api/v1/courses/{courseId}/versions", pi(a.newVersion))
 	mux.Handle("GET /api/v1/courses/{courseId}/versions/{n}", p(a.getVersion))
 	mux.Handle("GET /api/v1/courses/{courseId}/versions/{n}/preview", p(a.preview))
 	mux.Handle("POST /api/v1/courses/{courseId}/versions/{n}/validate", p(a.validate))
-	mux.Handle("POST /api/v1/courses/{courseId}/versions/{n}/publish", p(a.publish))
+	mux.Handle("POST /api/v1/courses/{courseId}/versions/{n}/publish", pi(a.publish))
 	mux.Handle("POST /api/v1/courses/{courseId}/versions/{n}/unpublish", p(a.unpublish))
 
 	mux.Handle("POST /api/v1/versions/{versionId}/modules", p(a.addModule))
@@ -130,6 +139,8 @@ type unitView struct {
 	Resources []resourceView `json:"resources"`
 }
 
+// etagDelRecurso viaja en el cuerpo además de la cabecera: el cliente que lee
+// el árbol completo necesita el ETag de cada recurso para poder editarlo.
 type resourceView struct {
 	ID               string  `json:"id"`
 	StableID         string  `json:"stable_id"`
@@ -144,6 +155,7 @@ type resourceView struct {
 	AssetID          *string `json:"asset_id"`
 	ExternalURL      *string `json:"external_url"`
 	ProcessingStatus string  `json:"processing_status"`
+	ETag             string  `json:"etag"`
 }
 
 func toResourceView(r Resource, conHTML bool) resourceView {
@@ -152,6 +164,7 @@ func toResourceView(r Resource, conHTML bool) resourceView {
 		Title: r.Title, Type: r.Type, Visible: r.Visible, Required: r.Required,
 		Downloadable: r.Downloadable, ContentMD: r.ContentMD, ExternalURL: r.ExternalURL,
 		ProcessingStatus: r.ProcessingStatus(),
+		ETag:             r.ContenidoETag(),
 	}
 	if r.AssetID != nil {
 		s := r.AssetID.String()
@@ -479,6 +492,7 @@ func (a *API) addResource(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, traducirError(err))
 		return
 	}
+	httpx.SetETag(w, res.ContenidoETag())
 	httpx.JSON(w, http.StatusCreated, toResourceView(res, false))
 }
 
@@ -519,11 +533,14 @@ func (a *API) saveContent(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, err)
 		return
 	}
-	res, err := a.svc.SaveContent(r.Context(), id, body.ContentMD, actor(r))
+	res, err := a.svc.SaveContent(r.Context(), id, body.ContentMD,
+		func(etagActual string) error { return httpx.ExigirIfMatch(r, etagActual) }, actor(r))
 	if err != nil {
 		httpx.Fail(w, r, traducirError(err))
 		return
 	}
+	// El ETag del contenido guardado: guardar lo mismo devuelve el mismo.
+	httpx.SetETag(w, res.ContenidoETag())
 	httpx.JSON(w, http.StatusOK, toResourceView(res, false))
 }
 

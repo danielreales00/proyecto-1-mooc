@@ -38,8 +38,9 @@ type Actor struct {
 
 // ------------------------------------------------------------- catálogo ----
 
-func (s *Service) Search(ctx context.Context, q, categoria, idioma string, limit int) ([]CatalogCourse, error) {
-	return s.store.SearchCatalog(ctx, s.store.DB(), NormalizarBusqueda(q), categoria, idioma, limit)
+func (s *Service) Search(ctx context.Context, q, categoria, idioma string,
+	limit int, desde *Cursor) ([]CatalogCourse, error) {
+	return s.store.SearchCatalog(ctx, s.store.DB(), NormalizarBusqueda(q), categoria, idioma, limit, desde)
 }
 
 func (s *Service) CourseBySlug(ctx context.Context, slug string) (CatalogCourse, error) {
