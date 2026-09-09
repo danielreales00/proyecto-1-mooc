@@ -111,6 +111,7 @@ postman: ## Colección de Postman, segmentos rápidos (lo que corre el CI)
 		--env-var mailpit_url=http://localhost:$${MAILPIT_UI_PORT:-8026} \
 		--folder "SEG-1 · Identidad y administración" \
 		--folder "SEG-2 · Autoría y publicación" \
+		--folder "SEG-3 · Carga multimedia" \
 		--folder "SEG-5 · Catálogo, inscripción y consumo" \
 		--folder "SEG-6 · Quiz" \
 		--delay-request 300

@@ -126,8 +126,39 @@ ejecutar esas peticiones a mano esperando entre una y otra.
 
 No hay pantalla para arrastrar un archivo. La carga es multipart directa al
 almacén —la API solo firma las URLs y los bytes nunca pasan por ella—, así que
-a mano hay que partir el archivo, subir cada parte, recoger su ETag y
-completar. Hay un guion que lo hace entero:
+hay que declarar el archivo, subir cada parte, recoger su ETag y completar.
+
+### Desde Postman (carpeta SEG-3)
+
+`postman/archivo-de-prueba.mp4` viene en el repositorio: son 256 KiB con
+contenido determinista, de modo que **cabe en una sola parte** y su SHA-256 es
+siempre el mismo. Eso importa porque `POST /assets/init` exige el hash por
+adelantado y Postman no sabe calcular el de un archivo local.
+
+Ejecuta la carpeta **SEG-3 · Carga multimedia** entera. Un único paso es
+manual: en la petición **«2 · Subir la parte 1»**, pestaña *Body* → *binary*,
+elige `postman/archivo-de-prueba.mp4`. Postman guarda la ruta pero no el
+archivo, así que hay que señalarlo una vez en cada máquina.
+
+Las siete peticiones muestran el flujo completo: declaración, subida al
+almacén, estado de la carga (lo que permite reanudar), completado, verificación
+del worker, descarga y un rechazo por checksum que no cuadra.
+
+Dos detalles que valen la pena en la demostración:
+
+- **«5 · Verificación del worker» reintenta sola.** `complete` responde `202`,
+  no `200`: la verificación la hace otro proceso. La petición sondea hasta
+  doce veces hasta ver `clean`. Si se queda en `uploaded`, el worker no está
+  corriendo (`docker compose logs worker`).
+- **«6 · Descargar» no sigue la redirección, a propósito.** La URL prefirmada
+  lleva la credencial en la query; si además se reenvía la cabecera
+  `Authorization`, S3 la rechaza con `400` porque solo admite un mecanismo de
+  autenticación a la vez. La prueba comprueba el `302` y que el `Location`
+  venga firmado y con caducidad.
+
+### Desde la terminal
+
+Con cualquier archivo tuyo, hay un guion que hace lo mismo de principio a fin:
 
 ```bash
 make subir ARCHIVO=mi-video.mp4
@@ -137,7 +168,9 @@ make subir ARCHIVO=mi-video.mp4
 ```
 
 Verás los seis pasos: declaración, URLs prefirmadas, subida por partes, estado
-de la carga (lo que permite reanudar), completado y verificación.
+de la carga (lo que permite reanudar), completado y verificación. A diferencia
+de la carpeta de Postman, este guion sí calcula el hash y parte el archivo, así
+que acepta vídeos de cualquier tamaño.
 
 Lo interesante está en el paso 6: el servidor **recalcula el SHA-256 leyendo
 del bucket** y **detecta el tipo real por los bytes**, no por la extensión.

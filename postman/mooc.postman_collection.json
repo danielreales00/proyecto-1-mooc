@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Plataforma MOOC — Entrega 1",
-    "description": "Colección de la demostración de aceptación. Una carpeta por segmento de la §10.2.\n\n**Uso:** `make up && make seed`, importar con el entorno, y ejecutar las carpetas EN ORDEN.\n\nSEG-1, 2, 5, 6, 7 y 8 están completas. SEG-3 y SEG-4 esperan al módulo `media`; SEG-9 se demuestra con `make demo` y `make scale`.\n\n**Aviso sobre SEG-7:** los heartbeats exigen 10 s de separación, a propósito. Con el Collection Runner hace falta `--delay-request 11000`, o ejecutar esas peticiones a mano. El equivalente automático es `make demo`.",
+    "description": "Colección de la demostración de aceptación. Una carpeta por segmento de la §10.2.\n\n**Uso:** `make up && make seed`, importar con el entorno, y ejecutar las carpetas EN ORDEN.\n\nSEG-1, 2, 5, 6, 7 y 8 están completas. SEG-3 cubre la carga y la verificación; el antimalware y la transcodificación no están. SEG-4 se demuestra con `make demo`; SEG-9 se demuestra con `make demo` y `make scale`.\n\n**Aviso sobre SEG-7:** los heartbeats exigen 10 s de separación, a propósito. Con el Collection Runner hace falta `--delay-request 11000`, o ejecutar esas peticiones a mano. El equivalente automático es `make demo`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -1121,8 +1121,443 @@
     },
     {
       "name": "SEG-3 · Carga multimedia",
-      "description": "URLs prefirmadas, reanudación, checksum, MIME real, antimalware, encolamiento y conservación del original.\n\nCriterio: multimedia y distribución (CE-04). Requisitos: RF-05, CA-02.\n\nPendiente: el módulo `media` aún no existe.",
-      "item": []
+      "description": "Carga multipart directa al almacén, con reanudación y verificación en servidor.\n\nCriterio: multimedia y distribución (CE-04). Requisitos: RF-05, CA-02.\n\n**Antes de empezar:** en la petición «Subir la parte 1» hay que elegir el archivo `postman/archivo-de-prueba.mp4` del repositorio. Postman no puede calcular el hash de un archivo cualquiera, así que la colección trae uno de contenido fijo y su SHA-256 ya declarado.\n\nEl archivo pesa 256 KiB, así que es **una sola parte**. Con uno mayor de 8 MiB habría varias, y ahí es donde luce la reanudación; para eso está `make subir ARCHIVO=…` o el segmento del guion del video.",
+      "item": [
+        {
+          "name": "Login como profesor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Solo profesores y administradores pueden subir archivos.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"profesor@mooc.local\",\n  \"password\": \"{{demo_password}}\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('prof_token', pm.response.json().token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1 · Declarar la carga",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/init",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "init"
+              ]
+            },
+            "description": "La API **no recibe los bytes**: crea el asset, abre la carga multipart y devuelve una URL prefirmada por parte. El cliente sube directamente al almacén (enunciado §4).\n\nEl `sha256` que se declara aquí es una promesa; el servidor lo recalculará leyendo del bucket.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filename\": \"archivo-de-prueba.mp4\",\n  \"content_type\": \"video/mp4\",\n  \"size_bytes\": 262144,\n  \"sha256\": \"2f182426a670429e79b600ae44d477ada5ae141d5dae433da2eafa3da728c731\",\n  \"kind\": \"video\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json();",
+                  "pm.collectionVariables.set('asset_id', d.asset_id);",
+                  "pm.collectionVariables.set('parte_1_url', d.parts[0].url);",
+                  "pm.test('una sola parte para este archivo', () => pm.expect(d.total_parts).to.eql(1));",
+                  "pm.test('la URL viene prefirmada', () =>",
+                  "  pm.expect(d.parts[0].url).to.include('X-Amz-Signature'));",
+                  "console.log('parte 1 →', d.parts[0].url.split('?')[0]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2 · Subir la parte 1  ← ELIGE EL ARCHIVO AQUÍ",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{parte_1_url}}",
+              "host": [
+                "{{parte_1_url}}"
+              ]
+            },
+            "description": "**Esta petición no va a la API**: va directa a MinIO con la URL prefirmada.\n\n**Selecciona el archivo** `postman/archivo-de-prueba.mp4` en la pestaña Body → binary. Postman recuerda la ruta para las siguientes veces.\n\nEl `ETag` que devuelve identifica la parte y hace falta para completar.",
+            "body": {
+              "mode": "file",
+              "file": {
+                "src": "archivo-de-prueba.mp4"
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const etag = (pm.response.headers.get('ETag') || '').replace(/\"/g, '');",
+                  "pm.test('el almacén devolvió un ETag', () => pm.expect(etag).to.not.be.empty);",
+                  "pm.collectionVariables.set('parte_1_etag', etag);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3 · Estado de la carga (reanudación)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/{{asset_id}}/upload",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{asset_id}}",
+                "upload"
+              ]
+            },
+            "description": "**Esto es lo que permite reanudar.** El servidor pregunta al almacén qué partes tiene ya, así que tras una interrupción el cliente sube solo lo que falta, dentro de la ventana de 24 horas."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('la parte 1 ya está en el almacén', () =>",
+                  "  pm.expect(d.received_parts.map(p => p.part_number)).to.include(1));",
+                  "pm.test('no falta ninguna', () => pm.expect(d.missing_parts).to.be.empty);",
+                  "console.log('recibidas:', d.received_parts.length, '· faltan:', d.missing_parts);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4 · Completar la carga",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/{{asset_id}}/complete",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{asset_id}}",
+                "complete"
+              ]
+            },
+            "description": "Cierra la multipart y encola la verificación. Responde **202**: la API no espera al worker (CA-02).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parts\": [\n    { \"part_number\": 1, \"etag\": \"{{parte_1_etag}}\" }\n  ]\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted', () => pm.response.to.have.status(202));",
+                  "pm.test('queda como uploaded', () => pm.expect(pm.response.json().status).to.eql('uploaded'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5 · Verificación del worker",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/{{asset_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{asset_id}}"
+              ]
+            },
+            "description": "El worker **recalcula el SHA-256 leyendo del bucket** y **detecta el tipo real por los bytes**, no por la extensión ni por lo que declaró el cliente.\n\nSi aún dice `uploaded`, vuelve a enviarla: tarda un par de segundos."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// La verificación es asíncrona: 'complete' respondió 202 y el trabajo lo",
+                  "// hace un worker aparte. Sondeamos hasta que termine en vez de suponer",
+                  "// que ya terminó.",
+                  "if (!pm.collectionVariables.get('intentos_verificacion')) {",
+                  "  pm.collectionVariables.set('intentos_verificacion', 0);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cuerpo = pm.response.json();",
+                  "const intentos = Number(pm.collectionVariables.get('intentos_verificacion')) + 1;",
+                  "pm.collectionVariables.set('intentos_verificacion', intentos);",
+                  "",
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const listo = ['clean', 'ready'].includes(cuerpo.status);",
+                  "if (!listo && intentos < 12) {",
+                  "  console.log('El worker todavía no termina (estado: ' + cuerpo.status +",
+                  "              '). Reintento ' + intentos + ' de 12.');",
+                  "  pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "  pm.collectionVariables.unset('intentos_verificacion');",
+                  "  pm.test('el archivo pasó la verificación', () => {",
+                  "    pm.expect(cuerpo.status, 'si sigue en uploaded, el worker no corrió: '",
+                  "      + 'revisa `docker compose logs worker`').to.be.oneOf(['clean', 'ready']);",
+                  "  });",
+                  "  pm.test('el servidor detectó el tipo REAL por los bytes', () => {",
+                  "    pm.expect(cuerpo.detected_mime).to.eql('video/mp4');",
+                  "  });",
+                  "  pm.test('el servidor recalculó el checksum', () => {",
+                  "    pm.expect(cuerpo.sha256).to.eql(pm.collectionVariables.get('sha256_prueba'));",
+                  "  });",
+                  "  console.log('estado:', cuerpo.status, '· tipo real:', cuerpo.detected_mime);",
+                  "  console.log('El cliente declaró el tipo, pero el servidor no le creyó:',",
+                  "              'lo dedujo de los bytes y recalculó el hash.');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6 · Descargar (302 a URL firmada)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/{{asset_id}}/content",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{asset_id}}",
+                "content"
+              ]
+            },
+            "description": "Responde **302** hacia una URL firmada de 15 minutos, emitida después de comprobar el derecho de acceso (CA-06). Los bytes nunca pasan por la API.\n\nDesactiva «Automatically follow redirects» en los ajustes de Postman para ver el 302; con la opción activada verás el archivo."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// No seguimos la redirección a propósito: la URL prefirmada lleva la",
+                  "// credencial en la query, y volver a mandar el header Authorization hace",
+                  "// que S3 la rechace con 400 (un solo mecanismo de autenticación a la vez).",
+                  "pm.test('302: el contenido no se sirve por la API', () => {",
+                  "  pm.expect(pm.response.code).to.eql(302);",
+                  "});",
+                  "const destino = pm.response.headers.get('Location') || '';",
+                  "pm.test('redirige al almacén de objetos con una URL firmada', () => {",
+                  "  pm.expect(destino).to.include('X-Amz-Signature');",
+                  "  pm.expect(destino).to.include('X-Amz-Expires');",
+                  "});",
+                  "console.log('La API nunca sirve los bytes; delega en una URL que caduca.');",
+                  "console.log('Destino:', destino.split('?')[0]);"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        },
+        {
+          "name": "7 · RECHAZO: checksum que no cuadra",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/init",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "init"
+              ]
+            },
+            "description": "Declara un checksum falso. La carga se inicia sin problema —el servidor aún no ha visto los bytes—, pero al subir y completar, el worker recalcula, no cuadra, y el asset queda `rejected` y en cuarentena.\n\nPara verlo entero: sube la parte con la URL que devuelve esta petición, completa, y consulta el asset.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filename\": \"mentira.mp4\",\n  \"content_type\": \"video/mp4\",\n  \"size_bytes\": 262144,\n  \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\",\n  \"kind\": \"video\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201: se acepta la declaración', () => pm.response.to.have.status(201));",
+                  "console.log('El rechazo ocurre al verificar, no al declarar.');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "name": "SEG-4 · Procesamiento y fallos",
@@ -2040,6 +2475,26 @@
     {
       "key": "idem_key",
       "value": "",
+      "type": "string"
+    },
+    {
+      "key": "asset_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "parte_1_url",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "parte_1_etag",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "sha256_prueba",
+      "value": "2f182426a670429e79b600ae44d477ada5ae141d5dae433da2eafa3da728c731",
       "type": "string"
     }
   ]
