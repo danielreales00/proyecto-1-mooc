@@ -1,10 +1,15 @@
 # Cómo probar la aplicación
 
+**No hay interfaz web.** El profesor relevó el frontend para esta entrega y
+autorizó Postman como interfaz, así que no existe pantalla de registro ni de
+login: se prueba por API. El frontend llega en la Entrega 2.
+
 Tres formas, de menos a más manual. Si solo tienes cinco minutos, ve al
 apartado 1.
 
 **Índice:** [Arrancar](#arrancar) · [1 · Automático](#1--automático-2-minutos) ·
-[2 · Postman](#2--postman) · [3 · A mano](#3--a-mano-con-curl) ·
+[2 · Postman](#2--postman) · [Subir un vídeo](#subir-un-vídeo) ·
+[3 · A mano](#3--a-mano-con-curl) ·
 [Lo que te va a morder](#lo-que-te-va-a-morder) ·
 [Si algo falla](#si-algo-falla)
 
@@ -90,6 +95,37 @@ ejecuta las carpetas **en orden** — encadenan variables entre sí.
 **SEG-7 necesita paciencia:** el servidor exige 10 segundos entre heartbeats, a
 propósito. Con el Collection Runner hay que poner `--delay-request 11000`, o
 ejecutar esas peticiones a mano esperando entre una y otra.
+
+## Subir un vídeo
+
+No hay pantalla para arrastrar un archivo. La carga es multipart directa al
+almacén —la API solo firma las URLs y los bytes nunca pasan por ella—, así que
+a mano hay que partir el archivo, subir cada parte, recoger su ETag y
+completar. Hay un guion que lo hace entero:
+
+```bash
+make subir ARCHIVO=mi-video.mp4
+
+# o directamente, indicando el tipo
+./scripts/subir-video.sh documento.pdf pdf
+```
+
+Verás los seis pasos: declaración, URLs prefirmadas, subida por partes, estado
+de la carga (lo que permite reanudar), completado y verificación.
+
+Lo interesante está en el paso 6: el servidor **recalcula el SHA-256 leyendo
+del bucket** y **detecta el tipo real por los bytes**, no por la extensión.
+Pruébalo con un PDF renombrado a `.mp4` y declarado como vídeo: se rechaza y va
+a cuarentena.
+
+**Lo que no puedes hacer es reproducirlo.** No hay transcodificación a HLS ni
+escaneo antimalware; son los pasos 2 y 3 de `arquitectura/media-plan.md`. Sí
+puedes descargarlo por URL firmada:
+
+```bash
+curl -L -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8090/api/v1/assets/<asset_id>/content -o descargado.mp4
+```
 
 ## 3 · A mano con curl
 

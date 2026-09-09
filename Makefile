@@ -165,6 +165,11 @@ obs: ## Levanta Prometheus y Grafana (perfil observability)
 	echo "  Prometheus  http://localhost:$${PROMETHEUS_PORT:-9091}"; \
 	echo "  Grafana     http://localhost:$${GRAFANA_PORT:-3002}  (panel: MOOC · Operación)"
 
+.PHONY: subir
+subir: ## Sube un archivo de prueba: make subir ARCHIVO=video.mp4
+	@test -n "$(ARCHIVO)" || { echo "uso: make subir ARCHIVO=<ruta>"; exit 1; }
+	@source .env; API="http://localhost:$${API_PORT:-8090}" ./scripts/subir-video.sh "$(ARCHIVO)"
+
 .PHONY: demo
 demo: ## Recorre el flujo completo de la demostración (guion del video)
 	@source .env; \
