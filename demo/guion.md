@@ -3,7 +3,7 @@
 Video de la Entrega 1. La interfaz es Postman y la línea de órdenes, como
 autorizó el profesor.
 
-**Duración objetivo: 24 minutos.** Un bloque por segmento de la §10.2 del
+**Duración objetivo: 25 minutos.** Un bloque por segmento de la §10.2 del
 enunciado, más apertura y cierre.
 
 **Índice:** [Antes de grabar](#antes-de-grabar) ·
@@ -41,6 +41,7 @@ make clean && make up && make seed
 - [ ] `docker compose ps` — los 9 servicios en `healthy`
 - [ ] http://localhost:8090/readyz — los tres en `ok`
 - [ ] http://localhost:8026 — Mailpit abierto y **vacío**
+- [ ] http://localhost:8090/docs — Swagger UI carga el contrato
 - [ ] http://localhost:3002 — Grafana, panel «MOOC · Operación»
 - [ ] http://localhost:9091/alerts — Prometheus, las 4 reglas en verde
 - [ ] Postman con la colección y el entorno **MOOC local** importados
@@ -117,6 +118,24 @@ docker compose ps | grep -c mooc-api
 > viven en Redis y los datos en PostgreSQL. Al final volveré sobre esto.»
 
 **Acredita:** arquitectura y despliegue (CE-01).
+
+---
+
+### 1b · El contrato, navegable — 1 min
+
+**Navegador → http://localhost:8090/docs**
+
+> «Antes de entrar en el flujo: esto es el contrato. Ochenta y ocho
+> operaciones, OpenAPI 3.1, validado en el pipeline. Y no es un documento
+> aparte: **lo sirve la propia API**, empotrado en el binario, así que no puede
+> quedarse atrás del código.
+>
+> Las que aún no responden llevan la marca de planificadas.»
+
+Despliega una operación cualquiera y enseña el `problem+json` de sus errores.
+
+> «Y funciona: comparte origen con la API, así que desde aquí se puede ejecutar
+> cualquier endpoint.»
 
 ---
 

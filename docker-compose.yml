@@ -140,6 +140,22 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  # Swagger UI: la documentación navegable del contrato.
+  #
+  # Va DETRÁS del mismo proxy, en /docs, para que comparta origen con la API.
+  # Servirlo en otro puerto obligaría a abrir CORS en todos los endpoints solo
+  # para que funcionara el botón «Try it out».
+  swagger:
+    image: swaggerapi/swagger-ui:latest
+    environment:
+      SWAGGER_JSON_URL: /openapi.yaml
+      BASE_URL: /docs
+      # El botón «Authorize» guarda el token entre peticiones.
+      PERSIST_AUTHORIZATION: "true"
+      DISPLAY_REQUEST_DURATION: "true"
+      DOC_EXPANSION: none
+    restart: unless-stopped
+
   proxy:
     image: caddy:2-alpine
     volumes:
@@ -149,6 +165,8 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      swagger:
+        condition: service_started
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
       interval: 10s

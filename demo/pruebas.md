@@ -1,15 +1,19 @@
 # Cómo probar la aplicación
 
-**No hay interfaz web.** El profesor relevó el frontend para esta entrega y
-autorizó Postman como interfaz, así que no existe pantalla de registro ni de
-login: se prueba por API. El frontend llega en la Entrega 2.
+**No hay interfaz de usuario.** El profesor relevó el frontend para esta
+entrega, así que no existe pantalla de registro ni de login: se prueba por API.
+El frontend llega en la Entrega 2.
+
+Lo que sí hay es **Swagger UI en http://localhost:8090/docs**, con las 88
+operaciones navegables y ejecutables. No es la aplicación: es la documentación
+del contrato, y sirve para probarlo todo sin escribir un `curl`.
 
 Tres formas, de menos a más manual. Si solo tienes cinco minutos, ve al
 apartado 1.
 
 **Índice:** [Arrancar](#arrancar) · [1 · Automático](#1--automático-2-minutos) ·
-[2 · Postman](#2--postman) · [Subir un vídeo](#subir-un-vídeo) ·
-[3 · A mano](#3--a-mano-con-curl) ·
+[2 · Swagger UI](#2--swagger-ui) · [3 · Postman](#3--postman) ·
+[Subir un vídeo](#subir-un-vídeo) · [4 · A mano](#4--a-mano-con-curl) ·
 [Lo que te va a morder](#lo-que-te-va-a-morder) ·
 [Si algo falla](#si-algo-falla)
 
@@ -24,6 +28,7 @@ make seed           # 8 cuentas sintéticas
 
 | Servicio | URL |
 | --- | --- |
+| **Swagger UI** | **http://localhost:8090/docs** |
 | API | http://localhost:8090/readyz |
 | Mailpit (correo) | http://localhost:8026 |
 | MinIO | http://localhost:9011 |
@@ -79,7 +84,28 @@ make ci            # ~8 min: TODO lo que corre el CI, en local
 `make invariantes` es el que prueba lo más difícil de ver a mano: que el
 progreso de un estudiante **sobrevive a publicar una versión nueva del curso**.
 
-## 2 · Postman
+## 2 · Swagger UI
+
+http://localhost:8090/docs
+
+Las 88 operaciones del contrato, navegables y **ejecutables**. Va detrás del
+mismo proxy que la API, así que comparten origen y el botón «Try it out» llama
+a los endpoints de verdad, no a un simulador.
+
+Para usarlo con sesión:
+
+1. Despliega `POST /api/v1/auth/login`, «Try it out», y envía
+   `{"email":"profesor@mooc.local","password":"Contrasena-Demo-2026"}`.
+2. Copia el `token` de la respuesta.
+3. Botón **Authorize** arriba a la derecha, pégalo y confirma.
+
+A partir de ahí todas las peticiones van firmadas. El token se conserva entre
+recargas.
+
+Las operaciones que aún no responden llevan la marca `x-estado: planificado` en
+su descripción.
+
+## 3 · Postman
 
 Es la interfaz de la demostración.
 
@@ -127,7 +153,7 @@ curl -L -H "Authorization: Bearer $TOKEN" \
   http://localhost:8090/api/v1/assets/<asset_id>/content -o descargado.mp4
 ```
 
-## 3 · A mano con curl
+## 4 · A mano con curl
 
 ```bash
 API=http://localhost:8090

@@ -42,12 +42,15 @@ Una vez en ejecución:
 
 | Servicio | URL |
 | --- | --- |
+| **Swagger UI** | **http://localhost:8090/docs** |
 | API (tras el proxy) | http://localhost:8090/readyz |
 | Mailpit (correo) | http://localhost:8026 |
 | MinIO (objetos) | http://localhost:9011 |
 
 La API **no publica puerto propio**: la única entrada es el proxy. Eso es lo que
-permite `--scale api=3` sin colisiones de puerto.
+permite `--scale api=3` sin colisiones de puerto, y es también lo que hace que
+Swagger UI comparta origen con la API y su botón «Try it out» funcione sin
+abrir CORS en ningún endpoint.
 
 Los puertos del host se configuran en `.env` y usan un rango propio del
 proyecto, para poder convivir con otros stacks de Docker en la misma máquina.
@@ -341,7 +344,8 @@ las 88 operaciones del inventario, validadas con redocly. Las que aún no
 responden llevan `x-estado: planificado`.
 
 La API sirve su propio contrato en `GET /openapi.yaml`, empotrado en el binario:
-si el archivo desaparece del árbol de fuentes, no compila.
+si el archivo desaparece del árbol de fuentes, no compila. Y en
+**http://localhost:8090/docs** está navegable y ejecutable con Swagger UI.
 
 Convenciones: token opaco en `Authorization: Bearer`, errores uniformes en
 `application/problem+json` (RFC 9457) con `trace_id`, paginación por cursor,

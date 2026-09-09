@@ -16,17 +16,29 @@
 		format json
 	}
 
-	reverse_proxy {
-		# Resolución dinámica: Docker devuelve una A por instancia de `api`,
-		# y el refresco hace que escalar en caliente se note sin reiniciar.
-		dynamic a {
-			name api
-			port 8080
-			refresh 5s
-		}
-		lb_policy round_robin
+	# La documentación navegable del contrato, en el MISMO origen que la API:
+	# así el botón «Try it out» de Swagger UI llama a los endpoints de verdad
+	# sin necesidad de abrir CORS.
+	# `handle`, no `handle_path`: swagger-ui sirve EN /docs (su BASE_URL), así
+	# que quitarle el prefijo le haría devolver 404.
+	handle /docs* {
+		reverse_proxy swagger:8080
+	}
 
-		header_up X-Forwarded-For {remote_host}
-		header_up X-Forwarded-Proto {scheme}
+	handle {
+		reverse_proxy {
+			# Resolución dinámica: Docker devuelve una A por instancia de
+			# `api`, y el refresco hace que escalar en caliente se note sin
+			# reiniciar.
+			dynamic a {
+				name api
+				port 8080
+				refresh 5s
+			}
+			lb_policy round_robin
+
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+		}
 	}
 }
