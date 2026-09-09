@@ -25,7 +25,7 @@ PostgreSQL, Redis y almacenamiento de objetos. Todo se ejecuta en contenedores.
 [Probar el stack levantado](#probar-el-stack-levantado)
 
 **Entrega:** [Qué está hecho y qué no](#qué-está-hecho-y-qué-no) ·
-[Guion de la demostración](demo/guion.md)
+[Cómo probarlo](demo/pruebas.md) · [Guion de la demostración](demo/guion.md)
 
 ## Cómo usar
 
