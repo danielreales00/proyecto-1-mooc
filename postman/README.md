@@ -7,6 +7,7 @@ frontend y aceptó Postman como forma de interactuar con el sistema.
 | --- | --- |
 | `mooc.postman_collection.json` | La colección, una carpeta por segmento de la §10.2 del enunciado |
 | `mooc.postman_environment.json` | Variables del entorno local |
+| `archivo-de-prueba.mp4` | 256 KiB deterministas para SEG-3: cabe en una parte y su SHA-256 es fijo, que es lo que `POST /assets/init` exige por adelantado |
 
 ## Uso
 
@@ -16,7 +17,32 @@ make seed    # datos sintéticos (§10.1)
 ```
 
 Importar ambos archivos en Postman, seleccionar el entorno **MOOC local** y
-ejecutar las carpetas en orden con el Collection Runner.
+ejecutar las carpetas en orden con el Collection Runner. Ver «Cómo importar».
+
+## Cómo importar
+
+En Postman: botón **Import** (arriba a la izquierda, junto a *New*) y arrastrar
+los dos `.json`. Después, en el desplegable de arriba a la derecha, elegir el
+entorno **MOOC local**; sin eso `{{base_url}}` queda vacío y todo falla con un
+error de DNS.
+
+**Si Postman corre en Windows y el repositorio está en WSL**, los archivos no
+están en el disco de Windows. En el diálogo de *Import*, pegar esta ruta en la
+casilla del nombre de archivo:
+
+```
+\\wsl.localhost\Ubuntu\home\schica\cloud-development\proyecto-1-mooc\postman
+```
+
+Ese mismo camino sirve para el `archivo-de-prueba.mp4` de SEG-3. Para que
+Postman lo acepte conviene apuntar ahí su directorio de trabajo:
+*Settings → General → Working directory*. Si no, hay que activar en esa misma
+pantalla la opción de leer archivos fuera del directorio de trabajo.
+
+Alternativa si la ruta UNC da problemas: copiar la carpeta al disco de Windows
+con `cp -r postman /mnt/c/Users/<tu-usuario>/Desktop/` e importar desde allí.
+El inconveniente es que esa copia no se actualiza sola cuando cambia la
+colección.
 
 Sin Postman, la colección también se ejecuta desde la línea de órdenes:
 
@@ -39,7 +65,7 @@ Una carpeta por segmento, en el orden en que se graba el video:
 | --- | --- |
 | SEG-1 · Identidad y administración | **Completa** — falta `admin` |
 | SEG-2 · Autoría y publicación | **Completa** |
-| SEG-3 · Carga multimedia | Pendiente (falta el módulo `media`) |
+| SEG-3 · Carga multimedia | **Completa** — un paso manual: elegir el archivo en «2 · Subir la parte 1» |
 | SEG-4 · Procesamiento y fallos | Se demuestra con `make demo` |
 | SEG-5 · Catálogo, inscripción y consumo | **Completa** |
 | SEG-6 · Quiz | **Completa** |
