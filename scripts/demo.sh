@@ -26,7 +26,7 @@ J="Content-Type: application/json"
 idem(){ echo "Idempotency-Key: $(cat /proc/sys/kernel/random/uuid)"; }
 
 # ───────────────────────────────────────────────────────── SEG-1 ────────────
-seg "SEG-1 · Identidad y administración"
+seg "SEG-1 · Identidad"
 
 curl -fsS "$API/readyz" >/dev/null || fallo "la API no está lista"
 ok "postgres, redis y el almacén de objetos responden"

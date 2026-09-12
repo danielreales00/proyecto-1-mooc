@@ -109,7 +109,8 @@ postman: ## Colección de Postman, segmentos rápidos (lo que corre el CI)
 		-e mooc.postman_environment.json \
 		--env-var base_url=http://localhost:$${API_PORT:-8090} \
 		--env-var mailpit_url=http://localhost:$${MAILPIT_UI_PORT:-8026} \
-		--folder "SEG-1 · Identidad y administración" \
+		--folder "SEG-1 · Identidad" \
+		--folder "SEG-1b · Administración" \
 		--folder "SEG-2 · Autoría y publicación" \
 		--folder "SEG-3 · Carga multimedia" \
 		--folder "SEG-5 · Catálogo, inscripción y consumo" \

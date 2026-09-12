@@ -6,7 +6,7 @@
   },
   "item": [
     {
-      "name": "SEG-1 · Identidad y administración",
+      "name": "SEG-1 · Identidad",
       "description": "Registro de estudiante, verificación de correo, sesiones revocables y rechazo de operaciones no autorizadas.\n\nCriterio: identidad, autorización y seguridad (CE-02).\nRequisitos: RF-01, RF-02, CA-06.\n\nEl token de verificación se lee de Mailpit: ejecuta «Leer token del correo» después de registrar.",
       "item": [
         {
@@ -564,6 +564,753 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('401 sin esperar a que expire', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SEG-1b · Administración",
+      "description": "Administración de usuarios, auditoría y trabajos (RF-01, SEG-2).\n\nSe ejecuta sobre las cuentas de `make seed`, que trae **una sola** administradora: por eso el paso 7 puede demostrar la guarda del último administrador sin preparar nada.\n\nNo modifica ninguna cuenta de la semilla. El único usuario que altera es el profesor invitado que ella misma crea en el paso 2.",
+      "item": [
+        {
+          "name": "Login como administradora",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@mooc.local\",\n  \"password\": \"{{demo_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const c = pm.response.json();",
+                  "pm.collectionVariables.set('admin_token', c.token);",
+                  "pm.collectionVariables.set('admin_id', c.user.id);",
+                  "pm.test('el rol es administrador', () => pm.expect(c.user.role).to.eql('admin'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1 · Listar usuarios",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users?limit=50",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json().items;",
+                  "pm.test('están las cuentas de la semilla', () => {",
+                  "  pm.expect(items.length).to.be.at.least(8);",
+                  "});",
+                  "pm.test('NUNCA sale el hash de la contraseña', () => {",
+                  "  const texto = pm.response.text();",
+                  "  pm.expect(texto).to.not.include('argon2');",
+                  "  pm.expect(texto).to.not.include('password');",
+                  "});",
+                  "console.log('usuarios:', items.length,",
+                  "  '· roles:', [...new Set(items.map(u => u.role))].join(', '));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2 · Crear un profesor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"profesor-invitado-{{$timestamp}}@mooc.local\",\n  \"full_name\": \"Profesor Invitado\",\n  \"role\": \"teacher\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Cada creación necesita su propia Idempotency-Key (ADR-0014).",
+                  "pm.collectionVariables.set('idem_key', 'seg1b-' + Date.now() + '-' +",
+                  "  Math.random().toString(36).slice(2, 8));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const u = pm.response.json();",
+                  "pm.collectionVariables.set('invitado_id', u.id);",
+                  "pm.test('nace como profesor y activo', () => {",
+                  "  pm.expect(u.role).to.eql('teacher');",
+                  "  pm.expect(u.status).to.eql('active');",
+                  "});",
+                  "pm.test('el correo se da por verificado: el administrador responde por él', () => {",
+                  "  pm.expect(u.email_verified_at).to.not.be.null;",
+                  "});",
+                  "console.log('La cuenta nace SIN contraseña utilizable.',",
+                  "  'Solo se activa por el enlace de la invitación.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3 · La invitación quedó registrada (outbox)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/jobs?type=email.send&limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "jobs"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "email.send"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const trabajos = pm.response.json().items;",
+                  "const inv = trabajos.find(t => t.job_key.includes('invitation'));",
+                  "pm.test('el trabajo del correo existe en PostgreSQL', () => {",
+                  "  pm.expect(inv, 'no hay ningún job de invitación').to.not.be.undefined;",
+                  "});",
+                  "if (inv) {",
+                  "  pm.collectionVariables.set('trabajo_vivo_id', inv.id);",
+                  "  console.log('job_key:', inv.job_key, '· estado:', inv.status,",
+                  "    '· intento:', inv.attempt);",
+                  "  console.log('Se registró en la MISMA transacción que el usuario,',",
+                  "    'y se publicó en la cola DESPUÉS del commit. Por eso existe aquí',",
+                  "    'aunque Redis se hubiera caído: el reaper lo recuperaría.');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4 · Sesiones de un usuario",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users/{{invitado_id}}/sessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users",
+                "{{invitado_id}}",
+                "sessions"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('recién creado, no tiene ninguna sesión', () => {",
+                  "  pm.expect(pm.response.json().items).to.be.an('array').that.is.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5 · Revocar las sesiones de un usuario",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users/{{invitado_id}}/sessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users",
+                "{{invitado_id}}",
+                "sessions"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const c = pm.response.json();",
+                  "pm.test('responde cuántas revocó', () => pm.expect(c.revoked).to.be.a('number'));",
+                  "console.log('Redis manda sobre la validez de la sesión, así que',",
+                  "  'revocar tiene efecto en la petición siguiente, sin ventana de gracia.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6 · Suspender al profesor invitado",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users/{{invitado_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users",
+                "{{invitado_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"suspended\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('queda suspendido', () => {",
+                  "  pm.expect(pm.response.json().status).to.eql('suspended');",
+                  "});",
+                  "console.log('Suspender corta el acceso YA: el servicio borra sus',",
+                  "  'sesiones de Redis tras el commit, no espera a que expiren.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "7 · ÚLTIMO ADMINISTRADOR: degradarse a sí misma",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users/{{admin_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users",
+                "{{admin_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"teacher\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Invariante del ADR-0001. La función que lo decide (`DejaSinAdministrador`) es pura y tiene una tabla de ocho casos en `admin/domain_test.go`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409: el sistema no se queda sin administrador', () => {",
+                  "  pm.expect(pm.response.code).to.eql(409);",
+                  "});",
+                  "const p = pm.response.json();",
+                  "pm.test('el problema viene tipado', () => {",
+                  "  pm.expect(p.type).to.include('last_admin');",
+                  "});",
+                  "pm.test('trae trace_id, como todo error de la API', () => {",
+                  "  pm.expect(p.trace_id).to.be.a('string').and.not.empty;",
+                  "});",
+                  "console.log('Es la única administradora activa, así que degradarse',",
+                  "  'dejaría el sistema sin nadie que pueda administrarlo.');",
+                  "console.log('La comprobación va DENTRO de la transacción, con FOR UPDATE:',",
+                  "  'hacerla antes dejaría una ventana en la que dos peticiones',",
+                  "  'simultáneas degradan a los dos últimos administradores.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "8 · Auditoría: quién hizo qué",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/audit?action=admin.user_created&limit=5",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "audit"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "admin.user_created"
+                },
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const ev = pm.response.json().items;",
+                  "pm.test('el alta del paso 2 quedó auditada', () => {",
+                  "  pm.expect(ev.length).to.be.at.least(1);",
+                  "});",
+                  "const mio = ev.find(e => e.actor_id === pm.collectionVariables.get('admin_id'));",
+                  "pm.test('consta QUIÉN lo hizo, no solo qué pasó', () => {",
+                  "  pm.expect(mio, 'ningún evento con este actor').to.not.be.undefined;",
+                  "});",
+                  "if (mio) {",
+                  "  console.log('acción:', mio.action, '· rol:', mio.actor_role,",
+                  "    '· ip:', mio.ip, '· trace:', mio.trace_id);",
+                  "  console.log('Y esta tabla es de SOLO INSERCIÓN: un trigger de',",
+                  "    'PostgreSQL rechaza cualquier UPDATE o DELETE.');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "9 · Trabajos en la cola de muertos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/jobs?status=dead&limit=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "jobs"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "dead"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const muertos = pm.response.json().items;",
+                  "if (muertos.length === 0) {",
+                  "  console.log('No hay trabajos muertos, que es lo normal en una',",
+                  "    'demo recién sembrada. El bloque 8b del guion fuerza uno.');",
+                  "} else {",
+                  "  pm.collectionVariables.set('trabajo_muerto_id', muertos[0].id);",
+                  "  console.log('muertos:', muertos.length, '· primero:', muertos[0].job_key,",
+                  "    '· último error:', muertos[0].last_error);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 · RECHAZO: reencolar un trabajo que no está en la DLQ",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/jobs/{{trabajo_vivo_id}}/requeue",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "jobs",
+                "{{trabajo_vivo_id}}",
+                "requeue"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Cada creación necesita su propia Idempotency-Key (ADR-0014).",
+                  "pm.collectionVariables.set('idem_key', 'seg1b-' + Date.now() + '-' +",
+                  "  Math.random().toString(36).slice(2, 8));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409: solo se reencola lo que está muerto o falló', () => {",
+                  "  pm.expect(pm.response.code).to.eql(409);",
+                  "});",
+                  "pm.test('el problema viene tipado', () => {",
+                  "  pm.expect(pm.response.json().type).to.include('not_requeueable');",
+                  "});",
+                  "console.log('Reencolar un trabajo que ya se completó lo ejecutaría',",
+                  "  'por segunda vez sin motivo. La guarda lo impide.');",
+                  "console.log('El reencolado de verdad se demuestra en el bloque 8b,',",
+                  "  'sobre el trabajo que sí acaba en la DLQ.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11 · Un profesor NO puede administrar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"profesor@mooc.local\",\n  \"password\": \"{{demo_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200: el profesor entra sin problema', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('prof_token', pm.response.json().token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12 · …y al intentarlo recibe 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403: autenticado, pero sin permiso', () => {",
+                  "  pm.expect(pm.response.code).to.eql(403);",
+                  "});",
+                  "console.log('401 sería «no sé quién eres»; 403 es «sé quién eres y',",
+                  "  'no te toca». La distinción importa.');"
                 ]
               }
             }
@@ -2496,6 +3243,26 @@
       "key": "sha256_prueba",
       "value": "2f182426a670429e79b600ae44d477ada5ae141d5dae433da2eafa3da728c731",
       "type": "string"
+    },
+    {
+      "key": "admin_token",
+      "value": ""
+    },
+    {
+      "key": "admin_id",
+      "value": ""
+    },
+    {
+      "key": "invitado_id",
+      "value": ""
+    },
+    {
+      "key": "trabajo_vivo_id",
+      "value": ""
+    },
+    {
+      "key": "trabajo_muerto_id",
+      "value": ""
     }
   ]
 }

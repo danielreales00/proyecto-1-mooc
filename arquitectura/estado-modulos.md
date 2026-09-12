@@ -69,7 +69,7 @@ Actualizado el 7 de septiembre de 2026.
 
 | Segmento | Estado |
 | --- | --- |
-| SEG-1 · Identidad y administración | ✅ completo |
+| SEG-1 · Identidad | ✅ completo |
 | SEG-2 · Autoría y publicación | ✅ completo |
 | SEG-3 · Carga multimedia | ⚠️ carga y verificación sí; antimalware no |
 | SEG-4 · Procesamiento y fallos | ⚠️ con `badge.issue`; falta con transcodificación |

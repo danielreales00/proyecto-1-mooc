@@ -63,7 +63,8 @@ Una carpeta por segmento, en el orden en que se graba el video:
 
 | Carpeta | Estado |
 | --- | --- |
-| SEG-1 · Identidad y administración | **Completa** — falta `admin` |
+| SEG-1 · Identidad | **Completa** |
+| SEG-1b · Administración | **Completa** — usuarios, auditoría y trabajos |
 | SEG-2 · Autoría y publicación | **Completa** |
 | SEG-3 · Carga multimedia | **Completa** — un paso manual: elegir el archivo en «2 · Subir la parte 1» |
 | SEG-4 · Procesamiento y fallos | Se demuestra con `make demo` |

@@ -3,14 +3,55 @@
 Video de la Entrega 1. La interfaz es Postman y la línea de órdenes, como
 autorizó el profesor.
 
-**Duración objetivo: 25 minutos.** Un bloque por segmento de la §10.2 del
-enunciado, más apertura y cierre.
+**Duración máxima: 20 minutos**, confirmada por el profesor. No es un objetivo
+nuestro: es un límite. Un bloque por segmento de la §10.2 del enunciado, más
+apertura y cierre.
 
-**Índice:** [Antes de grabar](#antes-de-grabar) ·
+Los tiempos de cada bloque son los de **la versión que se graba**, ya recortada.
+Suman 19,25 minutos, que deja 45 segundos de margen para tropiezos. El
+presupuesto y lo que se recortó están justo abajo.
+
+**Índice:** [Presupuesto de 20 minutos](#presupuesto-de-20-minutos) ·
+[Antes de grabar](#antes-de-grabar) ·
 [Cómo llevar la demo](#cómo-llevar-la-demo) · [El guion](#el-guion) ·
 [Si algo falla](#si-algo-falla) · [Qué no prometer](#qué-no-prometer)
 
 **Reparto entre las cuatro personas del equipo:** [`reparto.md`](reparto.md).
+
+---
+
+## Presupuesto de 20 minutos
+
+El guion sin recortar dura 30,5 minutos. Esta es la versión que cabe, y lo que
+se sacrifica en cada bloque. **Si un bloque se va de tiempo, se recorta ahí
+mismo, no se le roba al siguiente.**
+
+| Bloque | Completo | Se graba | Qué se cae |
+| --- | --- | --- | --- |
+| 0 · Apertura | 1 | **0,5** | Se nombra `arquitectura/adr`, no se recorre |
+| 1 · Stack | 1,5 | **1** | `docker compose ps` y el escalado; sin comentar servicio por servicio |
+| 1b · Contrato | 1 | **fuera** | Una frase en la apertura y diez segundos de `/docs` al pasar |
+| 2 · Identidad | 3 | **2** | Se cae la segunda cuenta desde la misma IP; el argumento de los dos niveles se dice mientras corre el bucle |
+| 2b · Administración | 2 | **1** | Solo el `409` del último administrador y el `403` del profesor |
+| 3 · Autoría | 3,5 | **2** | Se cae la previsualización y el discurso del Markdown canónico |
+| 3b · Multimedia | 2,5 | **1,5** | Se cae la interrupción a mitad: declarar, subir, verificado, un rechazo |
+| 4 · Catálogo | 1,5 | **1** | Tres peticiones seguidas, sin comentar cada una |
+| 5 · Quiz | 2,5 | **1,5** | Se cae el guardado parcial |
+| 6 · Progreso | 3 | **2,5** | Entero: es el bloque que más pesa en la evaluación |
+| 7 · Insignia | 1,5 | **1** | Directo a la URL pública de verificación |
+| 8 · Tolerancia a fallos | 2 | **1,5** | Un `psql` antes y otro después, sin el listado intermedio |
+| 8b · Observabilidad | 2,5 + 0,5 | **2** | El trabajo que falla se inyecta al **empezar el bloque 6**: al llegar, la alerta ya está en *firing* |
+| 9 · Operación | 1,5 | **1** | `make demo` y la pestaña verde del CI |
+| 10 · Cierre | 1 | **0,75** | — |
+| | **30,5** | **19,25** | |
+
+**El recorte que más rinde** es el de 8b: inyectar el trabajo que falla dos
+bloques antes ahorra los 3,5 minutos de espera y no se pierde nada, porque los
+reintentos con backoff siguen quedando en los logs.
+
+**Lo que no se recorta:** las esperas del worker en los bloques 2, 6 y 7. Son la
+prueba de que el procesamiento es asíncrono, que es justo lo que el profesor
+pidió evidenciar.
 
 ---
 
@@ -84,7 +125,7 @@ detecta antes una omisión que un hueco reconocido.
 
 ## El guion
 
-### 0 · Apertura — 1 min
+### 0 · Apertura — 0,5 min
 
 **Qué se ve:** el repositorio abierto, `arquitectura/` a la vista.
 
@@ -101,7 +142,7 @@ detecta antes una omisión que un hueco reconocido.
 
 ---
 
-### 1 · Levantar el stack — 1,5 min · *SEG-9, CE-01*
+### 1 · Levantar el stack — 1 min · *SEG-9, CE-01*
 
 ```bash
 docker compose ps
@@ -123,9 +164,14 @@ docker compose ps | grep -c mooc-api
 
 ---
 
-### 1b · El contrato, navegable — 1 min
+### 1b · El contrato, navegable — FUERA del video de 20 min
 
 **Navegador → http://localhost:8090/docs**
+
+> **Este bloque no entra en los 20 minutos.** En su lugar, al abrir la apertura
+> se dice una frase —«la propia API sirve su contrato OpenAPI en `/docs`»— y se
+> enseña la pestaña diez segundos al pasar. El bloque queda escrito para la
+> memoria y por si el profesor lo pide.
 
 > «Antes de entrar en el flujo: esto es el contrato. Ochenta y ocho
 > operaciones, OpenAPI 3.1, validado en el pipeline. Y no es un documento
@@ -141,7 +187,7 @@ Despliega una operación cualquiera y enseña el `problem+json` de sus errores.
 
 ---
 
-### 2 · Identidad — 3 min · *SEG-1, CE-02*
+### 2 · Identidad — 2 min · *SEG-1, CE-02*
 
 **Postman → SEG-1**
 
@@ -201,7 +247,59 @@ Despliega una operación cualquiera y enseña el `problem+json` de sus errores.
 
 ---
 
-### 3 · Autoría y publicación — 3,5 min · *SEG-2, CE-03*
+### 2b · Administración — 1 min · *SEG-1b, RF-01*
+
+**Postman → SEG-1b**
+
+> **En un minuto solo caben los pasos 4 y 5.** Los tres primeros están escritos
+> por si sobra tiempo o para la memoria escrita; los dos últimos son los que
+> acreditan algo que no se ve en ningún otro bloque.
+
+1. **Login como administradora** y **listar usuarios** → las ocho cuentas de la
+   semilla.
+
+   > «Ocho cuentas, con su rol y su estado. Y fíjense en lo que **no** está: no
+   > aparece el hash de la contraseña por ningún lado. Ni aquí ni en ninguna
+   > respuesta de la API.»
+
+2. **Crear un profesor** → `201`.
+
+   > «La cuenta nace activa y con el correo **ya verificado**: la invitación
+   > llega a ese buzón, así que abrirla ya demuestra que lo controla. Pero nace
+   > **sin contraseña utilizable**: solo se activa por el enlace.»
+
+3. **Los trabajos** — `GET /admin/jobs?type=email.send`. Señala el de la
+   invitación:
+
+   > «Ahí está el correo de invitación, registrado en PostgreSQL. Se escribió en
+   > la **misma transacción** que el usuario y se publicó en la cola después del
+   > commit. Si Redis estuviera caído, el usuario existiría igual y el trabajo
+   > seguiría aquí esperando a que el reaper lo recupere.»
+
+4. **El último administrador** ← *imprescindible*. Que se degrade a sí misma a
+   profesora → `409`.
+
+   > «Es la única administradora activa. Degradarse dejaría el sistema sin nadie
+   > que pueda administrarlo, así que se rechaza.
+   >
+   > Y el detalle que importa: esa comprobación va **dentro de la transacción**,
+   > con un `FOR UPDATE`. Hacerla antes dejaría una ventana en la que dos
+   > peticiones simultáneas degradan a los dos últimos administradores y el
+   > sistema se queda cerrado para siempre.»
+
+   *(La función que lo decide es pura y tiene una tabla de ocho casos en
+   `admin/domain_test.go`.)*
+
+5. **Un profesor intenta administrar** ← *imprescindible* → `403`.
+
+   > «Cuatrocientos tres, no cuatrocientos uno. Cuatrocientos uno sería «no sé
+   > quién eres»; esto es «sé quién eres y no te toca».»
+
+**Acredita:** RF-01, gestión de usuarios y roles.
+
+---
+
+### 3 · Autoría y publicación — 2 min · *SEG-2, CE-03*
 
 **Postman → SEG-2**
 
@@ -243,7 +341,7 @@ Despliega una operación cualquiera y enseña el `problem+json` de sus errores.
 
 ---
 
-### 3b · Carga multimedia — 2,5 min · *SEG-3, CE-04*
+### 3b · Carga multimedia — 1,5 min · *SEG-3, CE-04*
 
 Va en la terminal: la subida por partes se ve mejor con `curl` que en Postman.
 
@@ -294,7 +392,7 @@ en `arquitectura/media-plan.md`.
 
 ---
 
-### 4 · Catálogo, inscripción y consumo — 1,5 min · *SEG-5*
+### 4 · Catálogo, inscripción y consumo — 1 min · *SEG-5*
 
 **Postman → SEG-5**
 
@@ -307,7 +405,7 @@ en `arquitectura/media-plan.md`.
 
 ---
 
-### 5 · Quiz — 2,5 min · *SEG-6, CE-05*
+### 5 · Quiz — 1,5 min · *SEG-6, CE-05*
 
 **Postman → SEG-6**
 
@@ -335,7 +433,7 @@ en `arquitectura/media-plan.md`.
 
 ---
 
-### 6 · Progreso y aprobación — 3 min · *SEG-7, CE-06*
+### 6 · Progreso y aprobación — 2,5 min · *SEG-7, CE-06*
 
 Este es el bloque que más impresiona. No lo corras.
 
@@ -376,7 +474,7 @@ Este es el bloque que más impresiona. No lo corras.
 
 ---
 
-### 7 · Insignia — 1,5 min · *SEG-8, CA-07*
+### 7 · Insignia — 1 min · *SEG-8, CA-07*
 
 **Postman → SEG-8**
 
@@ -394,7 +492,7 @@ Este es el bloque que más impresiona. No lo corras.
 
 ---
 
-### 8 · Tolerancia a fallos — 2 min · *SEG-4, CA-03*
+### 8 · Tolerancia a fallos — 1,5 min · *SEG-4, CA-03*
 
 El bloque técnicamente más importante. Va en la terminal.
 
@@ -438,7 +536,7 @@ docker compose exec postgres psql -U mooc -d mooc -c \
 
 ---
 
-### 8b · Observabilidad y la alerta — 2,5 min · *SEG-4, CE-07*
+### 8b · Observabilidad y la alerta — 2 min · *SEG-4, CE-07*
 
 **Antes de grabar este bloque:** `make obs` (Prometheus y Grafana tardan ~20 s).
 
@@ -471,7 +569,8 @@ docker compose exec postgres psql -U mooc -d mooc -c \
 
    > «Ahí está el backoff: los reintentos se van separando. Y al tercero…»
 
-   Espera al `ALERTA: trabajo en la dead-letter queue`. Son unos dos minutos:
+   Espera al `ALERTA: trabajo en la dead-letter queue`. Son **unos 3,5
+   minutos** —medido: tres reintentos con backoff antes de morir—:
    aprovecha para explicar que el backoff exponencial existe para no castigar
    un servicio que ya está caído.
 
@@ -486,11 +585,23 @@ docker compose exec postgres psql -U mooc -d mooc -c \
    existía a su primer valor, y la alerta se quedaría muda justo el día que
    hace falta.
 
+5. **Recuperarlo por la API de administración.** Vuelve a Postman, **SEG-1b**,
+   petición «Trabajos en la cola de muertos»: ahí está el que acaba de morir.
+   Reencólalo con `POST /admin/jobs/{id}/requeue` → `202`.
+
+   > «Y no hace falta entrar a la base a mano: hay una ruta de administración
+   > para esto. Se reencola **con la misma `job_key`**, que es lo que hace que
+   > volver a ejecutarlo no produzca una segunda salida.
+   >
+   > Por eso la petición que vieron en SEG-1b devolvía `409` al intentar
+   > reencolar un trabajo ya completado: solo se recupera lo que está muerto o
+   > falló.»
+
 **Acredita:** CA-03 y calidad operativa (CE-07).
 
 ---
 
-### 9 · Operación — 1,5 min · *SEG-9, CE-07*
+### 9 · Operación — 1 min · *SEG-9, CE-07*
 
 1. **Auditoría inmutable:**
 
@@ -500,6 +611,12 @@ docker compose exec postgres psql -U mooc -d mooc -c \
    ```
 
    > «PostgreSQL lo rechaza. La auditoría es de solo inserción.»
+
+   Y consultarla no exige `psql`: `GET /api/v1/admin/audit?action=...` la
+   expone filtrada por acción, actor o entidad.
+
+   > «Cada evento trae quién, desde qué IP y con qué `trace_id`, así que una
+   > acción de la interfaz se puede seguir hasta su registro.»
 
 2. **El recorrido entero, automático:**
 
@@ -520,7 +637,7 @@ docker compose exec postgres psql -U mooc -d mooc -c \
 
 ---
 
-### 10 · Cierre — 1 min
+### 10 · Cierre — 0,75 min
 
 > «Lo que han visto es el flujo de trabajo completo: registro, autoría,
 > publicación, inscripción, consumo, evaluación, progreso e insignia, con los

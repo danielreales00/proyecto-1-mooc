@@ -75,11 +75,11 @@ El profesor no califica por módulos: califica siete criterios a través de los
 nueve segmentos de la demostración (§10.2). Esta es la vista que importa el día
 de la entrega.
 
-Estado a 5 de septiembre de 2026.
+Estado a 12 de septiembre de 2026.
 
 | Segmento | Qué debe demostrar | Necesita | Estado |
 | --- | --- | --- | --- |
-| **1.** Identidad y administración | Registro, invitación de profesor, revocación inmediata de sesiones, suspensión auditada, rechazo de operaciones no autorizadas | `identity` completo + `admin` | Parcial |
+| **1.** Identidad y administración | Registro, invitación de profesor, revocación inmediata de sesiones, suspensión auditada, rechazo de operaciones no autorizadas | `identity` completo + `admin` | Completo — SEG-1 y SEG-1b |
 | **2.** Autoría y publicación | Borrador, módulos, unidades y recursos; previsualización; lista exhaustiva de errores; versión inmutable | `authoring` + Markdown canónico | Nada |
 | **3.** Carga multimedia | URLs prefirmadas, reanudación, checksum, MIME real, antimalware, encolamiento, original conservado | `media` (carga) + ClamAV | Nada |
 | **4.** Procesamiento y fallos | Estados del recurso, HLS sin *upscaling*, doble entrega idempotente, backoff, DLQ, alerta, reencolado con la misma clave | Workers de medios + observabilidad + fallos inyectables | El mecanismo existe, sin nada que procesar ni alerta |
