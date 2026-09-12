@@ -1,0 +1,19 @@
+$kind: http-request
+description: "No falla al primer error: devuelve TODOS los incumplimientos (CA-01)."
+url: "{{base_url}}/api/v1/courses/{{course_id}}/versions/1/publish"
+method: POST
+headers:
+  Authorization: Bearer {{prof_token}}
+  Idempotency-Key: "{{idem_key}}"
+scripts:
+  - type: beforeRequest
+    code: pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('422', () => pm.response.to.have.status(422));
+      const d = pm.response.json();
+      pm.test('problem+json', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json'));
+      pm.test('lista los incumplimientos', () => pm.expect(d.errors).to.have.length.above(0));
+    language: text/javascript
+order: 3000

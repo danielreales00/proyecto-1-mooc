@@ -1,0 +1,6 @@
+$kind: collection
+description: |-
+  Emisión única por worker y verificación pública sin correo.
+
+  Requisito: CA-07.
+order: 9000

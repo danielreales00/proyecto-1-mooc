@@ -1,0 +1,24 @@
+$kind: http-request
+description: |-
+  La insignia la emite el worker tras la aprobación.
+
+  **Requiere haber completado SEG-7 de verdad**, es decir, con más de 10 s entre heartbeats. Si se ejecuta con el Collection Runner sin `--delay-request 11000`, la inscripción no llega a aprobada y aquí no habrá insignia. El equivalente automático es `make demo`.
+url: "{{base_url}}/api/v1/me/badges"
+method: GET
+headers:
+  Authorization: Bearer {{session_token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const items = pm.response.json().items;
+      const b = items.find(x => x.enrollment_id === pm.collectionVariables.get('enrollment_id'));
+      if (!b) {
+        console.warn('Sin insignia para esta inscripción: SEG-7 no llegó a aprobada.');
+        console.warn('Ejecuta con --delay-request 11000, o usa `make demo`.');
+      }
+      pm.test('hay insignia para esta inscripción', () => pm.expect(b, 
+        'la inscripción no llegó a approved; ver la descripción de esta petición').to.not.be.undefined);
+      if (b) pm.collectionVariables.set('badge_code', b.public_code);
+    language: text/javascript
+order: 1000

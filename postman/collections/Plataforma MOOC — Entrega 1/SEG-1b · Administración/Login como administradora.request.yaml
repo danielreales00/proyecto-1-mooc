@@ -1,0 +1,23 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/auth/login"
+method: POST
+headers:
+  Accept: application/json
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "admin@mooc.local",
+      "password": "{{demo_password}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const c = pm.response.json();
+      pm.collectionVariables.set('admin_token', c.token);
+      pm.collectionVariables.set('admin_id', c.user.id);
+      pm.test('el rol es administrador', () => pm.expect(c.user.role).to.eql('admin'));
+    language: text/javascript
+order: 1000

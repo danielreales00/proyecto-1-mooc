@@ -1,0 +1,40 @@
+$kind: http-request
+description: Esta es la ÚNICA ruta por la que `is_correct` sale del servidor, y solo para el profesor dueño.
+url: "{{base_url}}/api/v1/resources/{{quiz_resource_id}}/quiz"
+method: PUT
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{prof_token}}
+body:
+  type: text
+  content: |-
+    {
+      "max_attempts": 2,
+      "pass_score": 70,
+      "feedback_policy": "correctness",
+      "questions": [
+        {
+          "statement_md": "¿Qué aísla un contenedor?",
+          "kind": "single",
+          "points": 1,
+          "options": [
+            {
+              "text_md": "Procesos y sistema de archivos",
+              "is_correct": true
+            },
+            {
+              "text_md": "El hardware físico",
+              "is_correct": false
+            }
+          ]
+        }
+      ]
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('el profesor SÍ ve las claves', () =>
+        pm.expect(pm.response.text()).to.include('is_correct'));
+    language: text/javascript
+order: 8000

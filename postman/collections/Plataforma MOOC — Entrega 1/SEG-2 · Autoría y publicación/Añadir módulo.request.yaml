@@ -1,0 +1,19 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/versions/{{version_id}}/modules"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{prof_token}}
+body:
+  type: text
+  content: |-
+    {
+      "title": "Módulo 1: Contenedores"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201', () => pm.response.to.have.status(201));
+      pm.collectionVariables.set('module_id', pm.response.json().id);
+    language: text/javascript
+order: 4000

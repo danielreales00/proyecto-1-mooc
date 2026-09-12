@@ -1,0 +1,13 @@
+$kind: http-request
+description: El Markdown se renderiza y se sanea con lista blanca.
+url: "{{base_url}}/api/v1/courses/{{course_id}}/versions/1/preview"
+method: GET
+headers:
+  Authorization: Bearer {{prof_token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('sin script', () => pm.expect(pm.response.text()).to.not.include('<script'));
+    language: text/javascript
+order: 9000

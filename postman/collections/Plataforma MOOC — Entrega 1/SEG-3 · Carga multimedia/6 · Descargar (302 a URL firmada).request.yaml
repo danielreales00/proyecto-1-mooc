@@ -1,0 +1,29 @@
+$kind: http-request
+description: |-
+  Responde **302** hacia una URL firmada de 15 minutos, emitida después de comprobar el derecho de acceso (CA-06). Los bytes nunca pasan por la API.
+
+  Desactiva «Automatically follow redirects» en los ajustes de Postman para ver el 302; con la opción activada verás el archivo.
+url: "{{base_url}}/api/v1/assets/{{asset_id}}/content"
+method: GET
+headers:
+  Authorization: Bearer {{prof_token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      // No seguimos la redirección a propósito: la URL prefirmada lleva la
+      // credencial en la query, y volver a mandar el header Authorization hace
+      // que S3 la rechace con 400 (un solo mecanismo de autenticación a la vez).
+      pm.test('302: el contenido no se sirve por la API', () => {
+        pm.expect(pm.response.code).to.eql(302);
+      });
+      const destino = pm.response.headers.get('Location') || '';
+      pm.test('redirige al almacén de objetos con una URL firmada', () => {
+        pm.expect(destino).to.include('X-Amz-Signature');
+        pm.expect(destino).to.include('X-Amz-Expires');
+      });
+      console.log('La API nunca sirve los bytes; delega en una URL que caduca.');
+      console.log('Destino:', destino.split('?')[0]);
+    language: text/javascript
+settings:
+  followRedirects: false
+order: 7000

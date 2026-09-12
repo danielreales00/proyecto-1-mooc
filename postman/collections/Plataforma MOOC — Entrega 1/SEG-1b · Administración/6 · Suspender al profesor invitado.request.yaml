@@ -1,0 +1,24 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/admin/users/{{invitado_id}}"
+method: PATCH
+headers:
+  Accept: application/json
+  Authorization: Bearer {{admin_token}}
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "status": "suspended"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('queda suspendido', () => {
+        pm.expect(pm.response.json().status).to.eql('suspended');
+      });
+      console.log('Suspender corta el acceso YA: el servicio borra sus',
+        'sesiones de Redis tras el commit, no espera a que expiren.');
+    language: text/javascript
+order: 7000

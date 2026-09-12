@@ -1,0 +1,30 @@
+$kind: http-request
+name: "8 · Auditoría: quién hizo qué"
+url: "{{base_url}}/api/v1/admin/audit?action=admin.user_created&limit=5"
+method: GET
+headers:
+  Accept: application/json
+  Authorization: Bearer {{admin_token}}
+queryParams:
+  action: admin.user_created
+  limit: "5"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const ev = pm.response.json().items;
+      pm.test('el alta del paso 2 quedó auditada', () => {
+        pm.expect(ev.length).to.be.at.least(1);
+      });
+      const mio = ev.find(e => e.actor_id === pm.collectionVariables.get('admin_id'));
+      pm.test('consta QUIÉN lo hizo, no solo qué pasó', () => {
+        pm.expect(mio, 'ningún evento con este actor').to.not.be.undefined;
+      });
+      if (mio) {
+        console.log('acción:', mio.action, '· rol:', mio.actor_role,
+          '· ip:', mio.ip, '· trace:', mio.trace_id);
+        console.log('Y esta tabla es de SOLO INSERCIÓN: un trigger de',
+          'PostgreSQL rechaza cualquier UPDATE o DELETE.');
+      }
+    language: text/javascript
+order: 9000

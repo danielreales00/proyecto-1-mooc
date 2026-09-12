@@ -1,0 +1,6 @@
+$kind: collection
+description: |-
+  Catálogo público, inscripción y árbol del curso con progreso.
+
+  Requisito: RF-10.
+order: 6000

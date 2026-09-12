@@ -1,0 +1,50 @@
+$kind: http-request
+description: |-
+  El worker **recalcula el SHA-256 leyendo del bucket** y **detecta el tipo real por los bytes**, no por la extensión ni por lo que declaró el cliente.
+
+  Si aún dice `uploaded`, vuelve a enviarla: tarda un par de segundos.
+url: "{{base_url}}/api/v1/assets/{{asset_id}}"
+method: GET
+headers:
+  Authorization: Bearer {{prof_token}}
+scripts:
+  - type: beforeRequest
+    code: |-
+      // La verificación es asíncrona: 'complete' respondió 202 y el trabajo lo
+      // hace un worker aparte. Sondeamos hasta que termine en vez de suponer
+      // que ya terminó.
+      if (!pm.collectionVariables.get('intentos_verificacion')) {
+        pm.collectionVariables.set('intentos_verificacion', 0);
+      }
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      const cuerpo = pm.response.json();
+      const intentos = Number(pm.collectionVariables.get('intentos_verificacion')) + 1;
+      pm.collectionVariables.set('intentos_verificacion', intentos);
+
+      pm.test('200', () => pm.response.to.have.status(200));
+
+      const listo = ['clean', 'ready'].includes(cuerpo.status);
+      if (!listo && intentos < 12) {
+        console.log('El worker todavía no termina (estado: ' + cuerpo.status +
+                    '). Reintento ' + intentos + ' de 12.');
+        pm.execution.setNextRequest(pm.info.requestName);
+      } else {
+        pm.collectionVariables.unset('intentos_verificacion');
+        pm.test('el archivo pasó la verificación', () => {
+          pm.expect(cuerpo.status, 'si sigue en uploaded, el worker no corrió: '
+            + 'revisa `docker compose logs worker`').to.be.oneOf(['clean', 'ready']);
+        });
+        pm.test('el servidor detectó el tipo REAL por los bytes', () => {
+          pm.expect(cuerpo.detected_mime).to.eql('video/mp4');
+        });
+        pm.test('el servidor recalculó el checksum', () => {
+          pm.expect(cuerpo.sha256).to.eql(pm.collectionVariables.get('sha256_prueba'));
+        });
+        console.log('estado:', cuerpo.status, '· tipo real:', cuerpo.detected_mime);
+        console.log('El cliente declaró el tipo, pero el servidor no le creyó:',
+                    'lo dedujo de los bytes y recalculó el hash.');
+      }
+    language: text/javascript
+order: 6000

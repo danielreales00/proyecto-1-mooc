@@ -1,0 +1,14 @@
+$kind: http-request
+description: El porcentaje sale de los recursos obligatorios y visibles. Los opcionales no cuentan.
+url: "{{base_url}}/api/v1/enrollments/{{enrollment_id}}/progress"
+method: GET
+headers:
+  Authorization: Bearer {{session_token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const d = pm.response.json();
+      console.log('estado:', d.state, '·', d.required_completed + '/' + d.required_total);
+    language: text/javascript
+order: 5000

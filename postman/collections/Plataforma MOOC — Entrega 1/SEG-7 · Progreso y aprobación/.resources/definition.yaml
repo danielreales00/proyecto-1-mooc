@@ -1,0 +1,8 @@
+$kind: collection
+description: |-
+  Señales legítimas y fraudulentas. El progreso lo calcula el servidor.
+
+  Requisito: CA-05.
+
+  OJO: los heartbeats exigen 10 s entre sí. Con el Collection Runner, usar `--delay-request 11000` o ejecutar a mano.
+order: 8000

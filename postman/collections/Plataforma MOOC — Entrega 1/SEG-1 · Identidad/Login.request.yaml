@@ -1,0 +1,23 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/auth/login"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "{{nuevo_email}}",
+      "password": "{{demo_password}}"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const d = pm.response.json();
+      pm.test('devuelve token de sesión', () => pm.expect(d.token).to.be.a('string'));
+      pm.test('el registro público solo crea estudiantes (RF-01)', () =>
+        pm.expect(d.user.role).to.eql('student'));
+      pm.collectionVariables.set('session_token', d.token);
+    language: text/javascript
+order: 8000

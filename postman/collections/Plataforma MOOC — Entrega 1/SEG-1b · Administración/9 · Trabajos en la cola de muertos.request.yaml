@@ -1,0 +1,24 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/admin/jobs?status=dead&limit=10"
+method: GET
+headers:
+  Accept: application/json
+  Authorization: Bearer {{admin_token}}
+queryParams:
+  status: dead
+  limit: "10"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const muertos = pm.response.json().items;
+      if (muertos.length === 0) {
+        console.log('No hay trabajos muertos, que es lo normal en una',
+          'demo recién sembrada. El bloque 8b del guion fuerza uno.');
+      } else {
+        pm.collectionVariables.set('trabajo_muerto_id', muertos[0].id);
+        console.log('muertos:', muertos.length, '· primero:', muertos[0].job_key,
+          '· último error:', muertos[0].last_error);
+      }
+    language: text/javascript
+order: 10000

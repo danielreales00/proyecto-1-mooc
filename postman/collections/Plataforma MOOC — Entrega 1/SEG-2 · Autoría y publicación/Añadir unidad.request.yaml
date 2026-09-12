@@ -1,0 +1,19 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/modules/{{module_id}}/units"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{prof_token}}
+body:
+  type: text
+  content: |-
+    {
+      "title": "Unidad 1: Docker"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201', () => pm.response.to.have.status(201));
+      pm.collectionVariables.set('unit_id', pm.response.json().id);
+    language: text/javascript
+order: 5000

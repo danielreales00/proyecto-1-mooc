@@ -1,0 +1,25 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/admin/users?limit=50"
+method: GET
+headers:
+  Accept: application/json
+  Authorization: Bearer {{admin_token}}
+queryParams:
+  limit: "50"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const items = pm.response.json().items;
+      pm.test('están las cuentas de la semilla', () => {
+        pm.expect(items.length).to.be.at.least(8);
+      });
+      pm.test('NUNCA sale el hash de la contraseña', () => {
+        const texto = pm.response.text();
+        pm.expect(texto).to.not.include('argon2');
+        pm.expect(texto).to.not.include('password');
+      });
+      console.log('usuarios:', items.length,
+        '· roles:', [...new Set(items.map(u => u.role))].join(', '));
+    language: text/javascript
+order: 2000

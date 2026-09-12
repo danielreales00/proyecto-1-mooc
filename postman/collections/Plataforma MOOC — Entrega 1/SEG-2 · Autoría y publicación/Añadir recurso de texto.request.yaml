@@ -1,0 +1,24 @@
+$kind: http-request
+description: "El Markdown se guarda NORMALIZADO: viñetas canónicas y una sola línea en blanco (ADR-0014)."
+url: "{{base_url}}/api/v1/units/{{unit_id}}/resources"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{prof_token}}
+body:
+  type: text
+  content: |-
+    {
+      "title": "Introducción",
+      "type": "rich_text",
+      "content_md": "# Contenedores\n\n*  Aislamiento\n\n\n*  Portabilidad   \n"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('201', () => pm.response.to.have.status(201));
+      const d = pm.response.json();
+      pm.collectionVariables.set('text_stable_id', d.stable_id);
+      pm.test('markdown normalizado', () => pm.expect(d.content_md).to.not.include('*  Aislamiento'));
+    language: text/javascript
+order: 6000

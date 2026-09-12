@@ -1,0 +1,28 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/admin/jobs?type=email.send&limit=20"
+method: GET
+headers:
+  Accept: application/json
+  Authorization: Bearer {{admin_token}}
+queryParams:
+  type: email.send
+  limit: "20"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const trabajos = pm.response.json().items;
+      const inv = trabajos.find(t => t.job_key.includes('invitation'));
+      pm.test('el trabajo del correo existe en PostgreSQL', () => {
+        pm.expect(inv, 'no hay ningún job de invitación').to.not.be.undefined;
+      });
+      if (inv) {
+        pm.collectionVariables.set('trabajo_vivo_id', inv.id);
+        console.log('job_key:', inv.job_key, '· estado:', inv.status,
+          '· intento:', inv.attempt);
+        console.log('Se registró en la MISMA transacción que el usuario,',
+          'y se publicó en la cola DESPUÉS del commit. Por eso existe aquí',
+          'aunque Redis se hubiera caído: el reaper lo recuperaría.');
+      }
+    language: text/javascript
+order: 4000

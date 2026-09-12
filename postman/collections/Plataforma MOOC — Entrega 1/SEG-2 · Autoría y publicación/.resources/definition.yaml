@@ -1,0 +1,6 @@
+$kind: collection
+description: |-
+  Borrador, jerarquía, previsualización, lista exhaustiva de errores y versión inmutable.
+
+  Criterio: autoría y publicación (CE-03). Requisitos: RF-03, RF-04, CA-01.
+order: 3000

@@ -114,9 +114,15 @@ detecta antes una omisión que un hueco reconocido.
 
 ## El guion
 
+**Cada paso dice dónde se ejecuta.** `Postman` indica la carpeta y el nombre
+exacto de la petición, entre comillas angulares; `Terminal` y `Navegador` son
+lo que parecen. Las peticiones de una carpeta que el guion no nombra se pueden
+saltar, salvo donde se advierte lo contrario.
+
 ### 0 · Apertura — 0,5 min
 
-**Qué se ve:** el repositorio abierto, `arquitectura/` a la vista.
+**No se ejecuta nada.** Solo el repositorio abierto, con `arquitectura/` a la
+vista.
 
 > «Plataforma MOOC. Backend en Go como monolito modular con workers
 > independientes, todo sobre Docker Compose. Sin frontend, como se autorizó
@@ -135,6 +141,8 @@ Enseña la pestaña de `/docs` diez segundos al pasar, sin recorrerla.
 ---
 
 ### 1 · Levantar el stack — 1 min · *SEG-9, CE-01*
+
+**Terminal.** Nada de Postman en este bloque.
 
 ```bash
 docker compose ps
@@ -158,9 +166,10 @@ docker compose ps | grep -c mooc-api
 
 ### 2 · Identidad — 2 min · *SEG-1, CE-02*
 
-**Postman → SEG-1**
+**Postman → carpeta `SEG-1 · Identidad`**
 
-1. **Registro inválido.** Correo mal formado, contraseña corta, nombre vacío.
+1. **«Registro inválido — lista exhaustiva de errores»**. Correo mal formado,
+   contraseña corta, nombre vacío.
 
    > «Fíjense en que devuelve **los tres errores a la vez**, no el primero. Esa
    > mecánica es la misma que valida la publicación de un curso, y es una
@@ -168,26 +177,31 @@ docker compose ps | grep -c mooc-api
 
    Señala: `application/problem+json`, el `trace_id`, el arreglo `errors`.
 
-2. **Registro válido** → `202 Accepted`.
+2. **«Registro de estudiante»** → `202 Accepted`.
 
    > «Doscientos dos, no doscientos uno. La API **no espera al worker**. El
    > trabajo del correo se registró en PostgreSQL en la misma transacción que
    > el usuario, y se publicó en la cola después del commit.»
 
-3. **Mailpit** (navegador). El correo ya está. Vuelve a Postman: la petición
-   «Leer token del correo» lo extrae sola.
+3. **Navegador → Mailpit** (http://localhost:8026). El correo ya está. Vuelve a
+   Postman y ejecuta **«Leer token del correo (Mailpit)»**, que lo extrae sola.
 
    > «Ese correo lo envió el worker, no la API. Es el primer componente
    > asíncrono funcionando.»
 
-4. **Verificar** → `200`. **Reutilizar el token** → `422`.
+4. **«Verificar el correo»** → `200`. Después **«Reutilizar el token — debe
+   fallar»** → `422`.
 
-5. **Login**, **GET /me**, **logout**, **GET /me otra vez** → `401`.
+   *No te saltes la verificación:* sin ella la cuenta queda sin verificar y el
+   login del paso siguiente falla.
+
+5. **«Login»** → **«GET /me»** → **«Cerrar sesión»** → **«GET /me tras cerrar
+   sesión — revocación inmediata»** → `401`.
 
    > «La sesión se resuelve contra Redis en cada petición, así que revocarla
    > tiene efecto **inmediato**. No hay ventana de gracia.»
 
-6. **Límite de tasa.** En la terminal, seis intentos contra la misma cuenta:
+6. **Límite de tasa. Terminal**, seis intentos contra la misma cuenta:
 
    ```bash
    for i in $(seq 1 6); do
@@ -213,10 +227,11 @@ docker compose ps | grep -c mooc-api
 
 ### 2b · Administración — 1 min · *SEG-1b, RF-01*
 
-**Postman → SEG-1b.** Ejecuta el login como administradora y ve directo a las
-dos peticiones que siguen.
+**Postman → carpeta `SEG-1b · Administración`.** Ejecuta primero **«Login como
+administradora»** —fija `admin_token` y `admin_id`, que las dos siguientes
+necesitan— y salta al resto.
 
-1. **El último administrador.** Que se degrade a sí misma a profesora → `409`.
+1. **«7 · ÚLTIMO ADMINISTRADOR: degradarse a sí misma»** → `409`.
 
    > «Es la única administradora activa. Degradarse dejaría el sistema sin nadie
    > que pueda administrarlo, así que se rechaza.
@@ -229,7 +244,8 @@ dos peticiones que siguen.
    *(La función que lo decide es pura y tiene una tabla de ocho casos en
    `admin/domain_test.go`.)*
 
-2. **Un profesor intenta administrar** → `403`.
+2. **«12 · Un profesor NO puede administrar»** y después **«13 · …y al
+   intentarlo recibe 403»**.
 
    > «Cuatrocientos tres, no cuatrocientos uno. Cuatrocientos uno sería «no sé
    > quién eres»; esto es «sé quién eres y no te toca».»
@@ -240,26 +256,31 @@ dos peticiones que siguen.
 
 ### 3 · Autoría y publicación — 2 min · *SEG-2, CE-03*
 
-**Postman → SEG-2**
+**Postman → carpeta `SEG-2 · Autoría y publicación`**
 
-1. **Login como profesor** y **crear curso** → versión 1 en borrador.
+1. **«Login como profesor»** y **«Crear curso»** → versión 1 en borrador.
 
-2. **Publicar el curso vacío** → `422` con la lista de incumplimientos.
+2. **«Publicar un curso vacío — lista exhaustiva de errores»** → `422` con la
+   lista de incumplimientos.
 
    > «Aquí está la condición de aceptación: la validación **no para en el primer
    > error**. Recorre todas las reglas y devuelve la lista completa, para que el
    > profesor arregle todo de una vez.»
 
-3. **Módulo → unidad → recurso de texto**, de corrido.
+3. **«Añadir módulo»** → **«Añadir unidad»** → **«Añadir recurso de texto»**,
+   de corrido y sin comentar.
 
-4. **Recurso de quiz** y **configurar el quiz**.
+4. **«Añadir recurso de quiz»** y **«Configurar el quiz»**.
 
    > «Fíjense en que aquí **sí** viaja `is_correct`. Es la ruta del profesor
    > dueño del curso, y la única por la que la clave sale del servidor.»
 
-5. **Publicar** → `200`, `published`.
+5. **«Publicar la versión»** → `200`, `published`.
 
-6. **Intentar añadir un módulo a la versión publicada** → `409`.
+   *(«Previsualizar (HTML saneado)» queda en la carpeta pero no se enseña, por
+   tiempo.)*
+
+6. **«INMUTABILIDAD: mutar la versión publicada»** → `409`.
 
    > «Y esto no lo rechaza Go: lo rechaza **PostgreSQL**, con un trigger. La
    > regla vive donde están los datos, porque es la que más fácil se salta un
@@ -309,11 +330,12 @@ en `arquitectura/media-plan.md`.
 
 ### 4 · Catálogo, inscripción y consumo — 1 min · *SEG-5*
 
-**Postman → SEG-5**
+**Postman → carpeta `SEG-5 · Catálogo, inscripción y consumo`.** Las cuatro
+peticiones de corrido, comentando solo la última.
 
-1. **Catálogo sin sesión** → aparece el curso recién publicado.
-2. **Login como estudiante** e **inscribirse**.
-3. **Contenido con progreso** → el árbol, con el texto ya renderizado.
+1. **«Catálogo público (sin sesión)»** → aparece el curso recién publicado.
+2. **«Login como estudiante»** e **«Inscribirse»**.
+3. **«Contenido con progreso»** → el árbol, con el texto ya renderizado.
 
    > «El contenido llega como HTML ya saneado, y el recurso de quiz **no trae
    > ninguna clave**.»
@@ -322,9 +344,10 @@ en `arquitectura/media-plan.md`.
 
 ### 5 · Quiz — 1,5 min · *SEG-6, CE-05*
 
-**Postman → SEG-6**
+**Postman → carpeta `SEG-6 · Quiz`**
 
-1. **Iniciar intento.** Deja el JSON en pantalla unos segundos.
+1. **«Iniciar intento (congela el snapshot)»**. Deja el JSON en pantalla unos
+   segundos.
 
    > «Este es el snapshot congelado. Cada opción trae **dos campos**:
    > `stable_id` y `text_md`. No hay `is_correct`, ni siquiera como campo nulo.
@@ -332,17 +355,17 @@ en `arquitectura/media-plan.md`.
    > No es un `omitempty`: son **dos tipos distintos en Go**. El del estudiante
    > no tiene el campo, así que no hay forma de que se filtre por descuido.»
 
-2. **Guardado parcial** → `200`. Sin comentarla: es la que deja las respuestas
+2. **«Guardado parcial»** → `200`. Sin comentarla: es la que deja las respuestas
    guardadas, y el envío califica eso. **No se puede saltar** — el envío va con
    cuerpo vacío y sin ella la nota sale en cero.
 
-3. **Enviar** → nota calculada.
+3. **«Enviar (calificación en servidor)»** → nota calculada.
 
    > «La nota la calcula el servidor contra las claves de la base, no contra el
    > snapshot. Y con la política `correctness` le decimos qué acertó, pero **no
    > cuáles eran las correctas**, porque le queda otro intento.»
 
-4. **Reenviar el mismo intento** → misma nota.
+4. **«Reenviar: idempotente»** → misma nota.
 
    > «Idempotente. Reenviar no recalifica ni crea un segundo intento.»
 
@@ -367,14 +390,14 @@ docker compose exec postgres psql -U mooc -d mooc -c \
            created_at = now() - interval '1 hour';"
 ```
 
-**Postman → SEG-7**
+**Postman → carpeta `SEG-7 · Progreso y aprobación`**
 
-1. **Señal fraudulenta**: `{"kind":"heartbeat","progress_percent":100}` → `422`.
+1. **«SEÑAL FRAUDULENTA: enviar el porcentaje»** → `422`.
 
    > «El cliente reporta **evidencias**, nunca conclusiones. Un porcentaje
    > enviado por el cliente se rechaza… y además se **audita**.»
 
-   **Terminal:**
+   **Terminal**, para ver que además quedó auditado:
 
    ```bash
    docker compose exec postgres psql -U mooc -d mooc -x -c \
@@ -384,18 +407,19 @@ docker compose exec postgres psql -U mooc -d mooc -c \
 
    > «Ahí está el intento, con el cuerpo que envió y quién lo envió.»
 
-2. **Apertura** → aceptada.
+2. **«Evidencia legítima: apertura»** → aceptada.
 
-3. **Heartbeat inmediato** → `reject_reason: "cadence"`.
+3. **«Heartbeat inmediato: rechazado por cadencia»** → `reject_reason:
+   "cadence"`.
 
    > «Inundar de heartbeats no simula permanencia. El servidor exige diez
    > segundos entre uno y otro, con **su** reloj: el `client_ts` se registra
    > pero no se usa para calcular.»
 
-4. **Espera ~11 s** y repite el heartbeat dos veces. Cubre la espera explicando
-   el punto 3.
+4. **«Heartbeat espaciado (esperar >10 s)»**, dos veces, **esperando ~11 s
+   antes de cada una**. Cubre las esperas explicando el punto 3.
 
-5. **Consultar el progreso** → `approved`, 100 %.
+5. **«Progreso calculado por el servidor»** → `approved`, 100 %.
 
    > «El porcentaje sale de los recursos **obligatorios y visibles**. Los
    > opcionales no cuentan. Y al aprobar se registró el trabajo de la insignia.»
@@ -406,13 +430,17 @@ docker compose exec postgres psql -U mooc -d mooc -c \
 
 ### 7 · Insignia — 1 min · *SEG-8, CA-07*
 
-**Postman → SEG-8**
+**Postman → carpeta `SEG-8 · Insignia`**
 
-1. **Mis insignias.** Si aún no está, repite en unos segundos y aprovecha:
+1. **«Mis insignias»**. Si aún no está, repite en unos segundos y aprovecha:
 
    > «La emite un worker, no la petición. Por eso puede tardar un momento.»
 
-2. **Verificación pública** — pégala en el **navegador**, sin sesión.
+2. **«Verificación PÚBLICA (sin sesión)»**, y después pega esa misma URL en el
+   **navegador** para que se vea que funciona sin credenciales.
+
+   *No te saltes «Mis insignias»:* es la única petición que fija `badge_code`,
+   así que sin ella esta otra no tiene qué verificar.
 
    > «Pública, sin autenticación. Nombre, curso, versión, fecha y estado.
    > **No aparece el correo del estudiante** por ningún lado, y el código es
@@ -424,7 +452,8 @@ docker compose exec postgres psql -U mooc -d mooc -c \
 
 ### 8 · Tolerancia a fallos — 1,5 min · *SEG-4, CA-03*
 
-El bloque técnicamente más importante. Va en la terminal.
+El bloque técnicamente más importante. **Terminal**, salvo el último paso del
+8b.
 
 > «Todos los trabajos están en PostgreSQL, no solo en Redis. Se registran en la
 > misma transacción que el cambio de dominio y se publican en la cola **después**
@@ -464,14 +493,15 @@ docker compose exec postgres psql -U mooc -d mooc -c \
 
 **Antes de grabar este bloque:** `make obs` (Prometheus y Grafana tardan ~20 s).
 
-1. **Grafana** → panel «MOOC · Operación». Enseña las filas.
+1. **Navegador → Grafana** (http://localhost:3002), panel «MOOC · Operación».
+   Enseña las filas.
 
    > «Ocho gráficas, y ninguna está de adorno: cada una sostiene un objetivo
    > concreto del enunciado. Latencia p95, entregas duplicadas descartadas,
    > evidencias de progreso rechazadas por motivo, y esta de aquí arriba, la
    > dead-letter queue.»
 
-2. **Los reintentos del trabajo que lanzaste al empezar el bloque 6:**
+2. **Terminal.** Los reintentos del trabajo que lanzaste al empezar el bloque 6:
 
    ```bash
    docker compose logs worker | grep -E "trabajo fallido|ALERTA"
@@ -485,7 +515,7 @@ docker compose exec postgres psql -U mooc -d mooc -c \
    Debería estar ya el `ALERTA: trabajo en la dead-letter queue`. Si no,
    sigue el log con `-f` unos segundos.
 
-3. **La alerta en Prometheus** — http://localhost:9091/alerts
+3. **Navegador → Prometheus** — http://localhost:9091/alerts
 
    > «`TrabajoEnDeadLetterQueue`, en estado *firing*. Esta es literalmente la
    > condición del enunciado: tras tres reintentos fallidos, el trabajo llega a
@@ -496,17 +526,20 @@ docker compose exec postgres psql -U mooc -d mooc -c \
    existía a su primer valor, y la alerta se quedaría muda justo el día que
    hace falta.
 
-4. **Recuperarlo por la API de administración.** Vuelve a Postman, **SEG-1b**,
-   petición «Trabajos en la cola de muertos»: ahí está el que acaba de morir.
-   Reencólalo con `POST /admin/jobs/{id}/requeue` → `202`.
+4. **Recuperarlo por la API de administración.** Vuelve a Postman, carpeta
+   `SEG-1b · Administración`, y ejecuta dos peticiones seguidas:
+
+   **«9 · Trabajos en la cola de muertos»** → ahí está el que acaba de morir, y
+   la petición se queda con su `id` sola.
+
+   **«10 · Reencolar: 202 si está en la DLQ, 409 si no»** → `202`.
 
    > «Y no hace falta entrar a la base a mano: hay una ruta de administración
    > para esto. Se reencola **con la misma `job_key`**, que es lo que hace que
    > volver a ejecutarlo no produzca una segunda salida.
    >
-   > Por eso la petición que vieron en SEG-1b devolvía `409` al intentar
-   > reencolar un trabajo ya completado: solo se recupera lo que está muerto o
-   > falló.»
+   > Y la de al lado, «11 · RECHAZO», hace lo contrario sobre un trabajo ya
+   > completado y recibe `409`: solo se recupera lo que está muerto o falló.»
 
 **Acredita:** CA-03 y calidad operativa (CE-07).
 
@@ -514,7 +547,7 @@ docker compose exec postgres psql -U mooc -d mooc -c \
 
 ### 9 · Operación — 1 min · *SEG-9, CE-07*
 
-1. **Auditoría inmutable:**
+1. **Terminal.** Auditoría inmutable:
 
    ```bash
    docker compose exec postgres psql -U mooc -d mooc -c \
@@ -538,7 +571,7 @@ docker compose exec postgres psql -U mooc -d mooc -c \
    > «Treinta y tres aserciones, todas contra el sistema en ejecución. Este
    > guion es reproducible: cualquiera puede clonar el repositorio y correrlo.»
 
-3. **CI:** enseña la pestaña verde en GitHub.
+3. **Navegador → GitHub**, pestaña Actions: el run en verde.
 
    > «Build, lint, análisis de seguridad con gosec y govulncheck, migraciones,
    > pruebas y un trabajo de extremo a extremo que levanta Compose y corre esto

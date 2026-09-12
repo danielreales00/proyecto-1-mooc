@@ -1,0 +1,8 @@
+name: MOOC local
+values:
+  - key: base_url
+    value: 'http://localhost:8090'
+  - key: mailpit_url
+    value: 'http://localhost:8026'
+  - key: demo_password
+    value: Contrasena-Demo-2026

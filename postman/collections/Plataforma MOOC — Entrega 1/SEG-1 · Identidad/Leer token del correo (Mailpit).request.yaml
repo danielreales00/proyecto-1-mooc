@@ -1,0 +1,46 @@
+$kind: http-request
+description: |-
+  Lee el buzón de Mailpit, no la API. Es la evidencia de que el worker consumió el trabajo de la cola y envió el correo.
+
+  Guarda el token en la variable `verify_token` para la petición siguiente.
+url: "{{mailpit_url}}/api/v1/search?query=to:{{nuevo_email}}"
+method: GET
+queryParams:
+  query: to:{{nuevo_email}}
+scripts:
+  - type: afterResponse
+    code: |-
+      // El worker es asíncrono: la API respondió 202 sin esperarlo. Esta
+      // petición se reintenta a sí misma hasta que el correo llegue.
+      // Ejecutar con --delay-request para espaciar los intentos.
+      const MAX_INTENTOS = 20;
+
+      const d = pm.response.json();
+      const mensajes = (d && d.messages) || [];
+      const intento = Number(pm.collectionVariables.get('mailpit_intento') || 0);
+
+      if (mensajes.length === 0) {
+        if (intento < MAX_INTENTOS) {
+          pm.collectionVariables.set('mailpit_intento', intento + 1);
+          postman.setNextRequest('Leer token del correo (Mailpit)');
+          return;
+        }
+        pm.test('el worker entregó el correo', () =>
+          pm.expect.fail(`no llegó ningún correo tras ${MAX_INTENTOS} intentos`));
+        return;
+      }
+
+      pm.collectionVariables.set('mailpit_intento', 0);
+      pm.test('el worker entregó el correo', () => pm.expect(mensajes.length).to.be.above(0));
+      pm.test(`llegó en ${intento + 1} intento(s)`, () => pm.expect(true).to.be.true);
+
+      const id = mensajes[0].ID;
+      pm.sendRequest(`${pm.collectionVariables.get('mailpit_url')}/api/v1/message/${id}`, (err, res) => {
+        pm.test('el cuerpo del correo se puede leer', () => pm.expect(err).to.be.null);
+        // El token va en una línea propia; el \r del CRLF forma parte de ella.
+        const m = res.json().Text.match(/^([A-Za-z0-9_-]{40,})\r?$/m);
+        pm.test('el correo trae el token de verificación', () => pm.expect(m).to.not.be.null);
+        pm.collectionVariables.set('verify_token', m[1]);
+      });
+    language: text/javascript
+order: 4000

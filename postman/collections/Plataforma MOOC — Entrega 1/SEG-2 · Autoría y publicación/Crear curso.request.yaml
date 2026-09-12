@@ -1,0 +1,32 @@
+$kind: http-request
+description: Crea el curso y su versión 1 en borrador.
+url: "{{base_url}}/api/v1/courses"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{prof_token}}
+  Idempotency-Key: "{{idem_key}}"
+body:
+  type: text
+  content: |-
+    {
+      "title": "Fundamentos de Cloud",
+      "summary": "Curso de la demostración.",
+      "category": "cloud",
+      "language": "es"
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      pm.collectionVariables.set('nonce', Date.now());
+      pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('201', () => pm.response.to.have.status(201));
+      const d = pm.response.json();
+      pm.collectionVariables.set('course_id', d.course.id);
+      pm.collectionVariables.set('version_id', d.version.id);
+      pm.test('nace en borrador', () => pm.expect(d.version.status).to.eql('draft'));
+    language: text/javascript
+order: 2000

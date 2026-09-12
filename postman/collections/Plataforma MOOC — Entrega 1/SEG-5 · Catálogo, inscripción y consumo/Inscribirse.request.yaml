@@ -1,0 +1,24 @@
+$kind: http-request
+description: Reinscribirse reactiva y conserva el progreso (RF-10).
+url: "{{base_url}}/api/v1/enrollments"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{session_token}}
+  Idempotency-Key: "{{idem_key}}"
+body:
+  type: text
+  content: |-
+    {
+      "course_id": "{{course_id}}"
+    }
+scripts:
+  - type: beforeRequest
+    code: pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('201', () => pm.response.to.have.status(201));
+      pm.collectionVariables.set('enrollment_id', pm.response.json().id);
+    language: text/javascript
+order: 3000

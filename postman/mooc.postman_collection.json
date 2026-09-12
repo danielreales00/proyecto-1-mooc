@@ -1147,10 +1147,14 @@
                   "pm.test('200', () => pm.response.to.have.status(200));",
                   "const muertos = pm.response.json().items;",
                   "if (muertos.length === 0) {",
-                  "  console.log('No hay trabajos muertos, que es lo normal en una',",
-                  "    'demo recién sembrada. El bloque 8b del guion fuerza uno.');",
+                  "  // Sin trabajos muertos —lo normal en una demo recién sembrada— se",
+                  "  // reencola uno vivo, que debe rechazarse. El bloque 8b del guion fuerza",
+                  "  // uno muerto antes de llegar aquí.",
+                  "  pm.collectionVariables.set('trabajo_reencolar', pm.collectionVariables.get('trabajo_vivo_id'));",
+                  "  console.log('No hay trabajos muertos: el paso siguiente comprobará el rechazo.');",
                   "} else {",
                   "  pm.collectionVariables.set('trabajo_muerto_id', muertos[0].id);",
+                  "  pm.collectionVariables.set('trabajo_reencolar', muertos[0].id);",
                   "  console.log('muertos:', muertos.length, '· primero:', muertos[0].job_key,",
                   "    '· último error:', muertos[0].last_error);",
                   "}"
@@ -1160,7 +1164,88 @@
           ]
         },
         {
-          "name": "10 · RECHAZO: reencolar un trabajo que no está en la DLQ",
+          "name": "10 · Reencolar: 202 si está en la DLQ, 409 si no",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/jobs/{{trabajo_reencolar}}/requeue",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "jobs",
+                "{{trabajo_reencolar}}",
+                "requeue"
+              ]
+            },
+            "description": "Sirve para los dos casos. En el bloque 8b del guion, después de que un trabajo llegue a la DLQ, devuelve 202. En una ejecución normal no hay trabajos muertos y devuelve 409."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'seg1b-' + Date.now() + '-' +",
+                  "  Math.random().toString(36).slice(2, 8));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const muerto = pm.collectionVariables.get('trabajo_muerto_id');",
+                  "const usado = pm.collectionVariables.get('trabajo_reencolar');",
+                  "const eraMuerto = muerto && String(muerto) === String(usado);",
+                  "",
+                  "if (eraMuerto) {",
+                  "  pm.test('202: el trabajo muerto vuelve a la cola', () => {",
+                  "    pm.expect(pm.response.code).to.eql(202);",
+                  "  });",
+                  "  const t = pm.response.json();",
+                  "  pm.test('vuelve con la MISMA job_key', () => {",
+                  "    pm.expect(t.job_key).to.be.a('string').and.not.empty;",
+                  "    pm.expect(t.status).to.eql('queued');",
+                  "  });",
+                  "  console.log('job_key:', t.job_key, '· estado:', t.status, '· intento:', t.attempt);",
+                  "  console.log('Se reencola con la misma clave, así que volver a ejecutarlo',",
+                  "    'no produce una segunda salida: el reclamo atómico lo impide.');",
+                  "} else {",
+                  "  pm.test('409: solo se reencola lo que está muerto o falló', () => {",
+                  "    pm.expect(pm.response.code).to.eql(409);",
+                  "  });",
+                  "  pm.test('el problema viene tipado', () => {",
+                  "    pm.expect(pm.response.json().type).to.include('not_requeueable');",
+                  "  });",
+                  "  console.log('El trabajo usado ya se completó, así que se rechaza.',",
+                  "    'Reencolarlo lo ejecutaría por segunda vez sin motivo.');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11 · RECHAZO: reencolar un trabajo ya completado",
           "request": {
             "method": "POST",
             "header": [
@@ -1225,7 +1310,7 @@
           ]
         },
         {
-          "name": "11 · Un profesor NO puede administrar",
+          "name": "12 · Un profesor NO puede administrar",
           "request": {
             "method": "POST",
             "header": [
@@ -1274,7 +1359,7 @@
           ]
         },
         {
-          "name": "12 · …y al intentarlo recibe 403",
+          "name": "13 · …y al intentarlo recibe 403",
           "request": {
             "method": "GET",
             "header": [
@@ -3262,6 +3347,10 @@
     },
     {
       "key": "trabajo_muerto_id",
+      "value": ""
+    },
+    {
+      "key": "trabajo_reencolar",
       "value": ""
     }
   ]

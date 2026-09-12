@@ -1,0 +1,28 @@
+$kind: http-request
+name: "SEÑAL FRAUDULENTA: enviar el porcentaje"
+description: El cliente reporta evidencias, nunca conclusiones. El intento queda AUDITADO (CA-05).
+url: "{{base_url}}/api/v1/enrollments/{{enrollment_id}}/progress"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{session_token}}
+  Idempotency-Key: "{{idem_key}}"
+body:
+  type: text
+  content: |-
+    {
+      "resource_stable_id": "{{text_stable_id}}",
+      "kind": "heartbeat",
+      "progress_percent": 100
+    }
+scripts:
+  - type: beforeRequest
+    code: pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('422', () => pm.response.to.have.status(422));
+      pm.test('progress.client_computed_value', () =>
+        pm.expect(pm.response.json().type).to.include('progress.client_computed_value'));
+    language: text/javascript
+order: 1000

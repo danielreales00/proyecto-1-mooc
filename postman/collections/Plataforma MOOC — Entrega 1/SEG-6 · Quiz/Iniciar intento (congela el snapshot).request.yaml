@@ -1,0 +1,26 @@
+$kind: http-request
+description: "El snapshot se congela al iniciar: el profesor puede editar el quiz sin alterar este intento."
+url: "{{base_url}}/api/v1/enrollments/{{enrollment_id}}/quizzes/{{quiz_stable_id}}/attempts"
+method: POST
+headers:
+  Authorization: Bearer {{session_token}}
+  Idempotency-Key: "{{idem_key}}"
+scripts:
+  - type: beforeRequest
+    code: pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('201', () => pm.response.to.have.status(201));
+      const d = pm.response.json();
+      pm.collectionVariables.set('attempt_id', d.id);
+      pm.test('CA-04: NINGUNA clave en el snapshot', () =>
+        pm.expect(pm.response.text()).to.not.include('is_correct'));
+      const opt = d.questions[0].options[0];
+      pm.test('la opción solo trae stable_id y text_md', () =>
+        pm.expect(Object.keys(opt).sort()).to.eql(['stable_id','text_md']));
+      pm.collectionVariables.set('question_stable_id', d.questions[0].stable_id);
+      const correcta = d.questions[0].options.find(o => o.text_md.includes('Procesos'));
+      pm.collectionVariables.set('option_stable_id', correcta.stable_id);
+    language: text/javascript
+order: 1000

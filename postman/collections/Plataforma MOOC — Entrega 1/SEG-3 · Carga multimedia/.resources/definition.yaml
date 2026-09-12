@@ -1,0 +1,10 @@
+$kind: collection
+description: |-
+  Carga multipart directa al almacén, con reanudación y verificación en servidor.
+
+  Criterio: multimedia y distribución (CE-04). Requisitos: RF-05, CA-02.
+
+  **Antes de empezar:** en la petición «Subir la parte 1» hay que elegir el archivo `postman/archivo-de-prueba.mp4` del repositorio. Postman no puede calcular el hash de un archivo cualquiera, así que la colección trae uno de contenido fijo y su SHA-256 ya declarado.
+
+  El archivo pesa 256 KiB, así que es **una sola parte**. Con uno mayor de 8 MiB habría varias, y ahí es donde luce la reanudación; para eso está `make subir ARCHIVO=…` o el segmento del guion del video.
+order: 4000

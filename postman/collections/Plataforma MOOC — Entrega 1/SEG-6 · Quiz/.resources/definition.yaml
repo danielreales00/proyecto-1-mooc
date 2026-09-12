@@ -1,0 +1,6 @@
+$kind: collection
+description: |-
+  Snapshot sin claves, guardado parcial, calificación en servidor y envío idempotente.
+
+  Requisito: CA-04.
+order: 7000

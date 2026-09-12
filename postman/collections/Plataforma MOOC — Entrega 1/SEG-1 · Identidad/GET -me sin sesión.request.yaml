@@ -1,0 +1,10 @@
+$kind: http-request
+name: GET /me sin sesión
+description: "Control de acceso: cada endpoint respeta rol y sesión (CA-06)."
+url: "{{base_url}}/api/v1/me"
+method: GET
+scripts:
+  - type: afterResponse
+    code: pm.test('401', () => pm.response.to.have.status(401));
+    language: text/javascript
+order: 10000

@@ -1,0 +1,32 @@
+$kind: http-request
+description: |-
+  Responde 202: la API no espera al worker que envía el correo (CA-02).
+  El correo electrónico se genera con marca de tiempo para poder repetir la demo.
+url: "{{base_url}}/api/v1/auth/register"
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+      "email": "{{nuevo_email}}",
+      "password": "{{demo_password}}",
+      "full_name": "Estudiante de Demostración"
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      // Correo único por ejecución, para que la demo se pueda repetir
+      // sin limpiar la base de datos.
+      pm.collectionVariables.set('nuevo_email', `estudiante+${Date.now()}@mooc.local`);
+      pm.collectionVariables.set('mailpit_intento', 0);
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('202 Accepted — no bloquea esperando al worker', () => pm.response.to.have.status(202));
+      const d = pm.response.json();
+      pm.test('queda pendiente de verificación', () => pm.expect(d.status).to.eql('pending_verification'));
+      pm.collectionVariables.set('user_id', d.id);
+    language: text/javascript
+order: 3000

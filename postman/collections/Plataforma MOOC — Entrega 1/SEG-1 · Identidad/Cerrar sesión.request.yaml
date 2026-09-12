@@ -1,0 +1,10 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/auth/logout"
+method: POST
+headers:
+  Authorization: Bearer {{session_token}}
+scripts:
+  - type: afterResponse
+    code: pm.test('204', () => pm.response.to.have.status(204));
+    language: text/javascript
+order: 12000

@@ -1,0 +1,26 @@
+$kind: http-request
+description: "Cierra la multipart y encola la verificación. Responde **202**: la API no espera al worker (CA-02)."
+url: "{{base_url}}/api/v1/assets/{{asset_id}}/complete"
+method: POST
+headers:
+  Idempotency-Key: "{{idem_key}}"
+  Content-Type: application/json
+  Authorization: Bearer {{prof_token}}
+body:
+  type: text
+  content: |-
+    {
+      "parts": [
+        { "part_number": 1, "etag": "{{parte_1_etag}}" }
+      ]
+    }
+scripts:
+  - type: beforeRequest
+    code: pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('202 Accepted', () => pm.response.to.have.status(202));
+      pm.test('queda como uploaded', () => pm.expect(pm.response.json().status).to.eql('uploaded'));
+    language: text/javascript
+order: 5000

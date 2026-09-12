@@ -1,0 +1,21 @@
+$kind: http-request
+description: |-
+  **Esta petición no va a la API**: va directa a MinIO con la URL prefirmada.
+
+  **Selecciona el archivo** `postman/archivo-de-prueba.mp4` en la pestaña Body → binary. Postman recuerda la ruta para las siguientes veces.
+
+  El `ETag` que devuelve identifica la parte y hace falta para completar.
+url: "{{parte_1_url}}"
+method: PUT
+body:
+  type: file
+  content: {}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const etag = (pm.response.headers.get('ETag') || '').replace(/"/g, '');
+      pm.test('el almacén devolvió un ETag', () => pm.expect(etag).to.not.be.empty);
+      pm.collectionVariables.set('parte_1_etag', etag);
+    language: text/javascript
+order: 3000

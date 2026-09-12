@@ -1,0 +1,14 @@
+$kind: http-request
+description: Comprueba PostgreSQL, Redis y el almacén de objetos (ADR-0009).
+url: "{{base_url}}/readyz"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const d = pm.response.json();
+      pm.test('postgres ok', () => pm.expect(d.postgres).to.eql('ok'));
+      pm.test('redis ok', () => pm.expect(d.redis).to.eql('ok'));
+      pm.test('objectstore ok', () => pm.expect(d.objectstore).to.eql('ok'));
+    language: text/javascript
+order: 1000

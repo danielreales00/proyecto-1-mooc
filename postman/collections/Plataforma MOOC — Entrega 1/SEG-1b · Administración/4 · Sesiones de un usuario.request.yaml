@@ -1,0 +1,15 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/admin/users/{{invitado_id}}/sessions"
+method: GET
+headers:
+  Accept: application/json
+  Authorization: Bearer {{admin_token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('recién creado, no tiene ninguna sesión', () => {
+        pm.expect(pm.response.json().items).to.be.an('array').that.is.empty;
+      });
+    language: text/javascript
+order: 5000

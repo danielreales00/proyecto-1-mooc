@@ -1,0 +1,8 @@
+$kind: collection
+description: |-
+  p95, escalamiento, observabilidad, fallos, backup, restauración y RTO/RPO.
+
+  Criterio: arquitectura y calidad operativa (CE-01, CE-07).
+
+  Parcial: el escalamiento ya está verificado con `make scale`. Faltan la prueba de carga con k6, la observabilidad y la restauración medida.
+order: 10000

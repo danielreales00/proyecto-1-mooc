@@ -1,0 +1,43 @@
+$kind: collection
+description: |-
+  Colección de la demostración de aceptación. Una carpeta por segmento de la §10.2.
+
+  **Uso:** `make up && make seed`, importar con el entorno, y ejecutar las carpetas EN ORDEN.
+
+  SEG-1, 2, 5, 6, 7 y 8 están completas. SEG-3 cubre la carga y la verificación; el antimalware y la transcodificación no están. SEG-4 se demuestra con `make demo`; SEG-9 se demuestra con `make demo` y `make scale`.
+
+  **Aviso sobre SEG-7:** los heartbeats exigen 10 s de separación, a propósito. Con el Collection Runner hace falta `--delay-request 11000`, o ejecutar esas peticiones a mano. El equivalente automático es `make demo`.
+variables:
+  base_url: http://localhost:8090
+  mailpit_url: http://localhost:8026
+  demo_password: Contrasena-Demo-2026
+  nuevo_email: ""
+  verify_token: ""
+  session_token: ""
+  user_id: ""
+  mailpit_intento: "0"
+  prof_token: ""
+  course_id: ""
+  version_id: ""
+  module_id: ""
+  unit_id: ""
+  text_stable_id: ""
+  quiz_resource_id: ""
+  quiz_stable_id: ""
+  enrollment_id: ""
+  attempt_id: ""
+  question_stable_id: ""
+  option_stable_id: ""
+  score: ""
+  badge_code: ""
+  nonce: ""
+  idem_key: ""
+  asset_id: ""
+  parte_1_url: ""
+  parte_1_etag: ""
+  sha256_prueba: 2f182426a670429e79b600ae44d477ada5ae141d5dae433da2eafa3da728c731
+  admin_token: ""
+  admin_id: ""
+  invitado_id: ""
+  trabajo_vivo_id: ""
+  trabajo_muerto_id: ""

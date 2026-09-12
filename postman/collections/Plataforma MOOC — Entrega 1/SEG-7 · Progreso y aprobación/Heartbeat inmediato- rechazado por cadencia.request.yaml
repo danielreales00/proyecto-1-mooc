@@ -1,0 +1,27 @@
+$kind: http-request
+name: "Heartbeat inmediato: rechazado por cadencia"
+description: "Inundar de heartbeats no simula permanencia: el reloj lo pone el servidor."
+url: "{{base_url}}/api/v1/enrollments/{{enrollment_id}}/progress"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{session_token}}
+  Idempotency-Key: "{{idem_key}}"
+body:
+  type: text
+  content: |-
+    {
+      "resource_stable_id": "{{text_stable_id}}",
+      "kind": "heartbeat"
+    }
+scripts:
+  - type: beforeRequest
+    code: pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('202', () => pm.response.to.have.status(202));
+      const d = pm.response.json();
+      pm.test('rechazada por cadencia', () => pm.expect(d.reject_reason).to.eql('cadence'));
+    language: text/javascript
+order: 3000

@@ -1,0 +1,25 @@
+$kind: http-request
+description: "Naturalmente idempotente: guardar de nuevo sustituye la respuesta."
+url: "{{base_url}}/api/v1/attempts/{{attempt_id}}/answers"
+method: PATCH
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{session_token}}
+body:
+  type: text
+  content: |-
+    {
+      "answers": [
+        {
+          "question_stable_id": "{{question_stable_id}}",
+          "selected_option_stable_ids": [
+            "{{option_stable_id}}"
+          ]
+        }
+      ]
+    }
+scripts:
+  - type: afterResponse
+    code: pm.test('200', () => pm.response.to.have.status(200));
+    language: text/javascript
+order: 2000

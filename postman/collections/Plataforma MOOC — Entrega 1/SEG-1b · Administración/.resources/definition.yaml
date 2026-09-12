@@ -1,0 +1,8 @@
+$kind: collection
+description: |-
+  Administración de usuarios, auditoría y trabajos (RF-01, SEG-2).
+
+  Se ejecuta sobre las cuentas de `make seed`, que trae **una sola** administradora: por eso el paso 7 puede demostrar la guarda del último administrador sin preparar nada.
+
+  No modifica ninguna cuenta de la semilla. El único usuario que altera es el profesor invitado que ella misma crea en el paso 2.
+order: 2000

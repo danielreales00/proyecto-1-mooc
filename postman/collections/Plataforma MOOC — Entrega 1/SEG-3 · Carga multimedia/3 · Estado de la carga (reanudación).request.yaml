@@ -1,0 +1,17 @@
+$kind: http-request
+description: "**Esto es lo que permite reanudar.** El servidor pregunta al almacén qué partes tiene ya, así que tras una interrupción el cliente sube solo lo que falta, dentro de la ventana de 24 horas."
+url: "{{base_url}}/api/v1/assets/{{asset_id}}/upload"
+method: GET
+headers:
+  Authorization: Bearer {{prof_token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const d = pm.response.json();
+      pm.test('la parte 1 ya está en el almacén', () =>
+        pm.expect(d.received_parts.map(p => p.part_number)).to.include(1));
+      pm.test('no falta ninguna', () => pm.expect(d.missing_parts).to.be.empty);
+      console.log('recibidas:', d.received_parts.length, '· faltan:', d.missing_parts);
+    language: text/javascript
+order: 4000

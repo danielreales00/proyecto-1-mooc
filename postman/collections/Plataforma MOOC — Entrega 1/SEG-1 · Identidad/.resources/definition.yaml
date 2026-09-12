@@ -1,0 +1,9 @@
+$kind: collection
+description: |-
+  Registro de estudiante, verificación de correo, sesiones revocables y rechazo de operaciones no autorizadas.
+
+  Criterio: identidad, autorización y seguridad (CE-02).
+  Requisitos: RF-01, RF-02, CA-06.
+
+  El token de verificación se lee de Mailpit: ejecuta «Leer token del correo» después de registrar.
+order: 1000

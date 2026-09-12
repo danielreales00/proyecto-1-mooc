@@ -1,0 +1,13 @@
+$kind: http-request
+description: El contenido textual llega ya renderizado y saneado.
+url: "{{base_url}}/api/v1/enrollments/{{enrollment_id}}/content"
+method: GET
+headers:
+  Authorization: Bearer {{session_token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('sin claves de quiz', () => pm.expect(pm.response.text()).to.not.include('is_correct'));
+    language: text/javascript
+order: 4000

@@ -1,0 +1,21 @@
+$kind: http-request
+name: "INMUTABILIDAD: mutar la versión publicada"
+description: Un trigger de PostgreSQL rechaza la mutación. La regla vive donde están los datos (ADR-0007).
+url: "{{base_url}}/api/v1/versions/{{version_id}}/modules"
+method: POST
+headers:
+  Content-Type: application/json
+  Authorization: Bearer {{prof_token}}
+body:
+  type: text
+  content: |-
+    {
+      "title": "No debería entrar"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('409', () => pm.response.to.have.status(409));
+      pm.test('version_immutable', () => pm.expect(pm.response.json().type).to.include('version_immutable'));
+    language: text/javascript
+order: 11000

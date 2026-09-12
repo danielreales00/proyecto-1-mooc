@@ -1,0 +1,16 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/courses/{{course_id}}/versions/1/publish"
+method: POST
+headers:
+  Authorization: Bearer {{prof_token}}
+  Idempotency-Key: "{{idem_key}}"
+scripts:
+  - type: beforeRequest
+    code: pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('publicada', () => pm.expect(pm.response.json().status).to.eql('published'));
+    language: text/javascript
+order: 10000

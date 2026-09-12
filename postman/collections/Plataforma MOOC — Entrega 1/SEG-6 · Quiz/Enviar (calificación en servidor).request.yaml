@@ -1,0 +1,22 @@
+$kind: http-request
+description: La nota se calcula en el servidor contra las claves de la base, no contra el snapshot.
+url: "{{base_url}}/api/v1/attempts/{{attempt_id}}/submit"
+method: POST
+headers:
+  Authorization: Bearer {{session_token}}
+  Idempotency-Key: "{{idem_key}}"
+scripts:
+  - type: beforeRequest
+    code: pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      // La clave se conserva para que 'Reenviar' use la MISMA y demuestre la idempotencia.
+      pm.test('200', () => pm.response.to.have.status(200));
+      const d = pm.response.json();
+      pm.collectionVariables.set('score', d.score);
+      pm.test('calificado', () => pm.expect(d.score).to.be.a('number'));
+      pm.test('la política correctness no revela las claves', () =>
+        pm.expect(pm.response.text()).to.not.include('correct_option_stable_ids'));
+    language: text/javascript
+order: 3000

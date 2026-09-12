@@ -1,0 +1,13 @@
+$kind: http-request
+description: "Público: solo cursos con una versión publicada."
+url: "{{base_url}}/api/v1/catalog/courses?q=Cloud"
+method: GET
+queryParams:
+  q: Cloud
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('devuelve cursos', () => pm.expect(pm.response.json().items).to.have.length.above(0));
+    language: text/javascript
+order: 1000

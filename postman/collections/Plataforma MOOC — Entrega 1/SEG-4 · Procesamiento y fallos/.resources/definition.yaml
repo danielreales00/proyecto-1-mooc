@@ -1,0 +1,8 @@
+$kind: collection
+description: |-
+  Estados del recurso, HLS sin upscaling, doble entrega idempotente, backoff, DLQ, alerta y reencolado con la misma clave.
+
+  Criterio: arquitectura, multimedia y calidad operativa. Requisito: CA-03.
+
+  Pendiente: workers de medios y observabilidad. El mecanismo de idempotencia y DLQ ya existe en platform.job_runs.
+order: 5000

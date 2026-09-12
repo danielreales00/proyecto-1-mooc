@@ -1,0 +1,16 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/admin/users"
+method: GET
+headers:
+  Accept: application/json
+  Authorization: Bearer {{prof_token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('403: autenticado, pero sin permiso', () => {
+        pm.expect(pm.response.code).to.eql(403);
+      });
+      console.log('401 sería «no sé quién eres»; 403 es «sé quién eres y',
+        'no te toca». La distinción importa.');
+    language: text/javascript
+order: 13000

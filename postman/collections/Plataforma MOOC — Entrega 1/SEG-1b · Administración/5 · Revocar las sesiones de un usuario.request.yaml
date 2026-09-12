@@ -1,0 +1,16 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/admin/users/{{invitado_id}}/sessions"
+method: DELETE
+headers:
+  Accept: application/json
+  Authorization: Bearer {{admin_token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const c = pm.response.json();
+      pm.test('responde cuántas revocó', () => pm.expect(c.revoked).to.be.a('number'));
+      console.log('Redis manda sobre la validez de la sesión, así que',
+        'revocar tiene efecto en la petición siguiente, sin ventana de gracia.');
+    language: text/javascript
+order: 6000

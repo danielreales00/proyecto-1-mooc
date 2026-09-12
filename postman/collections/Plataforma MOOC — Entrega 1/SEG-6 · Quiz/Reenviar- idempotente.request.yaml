@@ -1,0 +1,21 @@
+$kind: http-request
+name: "Reenviar: idempotente"
+description: Reenviar devuelve la misma nota sin recalcular (CA-04).
+url: "{{base_url}}/api/v1/attempts/{{attempt_id}}/submit"
+method: POST
+headers:
+  Authorization: Bearer {{session_token}}
+  Idempotency-Key: "{{idem_key}}"
+scripts:
+  - type: beforeRequest
+    code: // Se reutiliza a propósito la clave del envío anterior.
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('misma nota', () =>
+        pm.expect(pm.response.json().score).to.eql(Number(pm.collectionVariables.get('score'))));
+      pm.test('la respuesta se repitió, no se recalculó', () =>
+        pm.expect(pm.response.headers.get('Idempotency-Replayed')).to.eql('true'));
+    language: text/javascript
+order: 4000

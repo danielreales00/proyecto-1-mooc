@@ -1,0 +1,39 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/admin/users"
+method: POST
+headers:
+  Accept: application/json
+  Authorization: Bearer {{admin_token}}
+  Content-Type: application/json
+  Idempotency-Key: "{{idem_key}}"
+body:
+  type: json
+  content: |-
+    {
+      "email": "profesor-invitado-{{$timestamp}}@mooc.local",
+      "full_name": "Profesor Invitado",
+      "role": "teacher"
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      // Cada creación necesita su propia Idempotency-Key (ADR-0014).
+      pm.collectionVariables.set('idem_key', 'seg1b-' + Date.now() + '-' +
+        Math.random().toString(36).slice(2, 8));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('201', () => pm.response.to.have.status(201));
+      const u = pm.response.json();
+      pm.collectionVariables.set('invitado_id', u.id);
+      pm.test('nace como profesor y activo', () => {
+        pm.expect(u.role).to.eql('teacher');
+        pm.expect(u.status).to.eql('active');
+      });
+      pm.test('el correo se da por verificado: el administrador responde por él', () => {
+        pm.expect(u.email_verified_at).to.not.be.null;
+      });
+      console.log('La cuenta nace SIN contraseña utilizable.',
+        'Solo se activa por el enlace de la invitación.');
+    language: text/javascript
+order: 3000

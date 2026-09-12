@@ -1,0 +1,12 @@
+$kind: http-request
+name: GET /me tras cerrar sesión — revocación inmediata
+description: Borrar la clave de Redis surte efecto en la petición siguiente, sin ventana de gracia. Es lo que el segmento 1 exige demostrar (ADR-0006).
+url: "{{base_url}}/api/v1/me"
+method: GET
+headers:
+  Authorization: Bearer {{session_token}}
+scripts:
+  - type: afterResponse
+    code: pm.test('401 sin esperar a que expire', () => pm.response.to.have.status(401));
+    language: text/javascript
+order: 13000

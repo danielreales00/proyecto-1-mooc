@@ -1,0 +1,29 @@
+$kind: http-request
+name: "10 · RECHAZO: reencolar un trabajo que no está en la DLQ"
+url: "{{base_url}}/api/v1/admin/jobs/{{trabajo_vivo_id}}/requeue"
+method: POST
+headers:
+  Accept: application/json
+  Authorization: Bearer {{admin_token}}
+  Idempotency-Key: "{{idem_key}}"
+scripts:
+  - type: beforeRequest
+    code: |-
+      // Cada creación necesita su propia Idempotency-Key (ADR-0014).
+      pm.collectionVariables.set('idem_key', 'seg1b-' + Date.now() + '-' +
+        Math.random().toString(36).slice(2, 8));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('409: solo se reencola lo que está muerto o falló', () => {
+        pm.expect(pm.response.code).to.eql(409);
+      });
+      pm.test('el problema viene tipado', () => {
+        pm.expect(pm.response.json().type).to.include('not_requeueable');
+      });
+      console.log('Reencolar un trabajo que ya se completó lo ejecutaría',
+        'por segunda vez sin motivo. La guarda lo impide.');
+      console.log('El reencolado de verdad se demuestra en el bloque 8b,',
+        'sobre el trabajo que sí acaba en la DLQ.');
+    language: text/javascript
+order: 11000

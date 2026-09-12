@@ -1,0 +1,18 @@
+$kind: http-request
+description: Pública. NO expone el correo del estudiante, y el código no deriva de su identidad (CA-07).
+url: "{{base_url}}/api/v1/verify/{{badge_code}}"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.test('CA-07: no expone el correo', () =>
+        pm.expect(pm.response.text()).to.not.match(/@|"email"/));
+      const d = pm.response.json();
+      pm.test('trae nombre, curso y estado', () => {
+        pm.expect(d.student_name).to.be.a('string');
+        pm.expect(d.course_title).to.be.a('string');
+        pm.expect(d.status).to.eql('valid');
+      });
+    language: text/javascript
+order: 2000

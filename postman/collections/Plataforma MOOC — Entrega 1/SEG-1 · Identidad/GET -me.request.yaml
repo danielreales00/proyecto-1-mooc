@@ -1,0 +1,16 @@
+$kind: http-request
+name: GET /me
+url: "{{base_url}}/api/v1/me"
+method: GET
+headers:
+  Authorization: Bearer {{session_token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const d = pm.response.json();
+      pm.test('correo verificado', () => pm.expect(d.email_verified_at).to.not.be.null);
+      pm.test('nunca expone el hash de la contraseña', () =>
+        pm.expect(pm.response.text()).to.not.include('password'));
+    language: text/javascript
+order: 9000

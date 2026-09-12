@@ -1,0 +1,32 @@
+$kind: http-request
+name: "7 · RECHAZO: checksum que no cuadra"
+description: |-
+  Declara un checksum falso. La carga se inicia sin problema —el servidor aún no ha visto los bytes—, pero al subir y completar, el worker recalcula, no cuadra, y el asset queda `rejected` y en cuarentena.
+
+  Para verlo entero: sube la parte con la URL que devuelve esta petición, completa, y consulta el asset.
+url: "{{base_url}}/api/v1/assets/init"
+method: POST
+headers:
+  Idempotency-Key: "{{idem_key}}"
+  Content-Type: application/json
+  Authorization: Bearer {{prof_token}}
+body:
+  type: text
+  content: |-
+    {
+      "filename": "mentira.mp4",
+      "content_type": "video/mp4",
+      "size_bytes": 262144,
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "kind": "video"
+    }
+scripts:
+  - type: beforeRequest
+    code: pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('201: se acepta la declaración', () => pm.response.to.have.status(201));
+      console.log('El rechazo ocurre al verificar, no al declarar.');
+    language: text/javascript
+order: 8000

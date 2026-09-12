@@ -1,0 +1,35 @@
+$kind: http-request
+name: "7 · ÚLTIMO ADMINISTRADOR: degradarse a sí misma"
+description: Invariante del ADR-0001. La función que lo decide (`DejaSinAdministrador`) es pura y tiene una tabla de ocho casos en `admin/domain_test.go`.
+url: "{{base_url}}/api/v1/admin/users/{{admin_id}}"
+method: PATCH
+headers:
+  Accept: application/json
+  Authorization: Bearer {{admin_token}}
+  Content-Type: application/json
+body:
+  type: json
+  content: |-
+    {
+      "role": "teacher"
+    }
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('409: el sistema no se queda sin administrador', () => {
+        pm.expect(pm.response.code).to.eql(409);
+      });
+      const p = pm.response.json();
+      pm.test('el problema viene tipado', () => {
+        pm.expect(p.type).to.include('last_admin');
+      });
+      pm.test('trae trace_id, como todo error de la API', () => {
+        pm.expect(p.trace_id).to.be.a('string').and.not.empty;
+      });
+      console.log('Es la única administradora activa, así que degradarse',
+        'dejaría el sistema sin nadie que pueda administrarlo.');
+      console.log('La comprobación va DENTRO de la transacción, con FOR UPDATE:',
+        'hacerla antes dejaría una ventana en la que dos peticiones',
+        'simultáneas degradan a los dos últimos administradores.');
+    language: text/javascript
+order: 8000
