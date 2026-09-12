@@ -139,8 +139,8 @@ sobrevivan a la petición o al job (ADR-0001, ADR-0006).
 | `migrate` | construida (`target: migrate`) | por defecto, `restart: no` |
 | `postgres` | `postgres:17-alpine` | por defecto |
 | `redis` | `redis:7-alpine` (`--appendonly yes`) | por defecto |
-| `minio` | `minio/minio` | por defecto |
-| `minio-init` | `minio/mc` (crea buckets y políticas) | por defecto, `restart: no` |
+| `minio` | `quay.io/minio/minio` (etiqueta fija) | por defecto |
+| `minio-init` | `quay.io/minio/mc` (crea buckets y políticas) | por defecto, `restart: no` |
 | `mailpit` | `axllent/mailpit` | por defecto |
 | `clamav` | `clamav/clamav` | por defecto |
 | `prometheus` | `prom/prometheus` | `observability` |
