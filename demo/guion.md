@@ -10,6 +10,8 @@ enunciado, más apertura y cierre.
 [Cómo llevar la demo](#cómo-llevar-la-demo) · [El guion](#el-guion) ·
 [Si algo falla](#si-algo-falla) · [Qué no prometer](#qué-no-prometer)
 
+**Reparto entre las cuatro personas del equipo:** [`reparto.md`](reparto.md).
+
 ---
 
 ## Antes de grabar
@@ -561,11 +563,11 @@ espera del worker: son la prueba de que el procesamiento es asíncrono.
 
 Frases que **no** hay que decir, porque no son ciertas hoy:
 
-- ~~«el backend está completo»~~ → «el flujo completo funciona; faltan
-  multimedia y administración»
+- ~~«el backend está completo»~~ → «el flujo completo funciona; de multimedia
+  faltan el antimalware y la transcodificación»
 - ~~«soporta 2.000 usuarios concurrentes»~~ → «está diseñado para eso; la prueba
   de carga es trabajo pendiente»
-- ~~«transcodifica video»~~ → el módulo de medios no está
+- ~~«transcodifica video»~~ → el módulo de medios sube y verifica, no transcodifica
 - ~~«tiene CDN»~~ → el contrato lo contempla; la implementación va en GCP
 - ~~«cumple WCAG»~~ → no hay interfaz que auditar
 
