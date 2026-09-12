@@ -3,16 +3,14 @@
 Video de la Entrega 1. La interfaz es Postman y la línea de órdenes, como
 autorizó el profesor.
 
-**Duración máxima: 20 minutos**, confirmada por el profesor. No es un objetivo
-nuestro: es un límite. Un bloque por segmento de la §10.2 del enunciado, más
-apertura y cierre.
+**Duración máxima: 20 minutos**, confirmada por el profesor. Los bloques suman
+**19,25**, así que hay 45 segundos de margen para tropiezos. Un bloque por
+segmento de la §10.2 del enunciado, más apertura y cierre.
 
-Los tiempos de cada bloque son los de **la versión que se graba**, ya recortada.
-Suman 19,25 minutos, que deja 45 segundos de margen para tropiezos. El
-presupuesto y lo que se recortó están justo abajo.
+**Si un bloque se va de tiempo, se recorta ahí mismo, no se le roba al
+siguiente.**
 
-**Índice:** [Presupuesto de 20 minutos](#presupuesto-de-20-minutos) ·
-[Antes de grabar](#antes-de-grabar) ·
+**Índice:** [Tiempos](#tiempos) · [Antes de grabar](#antes-de-grabar) ·
 [Cómo llevar la demo](#cómo-llevar-la-demo) · [El guion](#el-guion) ·
 [Si algo falla](#si-algo-falla) · [Qué no prometer](#qué-no-prometer)
 
@@ -20,38 +18,29 @@ presupuesto y lo que se recortó están justo abajo.
 
 ---
 
-## Presupuesto de 20 minutos
+## Tiempos
 
-El guion sin recortar dura 30,5 minutos. Esta es la versión que cabe, y lo que
-se sacrifica en cada bloque. **Si un bloque se va de tiempo, se recorta ahí
-mismo, no se le roba al siguiente.**
+| Bloque | Min |
+| --- | --- |
+| 0 · Apertura | 0,5 |
+| 1 · Levantar el stack | 1 |
+| 2 · Identidad | 2 |
+| 2b · Administración | 1 |
+| 3 · Autoría y publicación | 2 |
+| 3b · Carga multimedia | 1,5 |
+| 4 · Catálogo, inscripción y consumo | 1 |
+| 5 · Quiz | 1,5 |
+| 6 · Progreso y aprobación | 2,5 |
+| 7 · Insignia | 1 |
+| 8 · Tolerancia a fallos | 1,5 |
+| 8b · Observabilidad y la alerta | 2 |
+| 9 · Operación | 1 |
+| 10 · Cierre | 0,75 |
+| **Total** | **19,25** |
 
-| Bloque | Completo | Se graba | Qué se cae |
-| --- | --- | --- | --- |
-| 0 · Apertura | 1 | **0,5** | Se nombra `arquitectura/adr`, no se recorre |
-| 1 · Stack | 1,5 | **1** | `docker compose ps` y el escalado; sin comentar servicio por servicio |
-| 1b · Contrato | 1 | **fuera** | Una frase en la apertura y diez segundos de `/docs` al pasar |
-| 2 · Identidad | 3 | **2** | Se cae la segunda cuenta desde la misma IP; el argumento de los dos niveles se dice mientras corre el bucle |
-| 2b · Administración | 2 | **1** | Solo el `409` del último administrador y el `403` del profesor |
-| 3 · Autoría | 3,5 | **2** | Se cae la previsualización y el discurso del Markdown canónico |
-| 3b · Multimedia | 2,5 | **1,5** | Se cae la interrupción a mitad: declarar, subir, verificado, un rechazo |
-| 4 · Catálogo | 1,5 | **1** | Tres peticiones seguidas, sin comentar cada una |
-| 5 · Quiz | 2,5 | **1,5** | Se cae el guardado parcial |
-| 6 · Progreso | 3 | **2,5** | Entero: es el bloque que más pesa en la evaluación |
-| 7 · Insignia | 1,5 | **1** | Directo a la URL pública de verificación |
-| 8 · Tolerancia a fallos | 2 | **1,5** | Un `psql` antes y otro después, sin el listado intermedio |
-| 8b · Observabilidad | 2,5 + 0,5 | **2** | El trabajo que falla se inyecta al **empezar el bloque 6**: al llegar, la alerta ya está en *firing* |
-| 9 · Operación | 1,5 | **1** | `make demo` y la pestaña verde del CI |
-| 10 · Cierre | 1 | **0,75** | — |
-| | **30,5** | **19,25** | |
-
-**El recorte que más rinde** es el de 8b: inyectar el trabajo que falla dos
-bloques antes ahorra los 3,5 minutos de espera y no se pierde nada, porque los
-reintentos con backoff siguen quedando en los logs.
-
-**Lo que no se recorta:** las esperas del worker en los bloques 2, 6 y 7. Son la
-prueba de que el procesamiento es asíncrono, que es justo lo que el profesor
-pidió evidenciar.
+**Las esperas del worker en los bloques 2, 6 y 7 no se tocan.** Son la prueba de
+que el procesamiento es asíncrono, que es justo lo que el profesor pidió
+evidenciar.
 
 ---
 
@@ -138,7 +127,10 @@ detecta antes una omisión que un hueco reconocido.
 > su progreso y, al aprobar, un worker emite una insignia verificable.
 >
 > Todas las decisiones están en `arquitectura/adr`, quince documentos, cada uno
-> con las alternativas que descartamos y por qué.»
+> con las alternativas que descartamos y por qué. Y el contrato lo sirve la
+> propia API en `/docs`: ochenta y ocho operaciones, OpenAPI 3.1.»
+
+Enseña la pestaña de `/docs` diez segundos al pasar, sin recorrerla.
 
 ---
 
@@ -161,29 +153,6 @@ docker compose ps | grep -c mooc-api
 > viven en Redis y los datos en PostgreSQL. Al final volveré sobre esto.»
 
 **Acredita:** arquitectura y despliegue (CE-01).
-
----
-
-### 1b · El contrato, navegable — FUERA del video de 20 min
-
-**Navegador → http://localhost:8090/docs**
-
-> **Este bloque no entra en los 20 minutos.** En su lugar, al abrir la apertura
-> se dice una frase —«la propia API sirve su contrato OpenAPI en `/docs`»— y se
-> enseña la pestaña diez segundos al pasar. El bloque queda escrito para la
-> memoria y por si el profesor lo pide.
-
-> «Antes de entrar en el flujo: esto es el contrato. Ochenta y ocho
-> operaciones, OpenAPI 3.1, validado en el pipeline. Y no es un documento
-> aparte: **lo sirve la propia API**, empotrado en el binario, así que no puede
-> quedarse atrás del código.
->
-> Las que aún no responden llevan la marca de planificadas.»
-
-Despliega una operación cualquiera y enseña el `problem+json` de sus errores.
-
-> «Y funciona: comparte origen con la API, así que desde aquí se puede ejecutar
-> cualquier endpoint.»
 
 ---
 
@@ -235,13 +204,8 @@ Despliega una operación cualquiera y enseña el `problem+json` de sus errores.
    > NAT. Así que van dos niveles: uno estrecho por cuenta, cinco por minuto,
    > y otro ancho por IP, sesenta, contra el rociado de contraseñas.»
 
-   Demuéstralo: otra cuenta desde la misma IP entra sin problema.
-
-   ```bash
-   curl -s -o /dev/null -w "%{http_code}\n" -X POST localhost:8090/api/v1/auth/login \
-     -H 'Content-Type: application/json' \
-     -d '{"email":"estudiante2@mooc.local","password":"Contrasena-Demo-2026"}'
-   ```
+   Dilo mientras corre el bucle; no hace falta esperar a que termine para
+   empezar a explicarlo.
 
 **Acredita:** identidad, autorización y seguridad (CE-02).
 
@@ -249,35 +213,10 @@ Despliega una operación cualquiera y enseña el `problem+json` de sus errores.
 
 ### 2b · Administración — 1 min · *SEG-1b, RF-01*
 
-**Postman → SEG-1b**
+**Postman → SEG-1b.** Ejecuta el login como administradora y ve directo a las
+dos peticiones que siguen.
 
-> **En un minuto solo caben los pasos 4 y 5.** Los tres primeros están escritos
-> por si sobra tiempo o para la memoria escrita; los dos últimos son los que
-> acreditan algo que no se ve en ningún otro bloque.
-
-1. **Login como administradora** y **listar usuarios** → las ocho cuentas de la
-   semilla.
-
-   > «Ocho cuentas, con su rol y su estado. Y fíjense en lo que **no** está: no
-   > aparece el hash de la contraseña por ningún lado. Ni aquí ni en ninguna
-   > respuesta de la API.»
-
-2. **Crear un profesor** → `201`.
-
-   > «La cuenta nace activa y con el correo **ya verificado**: la invitación
-   > llega a ese buzón, así que abrirla ya demuestra que lo controla. Pero nace
-   > **sin contraseña utilizable**: solo se activa por el enlace.»
-
-3. **Los trabajos** — `GET /admin/jobs?type=email.send`. Señala el de la
-   invitación:
-
-   > «Ahí está el correo de invitación, registrado en PostgreSQL. Se escribió en
-   > la **misma transacción** que el usuario y se publicó en la cola después del
-   > commit. Si Redis estuviera caído, el usuario existiría igual y el trabajo
-   > seguiría aquí esperando a que el reaper lo recupere.»
-
-4. **El último administrador** ← *imprescindible*. Que se degrade a sí misma a
-   profesora → `409`.
+1. **El último administrador.** Que se degrade a sí misma a profesora → `409`.
 
    > «Es la única administradora activa. Degradarse dejaría el sistema sin nadie
    > que pueda administrarlo, así que se rechaza.
@@ -290,7 +229,7 @@ Despliega una operación cualquiera y enseña el `problem+json` de sus errores.
    *(La función que lo decide es pura y tiene una tabla de ocho casos en
    `admin/domain_test.go`.)*
 
-5. **Un profesor intenta administrar** ← *imprescindible* → `403`.
+2. **Un profesor intenta administrar** → `403`.
 
    > «Cuatrocientos tres, no cuatrocientos uno. Cuatrocientos uno sería «no sé
    > quién eres»; esto es «sé quién eres y no te toca».»
@@ -311,31 +250,20 @@ Despliega una operación cualquiera y enseña el `problem+json` de sus errores.
    > error**. Recorre todas las reglas y devuelve la lista completa, para que el
    > profesor arregle todo de una vez.»
 
-3. **Módulo → unidad → recurso de texto.**
-
-   Al crear el recurso, señala el `content_md` de la respuesta:
-
-   > «Envié las viñetas con asterisco y tres líneas en blanco. El servidor las
-   > guardó normalizadas: guión y una sola línea en blanco. **No guarda lo que
-   > le mandan**: parsea, valida y vuelve a serializar en forma canónica. Por eso
-   > guardar dos veces lo mismo da el mismo ETag.»
+3. **Módulo → unidad → recurso de texto**, de corrido.
 
 4. **Recurso de quiz** y **configurar el quiz**.
 
    > «Fíjense en que aquí **sí** viaja `is_correct`. Es la ruta del profesor
    > dueño del curso, y la única por la que la clave sale del servidor.»
 
-5. **Previsualizar** → HTML saneado.
+5. **Publicar** → `200`, `published`.
 
-6. **Publicar** → `200`, `published`.
-
-7. **Intentar añadir un módulo a la versión publicada** → `409`.
+6. **Intentar añadir un módulo a la versión publicada** → `409`.
 
    > «Y esto no lo rechaza Go: lo rechaza **PostgreSQL**, con un trigger. La
    > regla vive donde están los datos, porque es la que más fácil se salta un
    > UPDATE de mantenimiento.»
-
-   *(Opcional, si hay tiempo: abrir `psql` e intentar el UPDATE a mano.)*
 
 **Acredita:** autoría y publicación (CE-03), CA-01.
 
@@ -343,46 +271,33 @@ Despliega una operación cualquiera y enseña el `problem+json` de sus errores.
 
 ### 3b · Carga multimedia — 1,5 min · *SEG-3, CE-04*
 
-Va en la terminal: la subida por partes se ve mejor con `curl` que en Postman.
+Va en la terminal: el guion `subir-video.sh` recorre la carga entera y deja los
+seis pasos en pantalla.
 
-1. **Iniciar la carga** de un vídeo de 20 MiB. Señala la respuesta:
+1. **La carga completa**, narrando por encima mientras corre:
 
-   > «Tres partes de ocho megas, y una URL firmada por parte. Fíjense en que
-   > **los bytes no pasan por la API**: el cliente sube directamente al
-   > almacén. La API solo firma.»
+   ```bash
+   make subir ARCHIVO=demo.mp4
+   ```
 
-2. **Subir dos de las tres partes** y parar.
+   > «Declaración, URLs firmadas por parte, subida, estado de la carga,
+   > completado y verificación. Fíjense en que **los bytes no pasan por la
+   > API**: el cliente sube directamente al almacén y la API solo firma. Y esa
+   > consulta de estado es lo que hace la carga **reanudable**: hay
+   > veinticuatro horas para terminarla.»
 
-   > «Simulo que se corta la conexión a mitad.»
-
-3. **Preguntar qué falta** — `GET /assets/{id}/upload`:
-
-   > «El servidor pregunta al almacén qué partes tiene ya. Recibidas: uno y
-   > dos. Falta: tres. **Esto es lo que hace reanudable la carga**, y hay
-   > veinticuatro horas para completarla.»
-
-4. **Subir solo la parte que falta** y completar → `202`.
-
-5. **El worker verifica.** Consulta el asset:
+2. **La verificación del worker**, en el último paso que imprime el guion:
 
    > «El estado pasa a `clean`. Y aquí está lo importante: el servidor
    > **recalculó el SHA-256 leyendo del bucket** y **detectó el MIME por los
    > bytes**. Lo que el cliente declaró es informativo; lo que manda es lo que
    > el servidor comprueba.»
 
-6. **Los dos negativos.** Son rápidos y valen más que los positivos:
+3. **Un negativo**, que vale más que los positivos: un PDF renombrado a `.mp4`
+   y declarado como vídeo.
 
-   ```bash
-   # checksum falso
-   # un PDF renombrado a .mp4 y declarado como vídeo
-   ```
-
-   > «El primero se rechaza porque el checksum no cuadra. El segundo porque el
-   > tipo real es `application/pdf` y se declaró vídeo: un ejecutable
-   > renombrado no entra.
-   >
-   > Y los dos van a **cuarentena**, no a la papelera: si hay que revisarlos,
-   > están.»
+   > «El tipo real es `application/pdf`: un ejecutable renombrado no entra. Y va
+   > a **cuarentena**, no a la papelera: si hay que revisarlo, está.»
 
 **Lo que falta aquí**, y conviene decirlo en el momento: el escaneo antimalware
 con ClamAV y la transcodificación a HLS. Son los pasos 2 y 3 del plan que está
@@ -417,7 +332,9 @@ en `arquitectura/media-plan.md`.
    > No es un `omitempty`: son **dos tipos distintos en Go**. El del estudiante
    > no tiene el campo, así que no hay forma de que se filtre por descuido.»
 
-2. **Guardado parcial** → `200`.
+2. **Guardado parcial** → `200`. Sin comentarla: es la que deja las respuestas
+   guardadas, y el envío califica eso. **No se puede saltar** — el envío va con
+   cuerpo vacío y sin ella la nota sale en cero.
 
 3. **Enviar** → nota calculada.
 
@@ -436,6 +353,19 @@ en `arquitectura/media-plan.md`.
 ### 6 · Progreso y aprobación — 2,5 min · *SEG-7, CE-06*
 
 Este es el bloque que más impresiona. No lo corras.
+
+**Antes de empezar, sin comentarlo**, lanza en la terminal el trabajo que va a
+morir para el bloque 8b. Tarda 3,5 minutos en llegar a la DLQ, justo lo que
+duran los bloques 6, 7 y 8:
+
+```bash
+docker compose exec postgres psql -U mooc -d mooc -c \
+  "INSERT INTO platform.job_runs (job_key, type, queue, status, payload)
+   VALUES ('email.send:demo-dlq','email.send','critical','queued',
+           '{\"template\":\"inexistente\",\"to\":\"x@mooc.local\"}'::jsonb)
+   ON CONFLICT (job_key) DO UPDATE SET status='queued', attempt=0,
+           created_at = now() - interval '1 hour';"
+```
 
 **Postman → SEG-7**
 
@@ -496,17 +426,11 @@ Este es el bloque que más impresiona. No lo corras.
 
 El bloque técnicamente más importante. Va en la terminal.
 
-```bash
-docker compose exec postgres psql -U mooc -d mooc -c \
-  "SELECT job_key, type, status, attempt FROM platform.job_runs ORDER BY id DESC LIMIT 5;"
-```
-
 > «Todos los trabajos están en PostgreSQL, no solo en Redis. Se registran en la
 > misma transacción que el cambio de dominio y se publican en la cola **después**
-> del commit.»
+> del commit. Eso permite recuperarlos.»
 
-**Devolver el trabajo de la insignia a la cola**, como haría un reencolado
-administrativo:
+**Devolver a la cola el trabajo de la insignia** que se acaba de emitir:
 
 ```bash
 docker compose exec postgres psql -U mooc -d mooc -c \
@@ -547,34 +471,21 @@ docker compose exec postgres psql -U mooc -d mooc -c \
    > evidencias de progreso rechazadas por motivo, y esta de aquí arriba, la
    > dead-letter queue.»
 
-2. **Forzar un trabajo a la DLQ.** En la terminal:
+2. **Los reintentos del trabajo que lanzaste al empezar el bloque 6:**
 
    ```bash
-   docker compose exec postgres psql -U mooc -d mooc -c \
-     "INSERT INTO platform.job_runs (job_key, type, queue, status, payload)
-      VALUES ('email.send:demo-dlq','email.send','critical','queued',
-              '{\"template\":\"inexistente\",\"to\":\"x@mooc.local\"}'::jsonb)
-      ON CONFLICT (job_key) DO UPDATE SET status='queued', attempt=0,
-              created_at = now() - interval '1 hour';"
+   docker compose logs worker | grep -E "trabajo fallido|ALERTA"
    ```
 
-   > «Una plantilla de correo que no existe. El worker va a fallar las tres
-   > veces.»
+   > «Una plantilla de correo que no existe, así que el worker falló las tres
+   > veces. Ahí está el backoff: los reintentos se van separando, porque
+   > reintentar en ráfaga castiga a un servicio que ya está caído. Y al
+   > tercero, la alerta.»
 
-3. **Los reintentos, en vivo:**
+   Debería estar ya el `ALERTA: trabajo en la dead-letter queue`. Si no,
+   sigue el log con `-f` unos segundos.
 
-   ```bash
-   docker compose logs -f worker | grep -E "trabajo fallido|ALERTA"
-   ```
-
-   > «Ahí está el backoff: los reintentos se van separando. Y al tercero…»
-
-   Espera al `ALERTA: trabajo en la dead-letter queue`. Son **unos 3,5
-   minutos** —medido: tres reintentos con backoff antes de morir—:
-   aprovecha para explicar que el backoff exponencial existe para no castigar
-   un servicio que ya está caído.
-
-4. **La alerta en Prometheus** — http://localhost:9091/alerts
+3. **La alerta en Prometheus** — http://localhost:9091/alerts
 
    > «`TrabajoEnDeadLetterQueue`, en estado *firing*. Esta es literalmente la
    > condición del enunciado: tras tres reintentos fallidos, el trabajo llega a
@@ -585,7 +496,7 @@ docker compose exec postgres psql -U mooc -d mooc -c \
    existía a su primer valor, y la alerta se quedaría muda justo el día que
    hace falta.
 
-5. **Recuperarlo por la API de administración.** Vuelve a Postman, **SEG-1b**,
+4. **Recuperarlo por la API de administración.** Vuelve a Postman, **SEG-1b**,
    petición «Trabajos en la cola de muertos»: ahí está el que acaba de morir.
    Reencólalo con `POST /admin/jobs/{id}/requeue` → `202`.
 

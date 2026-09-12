@@ -55,10 +55,9 @@ El video tiene un máximo de **20 minutos**.
 Confirmado por el profesor el 12 de septiembre de 2026, fuera del PDF. El
 enunciado no fija duración, así que este límite manda.
 
-**Consecuencia directa:** el guion completo de `demo/guion.md` dura 30,5
-minutos, así que hay que grabar la versión recortada. El presupuesto por bloque
-está en el propio guion, en «Presupuesto de 20 minutos», y el reparto entre las
-cuatro personas en `demo/reparto.md`.
+**Consecuencia directa:** `demo/guion.md` está dimensionado para caber, con el
+tiempo de cada bloque en «Tiempos». El reparto entre las cuatro personas está en
+`demo/reparto.md`.
 
 Pasarse del límite es el único error de esta entrega que no se puede arreglar
 argumentando: o cabe, o no cabe.

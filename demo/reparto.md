@@ -2,10 +2,9 @@
 
 Divide `demo/guion.md` entre las cuatro personas del equipo.
 
-**El video tiene un máximo de 20 minutos.** Los tiempos de esta tabla son los de
-la versión recortada del guion (ver «Presupuesto de 20 minutos» allí) y suman
-**19,25**, con 45 segundos de margen. El guion sin recortar dura 30,5, así que
-nadie puede improvisar de más: cada minuto que uno se pasa lo paga el siguiente.
+**El video tiene un máximo de 20 minutos.** Los bloques suman **19,25**, así que
+quedan 45 segundos de margen: nadie puede improvisar de más, porque cada minuto
+que uno se pasa lo paga el siguiente.
 
 **Criterio del reparto:** los bloques que exigen entender *por qué* está hecho
 así van a Santiago; los que se sostienen leyendo la pantalla se reparten entre
@@ -103,7 +102,8 @@ primero:
    Postman, que se entrega igual, y mencionado en el cierre.
 2. **Bloque 7 (Insignia) a 30 s.** Solo la URL pública, sin el listado.
 3. **Bloque 4 a 30 s.** Catálogo e inscripción de corrido, sin comentar.
-4. **Bloque 3, el `psql` opcional.** Ya está marcado como opcional en el guion.
+4. **Bloque 3b a 1 min.** Dejar corriendo `make subir` y narrar solo la
+   verificación del worker, sin el negativo.
 
 Lo que **no** se toca, en ningún caso: el bloque 6 (progreso y la señal
 fraudulenta), el 8 (idempotencia) y la alerta del 8b. Son condiciones de
