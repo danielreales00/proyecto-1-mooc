@@ -28,18 +28,20 @@ llega en la Entrega 2.
 
 ## Componentes
 
+Lo que existe y corre hoy. Cada caja es un servicio de `docker-compose.yml`.
+
 ```mermaid
 graph TB
   CLI[Cliente<br/>Postman en E1]
 
-  subgraph borde[Borde]
-    PROXY[Proxy / TLS<br/>Caddy]
+  subgraph borde[Borde · único puerto publicado]
+    PROXY[proxy<br/>Caddy · :8090]
+    SW[swagger<br/>contrato en /docs]
   end
 
   subgraph app[Aplicación sin estado]
     API["api (N instancias)<br/>cmd/api"]
     WG["worker (N instancias)<br/>cmd/worker"]
-    WM["worker-media (N instancias)<br/>cmd/worker + ffmpeg"]
     MIG["migrate<br/>job de arranque"]
   end
 
@@ -50,17 +52,17 @@ graph TB
   end
 
   subgraph apoyo[Servicios de apoyo]
-    CLAM[ClamAV]
-    MAIL[Mailpit]
+    MAIL[mailpit<br/>SMTP local]
   end
 
   subgraph obs[Observabilidad]
-    PROM[Prometheus]
-    GRAF[Grafana]
-    JAEG[Jaeger]
+    PROM[prometheus]
+    GRAF[grafana]
   end
 
-  CLI --> PROXY --> API
+  CLI --> PROXY
+  PROXY --> API
+  PROXY --> SW
   CLI -. "PUT/GET prefirmado<br/>los bytes no pasan por la API" .-> S3
 
   API --> PG
@@ -68,26 +70,54 @@ graph TB
   API --> S3
   MIG --> PG
 
-  RD --> WG
-  RD --> WM
+  RD -- "cola 0" --> WG
   WG --> PG
   WG --> S3
   WG --> MAIL
-  WM --> PG
-  WM --> S3
-  WM --> CLAM
 
-  API -.métricas.-> PROM
-  WG -.métricas.-> PROM
-  WM -.métricas.-> PROM
-  API -.trazas.-> JAEG
-  WG -.trazas.-> JAEG
-  WM -.trazas.-> JAEG
-  PROM --> GRAF
+  PROM -. "raspa /metrics" .-> API
+  PROM -. "raspa /metrics" .-> WG
+  GRAF --> PROM
 ```
 
-Comparar con `../recursos/diagrama-enunciado.png`: es el mismo esquema, con los
-servicios de apoyo y observabilidad que el enunciado exige en otras secciones.
+**Cómo leerlo:**
+
+- **El proxy es la única puerta.** Ni la API ni el worker publican puerto en la
+  máquina, y por eso `--scale api=3 --scale worker=3` no colisiona (CE-01).
+  Caddy resuelve `api` por DNS y reparte en round robin.
+- **Los bytes no pasan por la API.** La flecha punteada al almacén es el cliente
+  subiendo y bajando con URLs prefirmadas; la API solo las firma.
+- **La API nunca llama al worker.** Escribe el trabajo en PostgreSQL, en la misma
+  transacción que el cambio de dominio, y lo publica en la cola **después** del
+  commit. De ahí el `202` y no el `201`. → `adr/0008`
+- **Prometheus raspa**, no recibe. Descubre las instancias por DNS, así que
+  escalar no exige tocar su configuración.
+- Quedan fuera dos contenedores de arranque que corren una vez y terminan:
+  `minio-init`, que crea los cuatro buckets y deja `mooc-badges` con lectura
+  pública, y `seed`, que carga las cuentas sintéticas de la demostración.
+
+### Trabajos que ejecuta el worker
+
+| Trabajo | Qué hace | Escribe en |
+| --- | --- | --- |
+| `email.send` | Verificación de correo e invitaciones de profesor | Mailpit, PostgreSQL |
+| `badge.issue` | Emite la insignia al aprobar una inscripción | PostgreSQL, MinIO |
+| `media.probe` | Recalcula el SHA-256 leyendo del bucket y detecta el MIME real | PostgreSQL, MinIO |
+| `jobs.reaper` | Cada 30 s republica los trabajos huérfanos | PostgreSQL |
+
+### Lo que este diagrama no tiene
+
+Está decidido y documentado, pero **no implementado**. No aparece aquí para que
+el diagrama no prometa de más:
+
+| Falta | Dónde está decidido |
+| --- | --- |
+| `worker-media` con FFmpeg y transcodificación a HLS | `../adr/0011-pipeline-de-medios-con-ffmpeg-y-clamav.md` |
+| ClamAV y el trabajo `media.scan` | `../adr/0011-…`, `../media-plan.md` |
+| Trazas distribuidas (Jaeger / OpenTelemetry) | `../pendientes.md` |
+
+El esquema con todo eso, que es el del enunciado, está en
+`../recursos/diagrama-enunciado.png`.
 
 ## Módulos del monolito
 
