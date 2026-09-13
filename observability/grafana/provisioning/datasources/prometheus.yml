@@ -1,6 +1,12 @@
 apiVersion: 1
+# Sustituye también la fuente existente si Grafana le asignó un UID automático.
+deleteDatasources:
+  - name: Prometheus
+    orgId: 1
 datasources:
   - name: Prometheus
+    # Debe coincidir con datasource.uid en dashboards/operacion.json.
+    uid: prometheus
     type: prometheus
     access: proxy
     url: http://prometheus:9090
