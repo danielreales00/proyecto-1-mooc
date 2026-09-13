@@ -63,7 +63,7 @@ type Almacen interface {
 }
 
 type Service struct {
-	store Store
+	store   Store
 	almacen Almacen
 	bucket  string
 	// baseImagenes es el origen público del almacén. El bucket de insignias
