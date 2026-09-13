@@ -49,6 +49,9 @@ jobs:
       - name: go vet
         run: go vet ./...
 
+      # En local esto entra en la imagen de herramientas (`make arch`). Aquí se
+      # llama directo: el runner de GitHub ya es el Linux con GNU que la imagen
+      # reproduce, y construirla costaría más que la comprobación.
       - name: Reglas de arquitectura (ADR-0001, 0002, 0010)
         working-directory: .
         run: ./scripts/arquitectura.sh

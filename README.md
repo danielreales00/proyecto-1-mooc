@@ -29,8 +29,7 @@ PostgreSQL, Redis y almacenamiento de objetos. Todo se ejecuta en contenedores.
 
 ## Cómo usar
 
-Requiere Docker y Docker Compose. **No hace falta tener Go instalado**: todo se
-compila dentro de contenedores.
+Requiere Docker y Docker Compose.
 
 ```bash
 make up      # copia .env.example a .env si no existe, construye y levanta
@@ -319,6 +318,11 @@ make postman    # ~30 s: la colección, segmentos rápidos
 make contrato   # el contrato y la API no se han separado
 make sec        # govulncheck, gosec y credenciales
 ```
+
+Ninguna de esas órdenes corre en la máquina: entran en la imagen
+`mooc-herramientas` (`scripts/Dockerfile`), con bash, coreutils, `python3` y
+newman fijos, para que el sistema de quien las lanza no cambie el resultado. La
+primera construye la imagen; a partir de ahí es inmediata.
 
 `make demo` sondea en vez de esperar un tiempo fijo: el worker tarda lo que
 tarde, y con un `sleep` la prueba fallaría sin que falle nada.

@@ -1,7 +1,11 @@
-# Todo se ejecuta en contenedores: no hay toolchain de Go en la máquina.
+# Todo se ejecuta en contenedores: no hay toolchain de Go en la máquina, y los
+# scripts de scripts/ tampoco corren en ella. HERRAMIENTAS los mete en una
+# imagen fija (ver scripts/Dockerfile) para que den lo mismo en Linux, en macOS
+# y en Windows; las órdenes se escriben y se ven igual que siempre.
 SHELL := /bin/bash
 COMPOSE := docker compose
 GO_IMAGE := golang:1.26-alpine
+HERRAMIENTAS := $(COMPOSE) run --rm herramientas
 
 .DEFAULT_GOAL := help
 
@@ -41,7 +45,7 @@ logs: ## Sigue los logs de api y worker
 
 .PHONY: build
 build: ## Reconstruye las imágenes
-	$(COMPOSE) build
+	$(COMPOSE) --profile tools build
 
 .PHONY: migrate
 migrate: ## Aplica las migraciones pendientes
@@ -67,8 +71,8 @@ openapi: ## Valida el contrato OpenAPI
 		redocly/cli:latest lint openapi.yaml
 
 .PHONY: contrato
-contrato: ## Comprueba que el contrato y la API no se hayan separado
-	@source .env; API="http://localhost:$${API_PORT:-8090}" ./scripts/contrato.sh
+contrato: env ## Comprueba que el contrato y la API no se hayan separado
+	@$(HERRAMIENTAS) ./scripts/contrato.sh
 
 .PHONY: sec
 sec: ## Análisis de seguridad: govulncheck y gosec (lo mismo que el CI)
@@ -77,7 +81,7 @@ sec: ## Análisis de seguridad: govulncheck y gosec (lo mismo que el CI)
 		go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./... && \
 		go install github.com/securego/gosec/v2/cmd/gosec@latest && gosec -exclude-generated -quiet ./... && \
 		echo 'sin hallazgos'"
-	@./scripts/sin-credenciales.sh
+	@$(HERRAMIENTAS) ./scripts/sin-credenciales.sh
 
 .PHONY: test
 test: ## Pruebas unitarias con detector de carreras
@@ -96,17 +100,14 @@ seed: ## Carga datos sintéticos para la demostración (idempotente)
 	$(COMPOSE) run --rm seed
 
 .PHONY: smoke
-smoke: ## Prueba de extremo a extremo: registro, verificación, login y /me
-	@source .env; \
-	API="http://localhost:$${API_PORT:-8090}" \
-	MAILPIT="http://localhost:$${MAILPIT_UI_PORT:-8026}" ./scripts/smoke.sh
+smoke: env ## Prueba de extremo a extremo: registro, verificación, login y /me
+	@$(HERRAMIENTAS) ./scripts/smoke.sh
 
 .PHONY: postman
-postman: ## Colección de Postman, segmentos rápidos (lo que corre el CI)
+postman: env ## Colección de Postman, segmentos rápidos (lo que corre el CI)
 	@source .env; \
-	docker run --rm --network host -v "$(PWD)/postman":/etc/newman \
-		postman/newman:alpine run mooc.postman_collection.json \
-		-e mooc.postman_environment.json \
+	$(HERRAMIENTAS) newman run postman/mooc.postman_collection.json \
+		-e postman/mooc.postman_environment.json --working-dir postman \
 		--env-var base_url=http://localhost:$${API_PORT:-8090} \
 		--env-var mailpit_url=http://localhost:$${MAILPIT_UI_PORT:-8026} \
 		--folder "SEG-1 · Identidad" \
@@ -118,23 +119,22 @@ postman: ## Colección de Postman, segmentos rápidos (lo que corre el CI)
 		--delay-request 300
 
 .PHONY: postman-completo
-postman-completo: obs ## Colección entera, incluidos progreso e insignia (tarda ~8 min)
+postman-completo: obs env ## Colección entera, incluidos progreso e insignia (tarda ~8 min)
 	@echo "Los heartbeats exigen 10 s de separación, a propósito: esto tarda."
 	@source .env; \
-	docker run --rm --network host -v "$(PWD)/postman":/etc/newman \
-		postman/newman:alpine run mooc.postman_collection.json \
-		-e mooc.postman_environment.json \
+	$(HERRAMIENTAS) newman run postman/mooc.postman_collection.json \
+		-e postman/mooc.postman_environment.json --working-dir postman \
 		--env-var base_url=http://localhost:$${API_PORT:-8090} \
 		--env-var mailpit_url=http://localhost:$${MAILPIT_UI_PORT:-8026} \
 		--delay-request 11000
 
 .PHONY: invariantes
-invariantes: ## Comprueba los invariantes de los ADR que no cubre `make demo`
-	@source .env; API="http://localhost:$${API_PORT:-8090}" ./scripts/invariantes.sh
+invariantes: env ## Comprueba los invariantes de los ADR que no cubre `make demo`
+	@$(HERRAMIENTAS) ./scripts/invariantes.sh
 
 .PHONY: arch
-arch: ## Comprueba las reglas de arquitectura de los ADR 0001, 0002 y 0010
-	@./scripts/arquitectura.sh
+arch: env ## Comprueba las reglas de arquitectura de los ADR 0001, 0002 y 0010
+	@$(HERRAMIENTAS) ./scripts/arquitectura.sh
 
 .PHONY: ci
 ci: ## Corre TODO lo que corre el CI, en local. Úsalo antes de empujar.
@@ -168,15 +168,18 @@ obs: ## Levanta Prometheus y Grafana (perfil observability)
 	echo "  Grafana     http://localhost:$${GRAFANA_PORT:-3002}  (panel: MOOC · Operación)"
 
 .PHONY: subir
-subir: ## Sube un archivo de prueba: make subir ARCHIVO=video.mp4
+subir: env ## Sube un archivo de prueba: make subir ARCHIVO=video.mp4
 	@test -n "$(ARCHIVO)" || { echo "uso: make subir ARCHIVO=<ruta>"; exit 1; }
-	@source .env; API="http://localhost:$${API_PORT:-8090}" ./scripts/subir-video.sh "$(ARCHIVO)"
+	@test -f "$(ARCHIVO)" || { echo "no existe el archivo: $(ARCHIVO)"; exit 1; }
+	@# El archivo puede estar en cualquier parte de la máquina; el contenedor
+	@# solo ve /repo, así que se le monta además la carpeta que lo contiene.
+	@$(COMPOSE) run --rm \
+		-v "$$(cd "$$(dirname "$(ARCHIVO)")" && pwd)":/entrada:ro \
+		herramientas ./scripts/subir-video.sh "/entrada/$$(basename "$(ARCHIVO)")"
 
 .PHONY: demo
-demo: ## Recorre el flujo completo de la demostración (guion del video)
-	@source .env; \
-	API="http://localhost:$${API_PORT:-8090}" \
-	MAILPIT="http://localhost:$${MAILPIT_UI_PORT:-8026}" ./scripts/demo.sh
+demo: env ## Recorre el flujo completo de la demostración (guion del video)
+	@$(HERRAMIENTAS) ./scripts/demo.sh
 
 .PHONY: scale
 scale: ## Levanta 3 instancias de api y 3 de worker (CE-01)

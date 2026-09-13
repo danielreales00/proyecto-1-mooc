@@ -12,24 +12,35 @@ worker `email.send`).
 sesión se abre en una instancia y `/me` la resuelve otra, que es la evidencia de
 que la API no guarda estado (CE-01).
 
-## Scripts portables entre sistemas
+## Scripts portables entre sistemas — hecho
 
-Los scripts de `scripts/` corren en el host, no en un contenedor, y por eso
-arrastran las diferencias entre GNU y BSD: `declare -A` y `${var,,}` exigen
-bash 4 y macOS trae 3.2; `stat -c`, `sha256sum` y `split -d` son de GNU.
-Se arreglaron uno a uno, pero la causa sigue ahí y volverá con el próximo
+Los scripts de `scripts/` corrían en el host y arrastraban las diferencias entre
+GNU y BSD: `declare -A` y `${var,,}` exigen bash 4 y macOS trae 3.2; `stat -c`,
+`sha256sum` y `split -d` son de GNU; y `jq()`, que es un `python3 -c` usado 53
+veces, convertía a python3 en dependencia obligatoria de la máquina, que macOS
+12.3+ no trae de fábrica. Se arreglaban uno a uno y volvían con el siguiente
 script.
 
-**Solución duradera:** ejecutarlos dentro de un contenedor con imagen fija,
-como todo lo demás del proyecto (`CLAUDE.md`, «todo corre en Docker»). Así deja
-de importar qué sistema use cada quien.
+Ahora corren dentro de `mooc-herramientas` (`scripts/Dockerfile`): bash,
+coreutils, gawk, python3 y newman fijos, más el cliente de Docker para los
+`docker compose exec` de los scripts. El Makefile la invoca por debajo, así que
+`make demo`, `make smoke` y las demás se escriben y se ven igual que antes —lo
+que importaba, porque el guion del video ya estaba ensayado.
 
-**Por qué no se hizo ya:** es un cambio de fontanería que toca el Makefile y el
-CI, y llega justo antes de la entrega. Después del video.
+**Lo que costó resolver:** los scripts y la colección apuntan a
+`http://localhost:8090`, y dentro de un contenedor eso es el propio contenedor.
+Las dos salidas evidentes no sirven: reescribir `/etc/hosts` no cambia nada
+porque glibc y musl resuelven el nombre `localhost` internamente, sin mirar el
+archivo (comprobado en las dos libc), y `--network host` no existe de verdad en
+macOS ni en Windows, donde el demonio vive en una máquina virtual. La salida es
+`entrada.sh`: socat escucha en `127.0.0.1` en los mismos puertos que publica la
+máquina y los reenvía al servicio dentro de la red de Docker. Reenvía en crudo,
+así que la firma de las URL prefirmadas de MinIO —que incluye el Host— sigue
+siendo válida; sin eso, la carga multimedia fallaría con `SignatureDoesNotMatch`.
 
-Además, `jq()` es un `python3 -c` usado 53 veces: python3 es hoy una dependencia
-obligatoria del host, y macOS 12.3+ no lo trae de fábrica. Meterlo en el
-contenedor resuelve también esto.
+**Efecto lateral que conviene saber:** cada ejecución sale de una IP distinta,
+la del contenedor, en vez de compartir `127.0.0.1`. Dos corridas seguidas de la
+colección ya no se estorban en el limitador de tasa.
 
 ## Dónde estamos
 

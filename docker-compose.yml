@@ -101,6 +101,28 @@ services:
         condition: service_healthy
     restart: "no"
 
+  # Los scripts de scripts/ y la colección de Postman corren aquí dentro, no en
+  # la máquina de quien los lanza: así no importa si es Linux, macOS o Windows
+  # (ADR-0003, «todo corre en contenedores»). El Makefile la invoca por debajo;
+  # `make demo`, `make smoke` y compañía se escriben y se ven igual que siempre.
+  herramientas:
+    build: ./scripts
+    image: mooc-herramientas
+    profiles: ["tools"]
+    env_file: [.env]
+    environment:
+      # Lo mismo que se escribiría en la máquina: entrada.sh hace que aquí
+      # dentro `localhost` lleve a donde debe.
+      API: http://localhost:${API_PORT:-8090}
+      MAILPIT: http://localhost:${MAILPIT_UI_PORT:-8026}
+    volumes:
+      - .:/repo
+      # `docker compose exec postgres psql` y `docker compose ps` desde dentro:
+      # el contenedor habla con el mismo demonio que lo arrancó.
+      - /var/run/docker.sock:/var/run/docker.sock
+    working_dir: /repo
+    restart: "no"
+
   # Bajo perfil: se ejecuta a mano con `make seed`, no al levantar el stack.
   seed:
     build:

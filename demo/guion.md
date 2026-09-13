@@ -77,6 +77,7 @@ make clean && make up && make seed
 - [ ] http://localhost:3002 — Grafana, panel «MOOC · Operación»
 - [ ] http://localhost:9091/alerts — Prometheus, las 4 reglas en verde
 - [ ] Postman con la colección y el entorno **MOOC local** importados
+- [ ] `make build` ya ejecutado: que ninguna orden se ponga a construir en cámara
 - [ ] Terminal con fuente grande (≥ 16 pt) y ventana ancha
 - [ ] Silenciar notificaciones
 

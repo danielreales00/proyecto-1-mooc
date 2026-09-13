@@ -30,6 +30,9 @@ Vienen del enunciado (sección 7) y de la aclaración del profesor:
   framework HTTP ni del proveedor cloud.
 - **Todo corre en Docker / Docker Compose.** No hay toolchain de Go instalada en
   la máquina local: compilar, probar y ejecutar se hace dentro de contenedores.
+  Los scripts de `scripts/` tampoco corren en la máquina: van en la imagen
+  `mooc-herramientas` (`scripts/Dockerfile`), que el Makefile invoca por debajo.
+  Un script nuevo se escribe para esa imagen, no para el bash de quien lo lanza.
 - API y workers **sin estado**, escalables a varias instancias
   (`docker compose up --scale api=3 --scale worker=3`).
 - **PostgreSQL** es la fuente de verdad transaccional. **Redis** soporta
