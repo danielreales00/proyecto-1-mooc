@@ -23,7 +23,7 @@ CLAVE="${CLAVE:-Contrasena-Demo-2026}"
 
 VERDE=$'\033[32m'; ROJO=$'\033[31m'; DIM=$'\033[2m'; NEG=$'\033[1m'; OFF=$'\033[0m'
 jq(){ python3 -c "import json,sys;d=json.load(sys.stdin);print(eval(sys.argv[1],{'d':d}))" "$1"; }
-idem(){ echo "Idempotency-Key: $(cat /proc/sys/kernel/random/uuid)"; }
+idem(){ echo "Idempotency-Key: $(python3 -c 'import uuid; print(uuid.uuid4())')"; }
 paso(){ echo; echo "${NEG}$*${OFF}"; }
 ok(){ echo "  ${VERDE}✓${OFF} $*"; }
 

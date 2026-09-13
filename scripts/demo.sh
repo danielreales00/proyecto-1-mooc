@@ -23,7 +23,7 @@ J="Content-Type: application/json"
 # Las operaciones no repetibles exigen `Idempotency-Key` (ADR-0008). Cada
 # llamada genera la suya; repetir una petición con la misma clave devuelve la
 # respuesta ya calculada en lugar de ejecutarla otra vez.
-idem(){ echo "Idempotency-Key: $(cat /proc/sys/kernel/random/uuid)"; }
+idem(){ echo "Idempotency-Key: $(python3 -c 'import uuid; print(uuid.uuid4())')"; }
 
 # ───────────────────────────────────────────────────────── SEG-1 ────────────
 seg "SEG-1 · Identidad"
@@ -167,8 +167,13 @@ ok "heartbeat inmediato rechazado por cadencia mínima"
 
 nota "acumulando permanencia con heartbeats espaciados…"
 for _ in 1 2; do
-  until [ "$(curl -s -X POST "$API/api/v1/enrollments/$EID/progress" -H "$(idem)" -H "$EA" -H "$J" \
-        -d "{\"resource_stable_id\":\"$TSID\",\"kind\":\"heartbeat\"}" | jq "d['accepted']")" = True ]; do
+  for i in $(seq 1 30); do
+    RESP=$(curl -fsS -X POST "$API/api/v1/enrollments/$EID/progress" -H "$(idem)" -H "$EA" -H "$J" \
+      -d "{\"resource_stable_id\":\"$TSID\",\"kind\":\"heartbeat\"}") \
+      || fallo "falló la petición de heartbeat"
+    ACEPTADO=$(echo "$RESP" | jq "d['accepted']") || fallo "respuesta de heartbeat inesperada: $RESP"
+    [ "$ACEPTADO" = True ] && break
+    [ "$i" = 30 ] && fallo "no se aceptó el heartbeat tras 30 intentos: $RESP"
     sleep 3
   done
 done

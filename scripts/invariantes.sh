@@ -15,14 +15,13 @@ mal(){ echo "  ${ROJO}✗ $*${OFF}" >&2; fallos=$((fallos+1)); }
 ok(){ echo "  ${VERDE}✓${OFF} $*"; }
 bloque(){ echo; echo "${NEG}▐ $*${OFF}"; }
 jq(){ python3 -c "import json,sys;d=json.load(sys.stdin);print(eval(sys.argv[1],{'d':d}))" "$1"; }
-idem(){ echo "Idempotency-Key: $(cat /proc/sys/kernel/random/uuid)"; }
 lg(){ curl -s -X POST "$API/api/v1/auth/login" -H 'Content-Type: application/json' \
         -d "{\"email\":\"$1\",\"password\":\"$CLAVE\"}" | jq "d['token']"; }
 J="Content-Type: application/json"
 # Las operaciones no repetibles exigen `Idempotency-Key` (ADR-0008). Cada
 # llamada genera la suya; repetir una petición con la misma clave devuelve la
 # respuesta ya calculada en lugar de ejecutarla otra vez.
-idem(){ echo "Idempotency-Key: $(cat /proc/sys/kernel/random/uuid)"; }
+idem(){ echo "Idempotency-Key: $(python3 -c 'import uuid; print(uuid.uuid4())')"; }
 
 P=$(lg profesor@mooc.local); E=$(lg estudiante2@mooc.local)
 PA="Authorization: Bearer $P"; EA="Authorization: Bearer $E"
