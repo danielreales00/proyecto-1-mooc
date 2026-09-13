@@ -33,25 +33,40 @@ contenedor resuelve también esto.
 
 ## Dónde estamos
 
-Medido contra el contrato: **61 de 88 operaciones**.
+Estado a 13 de septiembre de 2026. Medido contra el contrato: **60 de 88
+operaciones** responden; las 28 restantes llevan `x-estado: planificado`.
 
 | | Hecho | Falta |
 | --- | --- | --- |
-| Operaciones de la API | 61 | 27 |
-| Módulos de dominio | 7 (`identity` parcial, `audit`, `authoring`, `learning`, `assessment`, `badges`, `admin`) | `media` |
-| Tipos de trabajo asíncrono | 2 (`email.send`, `badge.issue`) + el `reaper` | 8 |
+| Operaciones de la API | 60 | 28 |
+| Módulos de dominio | 8: `identity`, `audit`, `authoring`, `learning`, `assessment`, `badges`, `admin`, `media` | Ninguno entero |
+| Tipos de trabajo asíncrono | 3 (`email.send`, `badge.issue`, `media.probe`) + el `reaper` | 7 |
 | Migraciones | 2 (esquema completo del dominio) | Ninguna bloqueante |
-| Segmentos de la demostración | 6 de 9 verificados por `make demo` | SEG-3 y SEG-4 parciales; falta `media` |
+| Carpetas de la colección con contenido | 9 de 10 | SEG-9, que se demuestra con `make demo` y `make scale` |
 
 **El flujo de trabajo completo funciona de punta a punta**: registro →
-verificación por correo → autoría → publicación → catálogo → inscripción →
-consumo → quiz → progreso → aprobación → insignia verificable. `make demo` lo
-recorre entero y comprueba cada condición.
+verificación por correo → autoría → publicación → carga multimedia verificada →
+catálogo → inscripción → consumo → quiz → progreso → aprobación → insignia
+verificable con imagen pública. `make demo` recorre 33 aserciones y la colección
+entera 140.
 
-Lo que falta es sobre todo **multimedia** (`media`: carga multipart, ClamAV,
-FFmpeg) y **administración** (`admin`).
+Lo que falta de verdad es **el procesamiento de medios**: el escaneo antimalware
+con ClamAV y la transcodificación a HLS. La carga, la reanudación y la
+verificación —checksum recalculado y MIME por *magic bytes*— sí están.
 
-## Qué falta — módulos de dominio
+### Evidencia ejecutable
+
+| Orden | Qué comprueba |
+| --- | --- |
+| `make demo` | 33 aserciones, el recorrido del video de punta a punta |
+| `make postman` | Segmentos rápidos, 112 aserciones; es lo que corre el CI |
+| `make postman-completo` | Las diez carpetas, 140 aserciones; necesita `make obs` |
+| `make invariantes` | Los invariantes de los ADR que `make demo` no cubre |
+| `make arch` | Reglas de los ADR 0001, 0002 y 0010 |
+| `make contrato` | Que el contrato y la API no se hayan separado |
+| `make ci` | Todo lo anterior más formato, lint, gosec y govulncheck |
+
+## Qué falta — módulos de dominio## Qué falta — módulos de dominio
 
 Ninguno de estos existe todavía, salvo lo indicado en `identity`.
 
@@ -196,6 +211,24 @@ versión 2, comprueba que el `stable_id` se conserva y el `id` de fila cambia, y
 que el estudiante conserva su 100 % y su aprobación.
 
 `make arch` y `make invariantes` corren en `make ci` y en el CI.
+
+## MinIO es una dependencia congelada
+
+MinIO terminó en octubre de 2025 la distribución de imágenes precompiladas y
+retiró sus repositorios de Docker Hub: `docker pull minio/mc` falla con
+«repository does not exist». `docker-compose.yml` apunta ahora a `quay.io` con
+etiqueta fija.
+
+**Lo que hay que saber:** quay.io conserva las etiquetas históricas pero **no
+publicará versiones nuevas**. La que usamos es de septiembre de 2025, así que no
+habrá parches de seguridad por esa vía.
+
+**Por qué se asume:** MinIO solo existe en el entorno local. En GCP el
+almacenamiento de objetos es GCS (ADR-0005, `disenos/ruta-a-gcp.md`), así que es
+una dependencia de desarrollo, no de producción.
+
+**Si molesta más adelante:** cambiar a otra imagen compatible con S3 que siga
+mantenida, o compilarla. No es trabajo para las primeras entregas.
 
 ## Decisiones abiertas
 

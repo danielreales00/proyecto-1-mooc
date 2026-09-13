@@ -80,9 +80,19 @@ leer el ADR correspondiente:
 
 ## Estado actual
 
-Entrega 1 en preparación: backend + workers completos y funcionales, sin
-frontend. La demostración se hace con Postman. Ver
-`arquitectura/alcance-entrega-1.md`.
+Entrega 1, a 13 de septiembre de 2026: backend y workers funcionando, sin
+frontend. **60 de 88 operaciones** responden; el resto lleva `x-estado:
+planificado` en el contrato. El flujo completo se recorre de punta a punta con
+`make demo` (33 aserciones) y la colección entera con `make postman-completo`
+(140). Falta el procesamiento de medios: ClamAV y la transcodificación a HLS.
+
+La demostración se hace con Postman. El guion del video está en
+`demo/guion.md`, dimensionado para el **máximo de 20 minutos**, y el reparto
+entre las cuatro personas en `demo/reparto.md`. Ver
+`arquitectura/alcance-entrega-1.md` y `arquitectura/pendientes.md`.
+
+**Antes de empujar, `make ci` y esperar su código de salida.** No basta leer
+«Todo en verde» dentro del log: eso lo imprime `make demo`, que es una parte.
 
 En entregas siguientes: frontend y despliegue en **GCP**. Las decisiones de hoy
 se toman sin amarrarse al proveedor; el mapeo previsto está en

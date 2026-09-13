@@ -617,13 +617,13 @@ acabas de decir.*
 > publicación, inscripción, consumo, evaluación, progreso e insignia, con los
 > workers funcionando y las condiciones de aceptación comprobadas.
 >
-> **Lo que falta**, y lo digo claro: de multimedia, el antimalware y la
-> transcodificación. Sesenta y una de las ochenta y ocho operaciones responden
-> hoy.
+> **Lo que falta**, y lo digo claro: **sesenta de las ochenta y ocho
+> operaciones** responden hoy; las veintiocho restantes están marcadas como
+> planificadas en el propio contrato.
 >
-> De multimedia han visto la carga reanudable y la verificación; falta el
-> escaneo antimalware y la transcodificación a HLS. Las decisiones están
-> tomadas en los ADR cinco, once y quince, y el plan paso a paso está en
+> De multimedia han visto la carga reanudable y la verificación en servidor;
+> falta el escaneo antimalware y la transcodificación a HLS. Las decisiones
+> están tomadas en los ADR cinco, once y quince, y el plan paso a paso está en
 > `arquitectura/media-plan.md`.
 >
 > La decisión fue anchura antes que profundidad: demostrar el flujo completo
