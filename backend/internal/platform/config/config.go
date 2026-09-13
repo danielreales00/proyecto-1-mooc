@@ -131,6 +131,23 @@ func optInt(key string, def int) int {
 	return def
 }
 
+// S3PublicURL es el origen del almacén con esquema, para construir enlaces que
+// se publican. S3PublicEndpoint va sin él porque el cliente de MinIO lo exige
+// como host:puerto.
+func (c Config) S3PublicURL() string {
+	if c.S3PublicEndpoint == "" {
+		return ""
+	}
+	if strings.HasPrefix(c.S3PublicEndpoint, "http://") ||
+		strings.HasPrefix(c.S3PublicEndpoint, "https://") {
+		return c.S3PublicEndpoint
+	}
+	if c.S3UseSSL {
+		return "https://" + c.S3PublicEndpoint
+	}
+	return "http://" + c.S3PublicEndpoint
+}
+
 func optBool(key string, def bool) bool {
 	if v := os.Getenv(key); v != "" {
 		if b, err := strconv.ParseBool(v); err == nil {

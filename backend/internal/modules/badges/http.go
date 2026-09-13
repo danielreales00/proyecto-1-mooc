@@ -31,12 +31,13 @@ func (a *API) Routes(mux *http.ServeMux, auth httpx.Middleware,
 }
 
 // vistaPrivada la ve el dueño de la insignia o un administrador.
-func vistaPrivada(b Badge, base string) map[string]any {
+func vistaPrivada(b Badge, base, imagen string) map[string]any {
 	return map[string]any{
 		"id": b.ID.String(), "enrollment_id": b.EnrollmentID.String(),
 		"course_id": b.CourseID.String(), "course_title": b.CourseTitle,
 		"public_code":      b.PublicCode,
 		"verification_url": base + "/api/v1/verify/" + b.PublicCode,
+		"image_url":        imagen,
 		"issued_at":        b.IssuedAt, "revoked_at": b.RevokedAt,
 		"revocation_reason": b.RevocationReason,
 		"status":            b.Estado(),
@@ -53,7 +54,7 @@ func (a *API) mine(w http.ResponseWriter, r *http.Request) {
 	base := baseURL(r)
 	items := make([]map[string]any, 0, len(bs))
 	for _, b := range bs {
-		items = append(items, vistaPrivada(b, base))
+		items = append(items, vistaPrivada(b, base, a.svc.URLImagen(b)))
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{"items": items})
 }
@@ -72,6 +73,7 @@ func (a *API) verify(w http.ResponseWriter, r *http.Request) {
 		"student_name":   b.StudentName,
 		"course_title":   b.CourseTitle,
 		"course_version": b.VersionNumber,
+		"image_url":      a.svc.URLImagen(b),
 		"issued_at":      b.IssuedAt,
 		"revoked_at":     b.RevokedAt,
 	})
@@ -100,7 +102,7 @@ func (a *API) revoke(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, traducir(err))
 		return
 	}
-	httpx.JSON(w, http.StatusOK, vistaPrivada(b, baseURL(r)))
+	httpx.JSON(w, http.StatusOK, vistaPrivada(b, baseURL(r), a.svc.URLImagen(b)))
 }
 
 func baseURL(r *http.Request) string {

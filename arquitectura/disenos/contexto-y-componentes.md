@@ -101,7 +101,7 @@ graph TB
 | Trabajo | Qué hace | Escribe en |
 | --- | --- | --- |
 | `email.send` | Verificación de correo e invitaciones de profesor | Mailpit, PostgreSQL |
-| `badge.issue` | Emite la insignia al aprobar una inscripción. **La imagen todavía no se genera**: solo se guarda su clave, ya determinista | PostgreSQL |
+| `badge.issue` | Emite la insignia al aprobar y publica su imagen SVG en el bucket de lectura anónima | PostgreSQL, MinIO |
 | `media.probe` | Recalcula el SHA-256 leyendo del bucket y detecta el MIME real | PostgreSQL, MinIO |
 | `jobs.reaper` | Cada 30 s republica los trabajos huérfanos | PostgreSQL |
 
@@ -115,7 +115,6 @@ el diagrama no prometa de más:
 | `worker-media` con FFmpeg y transcodificación a HLS | `../adr/0011-pipeline-de-medios-con-ffmpeg-y-clamav.md` |
 | ClamAV y el trabajo `media.scan` | `../adr/0011-…`, `../media-plan.md` |
 | Trazas distribuidas (Jaeger / OpenTelemetry) | `../pendientes.md` |
-| La imagen PNG de la insignia (el bucket `badges` existe pero está vacío) | `../adr/0008-…`, `../pendientes.md` |
 
 El esquema con todo eso, que es el del enunciado, está en
 `../recursos/diagrama-enunciado.png`.

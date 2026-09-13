@@ -4,6 +4,7 @@
 package objectstore
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -191,6 +192,18 @@ func (s *Store) Info(ctx context.Context, bucket, key string) (int64, error) {
 		return 0, fmt.Errorf("consultar %s/%s: %w", bucket, key, err)
 	}
 	return i.Size, nil
+}
+
+// Subir escribe un objeto pequeño de una sola vez. Para los archivos que sube
+// un usuario se usa multipart; esto es para lo que genera el servidor.
+func (s *Store) Subir(ctx context.Context, bucket, key, contentType string, datos []byte) error {
+	_, err := s.client.PutObject(ctx, bucket, key,
+		bytes.NewReader(datos), int64(len(datos)),
+		minio.PutObjectOptions{ContentType: contentType})
+	if err != nil {
+		return fmt.Errorf("subir %s/%s: %w", bucket, key, err)
+	}
+	return nil
 }
 
 // Mover copia el objeto a otro bucket y borra el original. Se usa para llevar

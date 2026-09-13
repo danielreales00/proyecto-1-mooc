@@ -436,8 +436,7 @@ docker compose exec postgres psql -U mooc -d mooc -c \
 
    > «La emite un worker, no la petición. Por eso puede tardar un momento.»
 
-2. **«Verificación PÚBLICA (sin sesión)»**, y después pega esa misma URL en el
-   **navegador** para que se vea que funciona sin credenciales.
+2. **«Verificación PÚBLICA (sin sesión)»**.
 
    *No te saltes «Mis insignias»:* es la única petición que fija `badge_code`,
    así que sin ella esta otra no tiene qué verificar.
@@ -445,6 +444,15 @@ docker compose exec postgres psql -U mooc -d mooc -c \
    > «Pública, sin autenticación. Nombre, curso, versión, fecha y estado.
    > **No aparece el correo del estudiante** por ningún lado, y el código es
    > aleatorio: no deriva de su identidad.»
+
+3. **«La imagen, descargada SIN credenciales»**, y después **abre esa misma
+   `image_url` en el navegador**. Es el momento más visual del video: aparece la
+   insignia dibujada, con el nombre, el curso y el código.
+
+   > «La imagen la generó el worker y vive en el almacén de objetos, no en la
+   > base: el enunciado lo pide así en la sección siete. Y la URL **no está
+   > firmada** a propósito, porque una insignia que caduca a los quince minutos
+   > no sirve para acreditar nada. El bucket tiene lectura anónima y solo ese.»
 
 **Acredita:** CA-07.
 
@@ -478,12 +486,20 @@ docker compose exec postgres psql -U mooc -d mooc -c \
   "SELECT job_key, status, attempt FROM platform.job_runs
     WHERE job_key LIKE 'badge.issue:%' ORDER BY id DESC LIMIT 1;"
 docker compose exec postgres psql -U mooc -d mooc -c \
-  "SELECT count(*) FROM badges.badges;"
+  "SELECT count(*) FROM badges.badges
+    WHERE enrollment_id = (SELECT split_part(job_key,':',2)::uuid
+                           FROM platform.job_runs
+                           WHERE job_key LIKE 'badge.issue:%' ORDER BY id DESC LIMIT 1);"
 ```
 
 > «**Intento 2**: el worker lo ejecutó de verdad, por segunda vez. Y sigue
-> habiendo **una sola insignia**. Esa es la idempotencia: no es que no se haya
-> ejecutado, es que ejecutarlo dos veces no produce dos salidas.»
+> habiendo **una sola insignia** para esa inscripción. Esa es la idempotencia:
+> no es que no se haya ejecutado, es que ejecutarlo dos veces no produce dos
+> salidas.»
+
+*La consulta se acota a la inscripción a propósito. Contar toda la tabla
+devolvería el número de ensayos que llevas, y en pantalla contradiría lo que
+acabas de decir.*
 
 **Acredita:** CA-03, tolerancia a fallos.
 

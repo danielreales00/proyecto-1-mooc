@@ -116,7 +116,8 @@ func run() error {
 	authoringSvc := authoring.NewService(postgres.NewAuthoringStore(pool), recorder, log)
 	learningSvc := learning.NewService(postgres.NewLearningStore(pool), recorder,
 		learningBridge{publisher}, learning.UmbralesPorDefecto(), log)
-	badgeSvc := badges.NewService(postgres.NewBadgeStore(pool), log)
+	badgeSvc := badges.NewService(postgres.NewBadgeStore(pool), store,
+		cfg.S3Buckets.Badges, cfg.S3PublicURL(), log)
 	assessmentSvc := assessment.NewService(postgres.NewAssessmentStore(pool), learningSvc, log)
 	adminSvc := admin.NewService(postgres.NewAdminStore(pool), sessionStore,
 		learningBridge{publisher}, recorder, log)

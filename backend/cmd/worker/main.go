@@ -68,13 +68,14 @@ func run() error {
 	emails := identity.NewEmailWorker(
 		mailer.New(cfg.SMTPAddr, cfg.MailFrom), cfg.PublicBaseURL, log)
 
-	badgeSvc := badges.NewService(postgres.NewBadgeStore(pool), log)
-
 	almacen, err := objectstore.Open(cfg.S3Endpoint, cfg.S3PublicEndpoint, cfg.S3AccessKey, cfg.S3SecretKey,
 		cfg.S3UseSSL, cfg.S3Buckets.Originals)
 	if err != nil {
 		return err
 	}
+	badgeSvc := badges.NewService(postgres.NewBadgeStore(pool), almacen,
+		cfg.S3Buckets.Badges, cfg.S3PublicURL(), log)
+
 	mediaSvc := media.NewService(postgres.NewMediaStore(pool), almacenBridge{almacen},
 		publicadorBridge{publisher}, audit.NewRecorder(log),
 		media.Buckets{Originales: cfg.S3Buckets.Originals, Cuarentena: cfg.S3Buckets.Quarantine},
