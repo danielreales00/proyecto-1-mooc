@@ -23,7 +23,10 @@ J="Content-Type: application/json"
 # Las operaciones no repetibles exigen `Idempotency-Key` (ADR-0008). Cada
 # llamada genera la suya; repetir una petición con la misma clave devuelve la
 # respuesta ya calculada en lugar de ejecutarla otra vez.
-idem(){ echo "Idempotency-Key: $(python3 -c 'import uuid; print(uuid.uuid4())')"; }
+# Solo hace falta que sea única y de 8 a 255 caracteres (ADR-0008). Se genera
+# con $RANDOM en vez de /proc ni python3: lo primero no existe en macOS y lo
+# segundo cuesta un proceso por petición.
+idem(){ echo "Idempotency-Key: idem-$(date +%s)-$RANDOM$RANDOM$RANDOM"; }
 
 # ───────────────────────────────────────────────────────── SEG-1 ────────────
 seg "SEG-1 · Identidad"

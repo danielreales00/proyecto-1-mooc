@@ -23,14 +23,17 @@ CLAVE="${CLAVE:-Contrasena-Demo-2026}"
 
 VERDE=$'\033[32m'; ROJO=$'\033[31m'; DIM=$'\033[2m'; NEG=$'\033[1m'; OFF=$'\033[0m'
 jq(){ python3 -c "import json,sys;d=json.load(sys.stdin);print(eval(sys.argv[1],{'d':d}))" "$1"; }
-idem(){ echo "Idempotency-Key: $(python3 -c 'import uuid; print(uuid.uuid4())')"; }
+# Solo hace falta que sea única y de 8 a 255 caracteres (ADR-0008). Se genera
+# con $RANDOM en vez de /proc ni python3: lo primero no existe en macOS y lo
+# segundo cuesta un proceso por petición.
+idem(){ echo "Idempotency-Key: idem-$(date +%s)-$RANDOM$RANDOM$RANDOM"; }
 paso(){ echo; echo "${NEG}$*${OFF}"; }
 ok(){ echo "  ${VERDE}✓${OFF} $*"; }
 
 # Tipo por extensión, si no se indicó.
 TIPO="${2:-}"
 if [ -z "$TIPO" ]; then
-  case "${ARCHIVO,,}" in
+  case "$(printf %s "$ARCHIVO" | tr "[:upper:]" "[:lower:]")" in
     *.mp4|*.mov|*.mkv|*.webm) TIPO=video ;;
     *.mp3|*.m4a|*.wav|*.ogg)  TIPO=audio ;;
     *.jpg|*.jpeg|*.png|*.gif|*.webp) TIPO=image ;;
@@ -40,8 +43,14 @@ if [ -z "$TIPO" ]; then
   esac
 fi
 
-TAM=$(stat -c%s "$ARCHIVO")
-SHA=$(sha256sum "$ARCHIVO" | cut -d' ' -f1)
+# `stat` y `sha256sum` no existen igual en macOS: wc -c es POSIX, y el hash se
+# resuelve con la herramienta que haya.
+TAM=$(wc -c < "$ARCHIVO" | tr -d ' ')
+if command -v sha256sum >/dev/null 2>&1; then
+  SHA=$(sha256sum "$ARCHIVO" | cut -d' ' -f1)
+else
+  SHA=$(shasum -a 256 "$ARCHIVO" | cut -d' ' -f1)
+fi
 NOMBRE=$(basename "$ARCHIVO")
 
 paso "1 · Iniciando sesión como $CORREO"
@@ -63,7 +72,9 @@ ok "URLs prefirmadas recibidas; los bytes NO pasan por la API"
 
 paso "3 · Subiendo las partes directamente al almacén"
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
-split -b "$TAM_PARTE" -d -a 3 "$ARCHIVO" "$TMP/p-"
+# Sin -d: esa bandera es de GNU. Con sufijos alfabéticos el orden del glob de
+# abajo sigue siendo el correcto, y funciona en los dos sistemas.
+split -b "$TAM_PARTE" -a 3 "$ARCHIVO" "$TMP/p-"
 ETAGS="[]"
 i=0
 for f in "$TMP"/p-*; do
