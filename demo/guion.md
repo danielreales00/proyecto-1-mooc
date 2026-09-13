@@ -521,10 +521,17 @@ docker compose exec postgres psql -U mooc -d mooc -c \
    > condición del enunciado: tras tres reintentos fallidos, el trabajo llega a
    > la DLQ y **emite una alerta**.»
 
-   **Detalle que vale la pena contar:** los contadores se declaran en cero al
-   arrancar el worker. Sin eso, `increase()` no ve el salto de una serie que no
-   existía a su primer valor, y la alerta se quedaría muda justo el día que
-   hace falta.
+   **Y el detalle que hace que esto funcione**, que además se puede enseñar en
+   lugar de solo contarlo. **Postman → carpeta `SEG-4 · Procesamiento y
+   fallos`**, petición **«3 · Los contadores nacen en cero — /metrics»**:
+
+   > «Fíjense en que `jobs_dead_letter_total` ya existía, en cero, **antes de
+   > que fallara nada**. Los contadores se declaran al arrancar el worker. Sin
+   > eso, `increase()` no ve el salto de una serie que no existía a su primer
+   > valor, y la alerta se quedaría muda justo el día que hace falta.»
+
+   Y **«4 · Las cuatro reglas de alerta»** para enseñar que las reglas están
+   versionadas con el código, no configuradas a mano en una interfaz.
 
 4. **Recuperarlo por la API de administración.** Vuelve a Postman, carpeta
    `SEG-1b · Administración`, y ejecuta dos peticiones seguidas:
@@ -547,7 +554,14 @@ docker compose exec postgres psql -U mooc -d mooc -c \
 
 ### 9 · Operación — 1 min · *SEG-9, CE-07*
 
-1. **Terminal.** Auditoría inmutable:
+1. **Postman → carpeta `SEG-4`**, peticiones **«1 · Vivo — /healthz»** y
+   **«2 · Listo — /readyz»**.
+
+   > «Dos sondas distintas a propósito: la primera dice que el proceso está en
+   > pie, la segunda que PostgreSQL, Redis y el almacén responden. Es la
+   > diferencia entre reiniciar un contenedor y no mandarle tráfico todavía.»
+
+2. **Terminal.** Auditoría inmutable:
 
    ```bash
    docker compose exec postgres psql -U mooc -d mooc -c \
@@ -562,7 +576,7 @@ docker compose exec postgres psql -U mooc -d mooc -c \
    > «Cada evento trae quién, desde qué IP y con qué `trace_id`, así que una
    > acción de la interfaz se puede seguir hasta su registro.»
 
-2. **El recorrido entero, automático:**
+3. **El recorrido entero, automático:**
 
    ```bash
    make demo
@@ -571,7 +585,7 @@ docker compose exec postgres psql -U mooc -d mooc -c \
    > «Treinta y tres aserciones, todas contra el sistema en ejecución. Este
    > guion es reproducible: cualquiera puede clonar el repositorio y correrlo.»
 
-3. **Navegador → GitHub**, pestaña Actions: el run en verde.
+4. **Navegador → GitHub**, pestaña Actions: el run en verde.
 
    > «Build, lint, análisis de seguridad con gosec y govulncheck, migraciones,
    > pruebas y un trabajo de extremo a extremo que levanta Compose y corre esto

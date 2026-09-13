@@ -2393,8 +2393,276 @@
     },
     {
       "name": "SEG-4 · Procesamiento y fallos",
-      "description": "Estados del recurso, HLS sin upscaling, doble entrega idempotente, backoff, DLQ, alerta y reencolado con la misma clave.\n\nCriterio: arquitectura, multimedia y calidad operativa. Requisito: CA-03.\n\nPendiente: workers de medios y observabilidad. El mecanismo de idempotencia y DLQ ya existe en platform.job_runs.",
-      "item": []
+      "description": "Procesamiento asíncrono, fallos y observabilidad (SEG-4 de la §10.2, CA-03 y CE-07).\n\nNinguna petición necesita sesión: son los endpoints operativos y la API de Prometheus. La carpeta se puede ejecutar en cualquier momento y sin preparar nada.\n\nEl reencolado de un trabajo muerto se hace desde `SEG-1b · Administración`, que es donde vive la API de administración.",
+      "item": [
+        {
+          "name": "1 · Vivo — /healthz",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/healthz",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "healthz"
+              ]
+            },
+            "description": "Sonda de vida. No comprueba dependencias: para eso está /readyz."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200: el proceso responde', () => pm.response.to.have.status(200));",
+                  "console.log('Liveness: solo dice que el proceso está en pie.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2 · Listo — /readyz",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/readyz",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "readyz"
+              ]
+            },
+            "description": "Sonda de disponibilidad: PostgreSQL, Redis y el almacén de objetos."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('las tres dependencias responden', () => {",
+                  "  pm.expect(d.postgres).to.eql('ok');",
+                  "  pm.expect(d.redis).to.eql('ok');",
+                  "  pm.expect(d.objectstore).to.eql('ok');",
+                  "});",
+                  "console.log('Readiness: comprueba PostgreSQL, Redis y el almacén.',",
+                  "  'Es lo que mira el orquestador antes de mandarle tráfico.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3 · Los contadores nacen en cero — /metrics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/metrics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "metrics"
+              ]
+            },
+            "description": "Las métricas que raspa Prometheus. Lo que se comprueba aquí no es que haya datos, sino que los contadores estén **declarados en cero** desde el arranque: sin eso `increase()` no ve el primer incidente."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const t = pm.response.text();",
+                  "",
+                  "pm.test('la API expone sus métricas en formato Prometheus', () => {",
+                  "  pm.expect(t).to.include('# TYPE http_requests_total counter');",
+                  "});",
+                  "",
+                  "// El detalle que hace que la alerta funcione: si una serie no existe",
+                  "// hasta su primer incidente, `increase()` no ve el salto de «nada» a 1",
+                  "// y la alerta se queda muda justo el día que hace falta.",
+                  "pm.test('jobs_dead_letter_total existe ANTES de que falle nada', () => {",
+                  "  pm.expect(t, 'el contador no está declarado al arrancar').to.match(",
+                  "    /^jobs_dead_letter_total\\{/m);",
+                  "});",
+                  "const ceros = (t.match(/^jobs_dead_letter_total\\{[^}]*\\} 0$/gm) || []);",
+                  "console.log('series de la DLQ declaradas:', ceros.length ? ceros.join(' · ') : 'ninguna en cero');",
+                  "console.log('Se declaran al arrancar el worker. Sin eso increase() no',",
+                  "  'detecta el salto de una serie que no existía a su primer valor.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4 · Las cuatro reglas de alerta",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              }
+            ],
+            "url": {
+              "raw": "{{prometheus_url}}/api/v1/rules",
+              "host": [
+                "{{prometheus_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rules"
+              ]
+            },
+            "description": "Las reglas de alerta cargadas en Prometheus, con su estado actual."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const reglas = [];",
+                  "pm.response.json().data.groups.forEach(g => g.rules.forEach(r => reglas.push(r)));",
+                  "const nombres = reglas.map(r => r.name);",
+                  "pm.test('están las cuatro reglas del enunciado', () => {",
+                  "  ['LatenciaAlta','TasaDeErroresAlta','TrabajoEnDeadLetterQueue',",
+                  "   'ColaAcumulandoTrabajos'].forEach(n => pm.expect(nombres).to.include(n));",
+                  "});",
+                  "reglas.forEach(r => console.log(r.name, '→', r.state || '-'));",
+                  "console.log('Las reglas viven en observability/prometheus/alertas.yml,',",
+                  "  'versionadas con el código.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5 · La serie de la cola de muertos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              }
+            ],
+            "url": {
+              "raw": "{{prometheus_url}}/api/v1/query?query=increase(jobs_dead_letter_total[5m])",
+              "host": [
+                "{{prometheus_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "query"
+              ],
+              "query": [
+                {
+                  "key": "query",
+                  "value": "increase(jobs_dead_letter_total[5m])"
+                }
+              ]
+            },
+            "description": "La consulta exacta del panel «Dead-letter queue» del tablero de Grafana."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('la consulta del panel devuelve series', () => {",
+                  "  pm.expect(d.status).to.eql('success');",
+                  "  pm.expect(d.data.result.length, 'no hay series: ¿arrancó el worker?').to.be.at.least(1);",
+                  "});",
+                  "const viva = d.data.result.filter(r => Number(r.value[1]) > 0);",
+                  "console.log('series:', d.data.result.length, '· con incidentes:', viva.length);",
+                  "viva.forEach(r => console.log('  ', JSON.stringify(r.metric), '=', r.value[1]));",
+                  "console.log('Es la misma consulta que dibuja el panel de Grafana.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6 · ¿Hay alguna alerta disparada?",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              }
+            ],
+            "url": {
+              "raw": "{{prometheus_url}}/api/v1/alerts",
+              "host": [
+                "{{prometheus_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "alerts"
+              ]
+            },
+            "description": "Tolerante a propósito: sin incidentes no hay alertas y eso no es un fallo. Después del bloque 8b del guion, aquí aparece la de la DLQ."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const a = pm.response.json().data.alerts || [];",
+                  "const dlq = a.filter(x => x.labels.alertname === 'TrabajoEnDeadLetterQueue');",
+                  "if (dlq.length) {",
+                  "  pm.test('TrabajoEnDeadLetterQueue está disparada', () => {",
+                  "    pm.expect(dlq[0].state).to.be.oneOf(['pending','firing']);",
+                  "  });",
+                  "  console.log('estado:', dlq[0].state, '·', JSON.stringify(dlq[0].labels));",
+                  "} else {",
+                  "  console.log('Ninguna alerta activa, que es lo normal si no ha fallado',",
+                  "    'nada. El bloque 8b del guion fuerza un trabajo a la DLQ para verla.');",
+                  "}",
+                  "console.log('alertas activas ahora mismo:', a.length);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "name": "SEG-5 · Catálogo, inscripción y consumo",
@@ -3380,6 +3648,10 @@
     {
       "key": "trabajo_reencolar",
       "value": ""
+    },
+    {
+      "key": "prometheus_url",
+      "value": "http://localhost:9091"
     }
   ]
 }

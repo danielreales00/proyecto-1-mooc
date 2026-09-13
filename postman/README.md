@@ -67,7 +67,7 @@ Una carpeta por segmento, en el orden en que se graba el video:
 | SEG-1b · Administración | **Completa** — usuarios, auditoría y trabajos |
 | SEG-2 · Autoría y publicación | **Completa** |
 | SEG-3 · Carga multimedia | **Completa** — un paso manual: elegir el archivo en «2 · Subir la parte 1» |
-| SEG-4 · Procesamiento y fallos | Se demuestra con `make demo` |
+| SEG-4 · Procesamiento y fallos | **Completa** — sondas, métricas y alertas. **Necesita `make obs`**; por eso no entra en el CI |
 | SEG-5 · Catálogo, inscripción y consumo | **Completa** |
 | SEG-6 · Quiz | **Completa** |
 | SEG-7 · Progreso y aprobación | **Completa** — necesita 10 s entre heartbeats |

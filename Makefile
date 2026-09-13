@@ -118,7 +118,7 @@ postman: ## Colección de Postman, segmentos rápidos (lo que corre el CI)
 		--delay-request 300
 
 .PHONY: postman-completo
-postman-completo: ## Colección entera, incluidos progreso e insignia (tarda ~8 min)
+postman-completo: obs ## Colección entera, incluidos progreso e insignia (tarda ~8 min)
 	@echo "Los heartbeats exigen 10 s de separación, a propósito: esto tarda."
 	@source .env; \
 	docker run --rm --network host -v "$(PWD)/postman":/etc/newman \

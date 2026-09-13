@@ -80,7 +80,8 @@ Cada quien debería poder responder esto sobre lo suyo sin mirar el guion:
 | 3 | «¿Quién impide editar una versión publicada?» | `adr/0007` — un trigger de PostgreSQL, no código Go |
 | 5 | «¿Cómo garantizan que la clave del quiz no se filtra?» | `adr/0013` — dos tipos distintos en Go, no un `omitempty` |
 | 8 | «¿Qué pasa si el worker ejecuta el mismo trabajo dos veces?» | `adr/0008` — claim atómico: se ejecuta, pero no produce dos salidas |
-| 8b | «¿Por qué la alerta no se queda muda la primera vez?» | Los contadores se declaran en cero al arrancar el worker; sin eso `increase()` no ve el salto de una serie que no existía a su primer valor |
+| 8b | «¿Por qué la alerta no se queda muda la primera vez?» | Los contadores se declaran en cero al arrancar el worker; sin eso `increase()` no ve el salto de una serie que no existía a su primer valor. Se enseña con `SEG-4 › «3 · Los contadores nacen en cero»` |
+| 9 | «¿Para qué dos sondas de salud y no una?» | `/healthz` dice que el proceso vive; `/readyz` que PostgreSQL, Redis y el almacén responden. Una reinicia el contenedor, la otra le corta el tráfico |
 | 9 | «¿Qué cubre `make demo`?» | 33 aserciones contra el sistema en ejecución, el mismo recorrido del video |
 
 Conviene que todos lean, además de su bloque, el apartado
