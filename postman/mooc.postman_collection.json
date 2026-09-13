@@ -2957,7 +2957,7 @@
                 "progress"
               ]
             },
-            "description": "Inundar de heartbeats no simula permanencia: el reloj lo pone el servidor.",
+            "description": "Inundar de heartbeats no simula permanencia: el reloj lo pone el servidor.\n\nEl script previo manda un heartbeat por su cuenta justo antes, para que esta petición llegue con un hueco de milisegundos **sea cual sea el retardo del runner**. Sin eso, `--delay-request 11000` hace que deje de ser inmediata y el servidor la acepta.",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"resource_stable_id\": \"{{text_stable_id}}\",\n  \"kind\": \"heartbeat\"\n}"
@@ -2970,6 +2970,30 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "// Esta petición demuestra el rechazo por cadencia, así que necesita que",
+                  "// acabe de llegar otra evidencia. Con un retardo grande entre peticiones",
+                  "// eso no se cumple, así que la mandamos aquí y el hueco pasa a ser de",
+                  "// milisegundos. El resultado da igual: si se acepta, reinicia el reloj del",
+                  "// servidor; si se rechaza, el reloj sigue donde estaba. En los dos casos la",
+                  "// petición de abajo cae dentro de la ventana de diez segundos.",
+                  "pm.sendRequest({",
+                  "  url: pm.variables.replaceIn('{{base_url}}/api/v1/enrollments/{{enrollment_id}}/progress'),",
+                  "  method: 'POST',",
+                  "  header: {",
+                  "    'Content-Type': 'application/json',",
+                  "    'Authorization': pm.variables.replaceIn('Bearer {{session_token}}'),",
+                  "    'Idempotency-Key': 'pm-previo-' + Date.now() + '-' + Math.random().toString(36).slice(2)",
+                  "  },",
+                  "  body: { mode: 'raw', raw: JSON.stringify({",
+                  "    resource_stable_id: pm.collectionVariables.get('text_stable_id'),",
+                  "    kind: 'heartbeat'",
+                  "  })}",
+                  "}, (err, res) => {",
+                  "  if (err) { console.warn('el heartbeat previo falló:', err); return; }",
+                  "  const d = res.json();",
+                  "  console.log('heartbeat previo →', d.accepted ? 'aceptado' : 'rechazado (' + d.reject_reason + ')');",
+                  "});",
+                  "",
                   "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
                 ]
               }
@@ -2981,7 +3005,11 @@
                 "exec": [
                   "pm.test('202', () => pm.response.to.have.status(202));",
                   "const d = pm.response.json();",
-                  "pm.test('rechazada por cadencia', () => pm.expect(d.reject_reason).to.eql('cadence'));"
+                  "pm.test('rechazada por cadencia', () => {",
+                  "  pm.expect(d.accepted, 'debería rechazarse: llega a milisegundos de la anterior').to.be.false;",
+                  "  pm.expect(d.reject_reason).to.eql('cadence');",
+                  "});",
+                  "console.log('El servidor exige diez segundos entre heartbeats, con SU reloj.');"
                 ]
               }
             }
