@@ -12,6 +12,25 @@ worker `email.send`).
 sesión se abre en una instancia y `/me` la resuelve otra, que es la evidencia de
 que la API no guarda estado (CE-01).
 
+## Scripts portables entre sistemas
+
+Los scripts de `scripts/` corren en el host, no en un contenedor, y por eso
+arrastran las diferencias entre GNU y BSD: `declare -A` y `${var,,}` exigen
+bash 4 y macOS trae 3.2; `stat -c`, `sha256sum` y `split -d` son de GNU.
+Se arreglaron uno a uno, pero la causa sigue ahí y volverá con el próximo
+script.
+
+**Solución duradera:** ejecutarlos dentro de un contenedor con imagen fija,
+como todo lo demás del proyecto (`CLAUDE.md`, «todo corre en Docker»). Así deja
+de importar qué sistema use cada quien.
+
+**Por qué no se hizo ya:** es un cambio de fontanería que toca el Makefile y el
+CI, y llega justo antes de la entrega. Después del video.
+
+Además, `jq()` es un `python3 -c` usado 53 veces: python3 es hoy una dependencia
+obligatoria del host, y macOS 12.3+ no lo trae de fábrica. Meterlo en el
+contenedor resuelve también esto.
+
 ## Dónde estamos
 
 Medido contra el contrato: **61 de 88 operaciones**.
