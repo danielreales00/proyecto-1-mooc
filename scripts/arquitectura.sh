@@ -34,16 +34,16 @@ echo "── ADR-0001 · ningún módulo ESCRIBE en el esquema de otro ──"
 # capa de adaptadores —un JOIN es más simple y más rápido que reunir en memoria
 # lo que la base sabe reunir—, pero las escrituras no: escribir en la tabla de
 # otro módulo se salta sus reglas de negocio.
-declare -A duenio=(
-  [identity]=identity [authoring]=authoring [media]=media
-  [assessment]=assessment [progress]=learning [badges]=badges [audit]=audit
-)
+# Pares «esquema:módulo propietario». Lista plana en vez de array asociativo:
+# macOS trae bash 3.2, que no tiene `declare -A`.
+duenios='identity:identity authoring:authoring media:media
+assessment:assessment progress:learning badges:badges audit:audit'
 # Excepción documentada en el ADR-0001: admin e identity son el mismo contexto
 # con dos caras, la del usuario y la administrativa, y comparten el agregado.
 excepciones='postgres/admin.go:.*identity\.'
 
-for esquema in "${!duenio[@]}"; do
-    propietario="${duenio[$esquema]}"
+for par in $duenios; do
+    esquema="${par%%:*}"; propietario="${par##*:}"
     escrituras=$(grep -rnE "(INSERT INTO|UPDATE|DELETE FROM)[[:space:]]+${esquema}\.[a-z_]+" \
         internal/adapters/ internal/modules/ 2>/dev/null \
         | grep -v '_test.go' | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//' \
@@ -59,8 +59,8 @@ done
 # Las lecturas cruzadas se cuentan, no se prohíben: son el precio de extraer un
 # módulo algún día, y conviene tenerlo a la vista.
 lecturas=0
-for esquema in "${!duenio[@]}"; do
-    propietario="${duenio[$esquema]}"
+for par in $duenios; do
+    esquema="${par%%:*}"; propietario="${par##*:}"
     n=$(grep -rncE "(FROM|JOIN)[[:space:]]+${esquema}\.[a-z_]+" internal/adapters/ 2>/dev/null \
         | grep -v "/${propietario}\.go:" | awk -F: '{s+=$2} END {print s+0}')
     lecturas=$((lecturas+n))
