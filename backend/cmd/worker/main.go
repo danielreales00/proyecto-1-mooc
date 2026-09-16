@@ -16,6 +16,7 @@ import (
 
 	"github.com/hibiken/asynq"
 
+	"mooc/backend/internal/adapters/ffmpeg"
 	"mooc/backend/internal/adapters/mailer"
 	"mooc/backend/internal/adapters/objectstore"
 	"mooc/backend/internal/adapters/postgres"
@@ -78,17 +79,22 @@ func run() error {
 
 	mediaSvc := media.NewService(postgres.NewMediaStore(pool), almacenBridge{almacen},
 		publicadorBridge{publisher}, audit.NewRecorder(log),
-		media.Buckets{Originales: cfg.S3Buckets.Originals, Cuarentena: cfg.S3Buckets.Quarantine},
-		cfg.S3PublicEndpoint, log)
+		media.Buckets{Originales: cfg.S3Buckets.Originals, Derivados: cfg.S3Buckets.Derived,
+			Cuarentena: cfg.S3Buckets.Quarantine},
+		cfg.S3PublicEndpoint, log).ConTranscodificador(ffmpeg.New())
 
 	// Los contadores deben existir en cero antes del primer suceso, o
 	// increase() no verá el salto y la alerta de DLQ nunca disparará.
-	metrics.Inicializar(jobs.TypeEmailSend, jobs.TypeBadgeIssue, jobs.TypeMediaProbe)
+	metrics.Inicializar(jobs.TypeEmailSend, jobs.TypeBadgeIssue, jobs.TypeMediaProbe,
+		jobs.TypeMediaTranscode)
 
 	mux := asynq.NewServeMux()
 	mux.HandleFunc(jobs.TypeEmailSend, runner.Wrap(jobs.TypeEmailSend, emails.Handle))
 	mux.HandleFunc(jobs.TypeBadgeIssue, runner.Wrap(jobs.TypeBadgeIssue, badgeSvc.Handle))
 	mux.HandleFunc(jobs.TypeMediaProbe, runner.Wrap(jobs.TypeMediaProbe, mediaSvc.Verificar))
+	// Solo lo atiende de verdad el worker de medios: la transcodificación viaja
+	// por la cola `bulk` y el worker normal no la consume (ver docker-compose).
+	mux.HandleFunc(jobs.TypeMediaTranscode, runner.Wrap(jobs.TypeMediaTranscode, mediaSvc.Transcodificar))
 
 	srv := asynq.NewServer(
 		asynq.RedisClientOpt{Addr: cfg.RedisAddr, Password: cfg.RedisPassword, DB: cfg.RedisQueueDB},
@@ -150,6 +156,10 @@ func startHealth(log *slog.Logger) *http.Server {
 // almacenBridge y publicadorBridge adaptan los adaptadores a los puertos que
 // declara media. Viven aquí porque la composición es quien conoce ambos lados.
 type almacenBridge struct{ s *objectstore.Store }
+
+func (b almacenBridge) Subir(ctx context.Context, bucket, key, ct string, datos []byte) error {
+	return b.s.Subir(ctx, bucket, key, ct, datos)
+}
 
 func (b almacenBridge) CrearMultipart(ctx context.Context, bucket, key, ct string) (string, error) {
 	return b.s.CrearMultipart(ctx, bucket, key, ct)

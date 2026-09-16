@@ -38,6 +38,21 @@ COPY --from=builder /out/worker /usr/local/bin/worker
 EXPOSE 8081
 ENTRYPOINT ["worker"]
 
+# --- worker-media -----------------------------------------------------------
+# El mismo binario que `worker`, en una imagen que además trae FFmpeg.
+#
+# Va aparte porque FFmpeg pesa más que todo lo demás junto, y el worker normal
+# no lo necesita: la transcodificación viaja por la cola `bulk`, que solo
+# consume este servicio (ADR-0011). Así el worker de correo e insignias sigue
+# arrancando en segundos.
+FROM base AS worker-media
+USER root
+RUN apk add --no-cache ffmpeg
+USER app
+COPY --from=builder /out/worker /usr/local/bin/worker
+EXPOSE 8081
+ENTRYPOINT ["worker"]
+
 # --- migrate ----------------------------------------------------------------
 FROM base AS migrate
 COPY --from=builder /out/migrate /usr/local/bin/migrate

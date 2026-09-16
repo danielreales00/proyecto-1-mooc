@@ -44,14 +44,18 @@ colección ya no se estorban en el limitador de tasa.
 
 ## Dónde estamos
 
-Estado a 13 de septiembre de 2026. Medido contra el contrato: **60 de 88
-operaciones** responden; las 28 restantes llevan `x-estado: planificado`.
+Estado a 15 de septiembre de 2026. Medido contra el contrato: **63 de 89
+operaciones** responden; las 26 restantes llevan `x-estado: planificado`.
+
+Después de grabar el video de la Entrega 1 entró la transcodificación a HLS.
+El video no la muestra, y `demo/guion.md` tampoco: ese documento describe lo
+que se grabó y no se actualiza hacia atrás.
 
 | | Hecho | Falta |
 | --- | --- | --- |
 | Operaciones de la API | 60 | 28 |
 | Módulos de dominio | 8: `identity`, `audit`, `authoring`, `learning`, `assessment`, `badges`, `admin`, `media` | Ninguno entero |
-| Tipos de trabajo asíncrono | 3 (`email.send`, `badge.issue`, `media.probe`) + el `reaper` | 7 |
+| Tipos de trabajo asíncrono | 4 (`email.send`, `badge.issue`, `media.probe`, `media.transcode_hls`) + el `reaper` | 6, empezando por `media.scan` |
 | Migraciones | 2 (esquema completo del dominio) | Ninguna bloqueante |
 | Carpetas de la colección con contenido | 9 de 10 | SEG-9, que se demuestra con `make demo` y `make scale` |
 

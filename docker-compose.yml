@@ -224,6 +224,38 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  # Worker de medios: el mismo binario, con FFmpeg, consumiendo solo la cola
+  # `bulk`. La transcodificación satura CPU y tarda minutos; separarla evita que
+  # un vídeo largo retrase un correo de verificación (ADR-0004, ADR-0011).
+  #
+  # La concurrencia es 2 a propósito: más procesos de FFmpeg en paralelo no
+  # transcodifican más rápido, solo se estorban en la CPU.
+  worker-media:
+    build:
+      context: ./backend
+      target: worker-media
+    image: mooc-worker-media
+    env_file: [.env]
+    environment:
+      WORKER_QUEUES: bulk=1
+      WORKER_CONCURRENCY: 2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
   # Perfil `observability`: no se levantan con `make up` a secas, para que el
   # arranque del día a día sea rápido. `make obs` los añade.
   prometheus:

@@ -1409,12 +1409,15 @@ paths:
     get:
       tags: [medios]
       operationId: getHlsManifest
-      x-estado: planificado
       summary: Manifiesto HLS del asset
       description: |
-        Devuelve el manifiesto maestro con las variantes generadas. La
-        credencial para los segmentos **no se emite aquí**, sino en
-        `POST /enrollments/{id}/media-sessions` (ADR-0015, D2).
+        Devuelve el manifiesto maestro con las variantes generadas.
+
+        Cada variante se referencia con una ruta relativa que incluye una
+        **credencial de reproducción** de 30 minutos: un testigo opaco que
+        autoriza a leer las playlists de este asset y nada más. Es lo único que
+        un reproductor puede transportar entre los documentos de un manifiesto,
+        porque no envía cabeceras de autorización a los sub-recursos.
 
         La escalera no hace *upscaling*: solo se generan variantes cuya altura
         sea menor o igual a la del original.
@@ -1430,6 +1433,43 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
+
+  /api/v1/assets/{assetId}/hls/{playlist}:
+    parameters:
+      - $ref: "#/components/parameters/AssetId"
+      - name: playlist
+        in: path
+        required: true
+        description: Nombre del archivo de la variante, con extensión.
+        schema: { type: string, example: "360p.m3u8" }
+    get:
+      tags: [medios]
+      operationId: getHlsPlaylist
+      summary: Playlist de una variante, con los segmentos firmados
+      security: []
+      description: |
+        Devuelve la playlist de la variante con **cada segmento convertido en
+        una URL firmada** hacia el almacén de objetos, válida 15 minutos.
+
+        No lleva sesión: autoriza la credencial de reproducción que viaja en el
+        parámetro `t`, emitida por el manifiesto maestro. El bucket de derivados
+        sigue siendo privado (ADR-0005); sin esta reescritura, un reproductor
+        resolvería los segmentos como rutas relativas y el almacén respondería
+        403.
+      parameters:
+        - name: t
+          in: query
+          required: true
+          description: Credencial de reproducción emitida por el manifiesto maestro.
+          schema: { type: string }
+      responses:
+        "200":
+          description: Playlist de la variante
+          content:
+            application/vnd.apple.mpegurl:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/NoAutenticado" }
+        "404": { $ref: "#/components/responses/NoEncontrado" }
 
   # ==========================================================================
   # Catálogo (RF-10)
@@ -2751,6 +2791,11 @@ components:
       properties:
         kind: { type: string, enum: [hls_master, hls_variant, poster, pdf] }
         variant: { type: [string, "null"], examples: ["720p"] }
+        key:
+          type: string
+          description: |
+            Clave del objeto en el almacén. Determinista: reejecutar la
+            transcodificación reescribe la misma, no añade otra (CA-03).
         bytes: { type: integer, format: int64 }
 
     Asset:

@@ -1,9 +1,9 @@
 # Módulo `media` — estado y plan
 
-**El paso 1 está hecho.** Multimedia entra en la Entrega 1 con la carga
-multipart reanudable y la verificación en servidor; el escaneo antimalware y la
-transcodificación quedan para después. Este documento dice qué falta y en qué
-orden.
+**Los pasos 1, 3 y 4 están hechos.** La Entrega 1 llevó la carga multipart
+reanudable y la verificación en servidor; después se añadieron la
+transcodificación a HLS y la entrega firmada del manifiesto. Queda el escaneo
+antimalware. Este documento dice qué falta y en qué orden.
 
 Sirve para dos cosas: que el tribunal vea que la ausencia es una decisión con
 fecha, y que quien lo implemente no tenga que rehacer el diseño.
@@ -34,8 +34,8 @@ maquinaria que ya funciona, no una maquinaria nueva.
 | Carga multipart prefirmada | `assets:init`, estado de partes, renovación de URLs, `complete`, `abort` | **Medio**: es la parte con más casos límite |
 | Worker `media.probe` | Recalcular SHA-256 leyendo del bucket, detectar MIME real por *magic bytes*, extraer duración y resolución con `ffprobe` | Bajo |
 | Worker `media.scan` | ClamAV por INSTREAM, cuarentena y auditoría | **Medio**: el contenedor tarda en arrancar y descargar firmas |
-| Worker `media.transcode_hls` | FFmpeg, escalera sin *upscaling*, póster, original intacto | **Alto**: es el que más tarda en afinar |
-| Imagen `worker-media` | Etapa nueva del Dockerfile con FFmpeg | Bajo |
+| ~~Worker `media.transcode_hls`~~ | **Hecho** | — |
+| ~~Imagen `worker-media`~~ | **Hecha** | — |
 | `media-sessions` | Emisión de la credencial de reproducción (ADR-0015, D2) | Bajo: el contrato ya está cerrado |
 | Barrido de cargas vencidas | Worker programado `media.sweep_uploads` | Bajo |
 
@@ -62,14 +62,45 @@ Contenedor de ClamAV con `healthcheck`, worker `media.scan`, cuarentena y
 evento de auditoría. Se prueba con el archivo **EICAR**, que es inofensivo y
 detectado por cualquier antivirus.
 
-### Paso 3 · Transcodificación — desbloquea SEG-4 con medios
+### ~~Paso 3 · Transcodificación~~ — **HECHO**
 
-Imagen `worker-media` con FFmpeg y el trabajo `media.transcode_hls`. Aquí es
-donde SEG-4 pasa de demostrarse con `badge.issue` a demostrarse con lo que el
-enunciado describe: HLS sin *upscaling*, doble entrega idempotente, backoff,
-DLQ y reencolado con la misma clave.
+Imagen `worker-media` con FFmpeg, consumiendo **solo la cola `bulk`**: la
+transcodificación satura CPU durante minutos y no debe retrasar un correo de
+verificación. El worker normal no la consume, así que tampoco puede recibir un
+trabajo que su imagen no sabe ejecutar.
 
-### Paso 4 · Entrega — completa SEG-5
+`media.probe` encola `media.transcode_hls` en la misma transacción que deja el
+asset `clean`, y lo publica tras el commit (outbox, ADR-0004).
+
+Comprobado en vivo:
+
+- Un original de 640×360 genera **una sola variante, 360p**: anunciar 720p
+  sería inventar información. La regla vive en `VariantesPara` y tiene prueba
+  unitaria.
+- Reejecutar el trabajo —devolviéndolo a la cola y dejando que lo recupere el
+  reaper— deja **los mismos tres derivados**, no seis (CA-03).
+- El original sigue intacto en `mooc-originals` (CA-02).
+- Un MP4 truncado deja el asset en `failed` con el motivo, **sin agotar
+  reintentos ni ensuciar la DLQ**: un archivo roto no es una avería del
+  sistema. `jobs_dead_letter_total{type="media.transcode_hls"}` sigue en cero.
+
+### ~~Paso 4 · Entrega~~ — **HECHO para el asset**
+
+El manifiesto maestro lo sirve la API autenticada; las playlists de variante van
+sin sesión, autorizadas por una **credencial de reproducción** de 30 minutos que
+el propio maestro incrusta en la URL, y cada segmento sale reescrito como URL
+firmada de 15 minutos hacia MinIO. El bucket de derivados sigue privado.
+
+Hizo falta porque un reproductor pide cada documento del manifiesto por su
+cuenta y **no envía cabeceras de autorización a los sub-recursos**: si los
+segmentos se dejan como nombres relativos, se resuelven contra una URL firmada,
+salen sin firma y el almacén responde 403.
+
+Queda pendiente `POST /enrollments/{id}/media-sessions`, que es la misma
+credencial con alcance de inscripción en vez de asset: lo que necesita el
+estudiante para reproducir desde el árbol del curso (ADR-0015, D2).
+
+### Paso 4b · Entrega desde la inscripción
 
 `media-sessions` y la entrega firmada del manifiesto. El contrato ya está
 cerrado desde el ADR-0015, así que es cablear, no diseñar.

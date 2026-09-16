@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mooc/backend/internal/adapters/objectstore"
+	"mooc/backend/internal/adapters/playback"
 	"mooc/backend/internal/adapters/postgres"
 	"mooc/backend/internal/adapters/queue"
 	"mooc/backend/internal/adapters/rediscli"
@@ -123,8 +124,12 @@ func run() error {
 		learningBridge{publisher}, recorder, log)
 	mediaSvc := media.NewService(postgres.NewMediaStore(pool), almacenBridge{store},
 		learningBridge{publisher}, recorder,
-		media.Buckets{Originales: cfg.S3Buckets.Originals, Cuarentena: cfg.S3Buckets.Quarantine},
-		cfg.S3PublicEndpoint, log)
+		media.Buckets{Originales: cfg.S3Buckets.Originals, Derivados: cfg.S3Buckets.Derived,
+			Cuarentena: cfg.S3Buckets.Quarantine},
+		cfg.S3PublicEndpoint, log).
+		// Las credenciales de reproducción viven en la base de sesiones: son lo
+		// mismo que una sesión, con menos alcance y menos vida.
+		ConReproduccion(playback.New(sessionRedis))
 
 	metrics.Inicializar(jobs.TypeEmailSend, jobs.TypeBadgeIssue)
 
@@ -231,6 +236,10 @@ func (b learningBridge) Publish(ctx context.Context, key, tipo, cola string,
 // Los tipos Parte son distintos a propósito: el dominio no importa el
 // adaptador (ADR-0001).
 type almacenBridge struct{ s *objectstore.Store }
+
+func (b almacenBridge) Subir(ctx context.Context, bucket, key, ct string, datos []byte) error {
+	return b.s.Subir(ctx, bucket, key, ct, datos)
+}
 
 func (b almacenBridge) CrearMultipart(ctx context.Context, bucket, key, ct string) (string, error) {
 	return b.s.CrearMultipart(ctx, bucket, key, ct)

@@ -10,6 +10,7 @@ import (
 
 	"mooc/backend/internal/modules/media"
 	"mooc/backend/internal/platform/dbx"
+	"mooc/backend/internal/platform/ids"
 )
 
 type MediaStore struct{ pool *pgxpool.Pool }
@@ -96,4 +97,54 @@ func (s *MediaStore) CerrarCarga(ctx context.Context, db dbx.DB, assetID uuid.UU
 	_, err := db.Exec(ctx,
 		`UPDATE media.uploads SET `+col+` = now() WHERE asset_id=$1`, assetID)
 	return err
+}
+
+// ------------------------------------------------------------ derivados ---
+
+// ReemplazarDerivados deja exactamente el juego que se le pasa. Borrar e
+// insertar dentro de la misma transacción es lo que hace que reejecutar la
+// transcodificación no acumule filas: el UNIQUE (asset_id, kind, variant) lo
+// impediría, pero fallando; así se repara en silencio (CA-03).
+func (s *MediaStore) ReemplazarDerivados(ctx context.Context, db dbx.DB,
+	assetID uuid.UUID, ds []media.Derivado) error {
+	if _, err := db.Exec(ctx, `DELETE FROM media.asset_derivatives WHERE asset_id=$1`, assetID); err != nil {
+		return err
+	}
+	for _, d := range ds {
+		var variante *string
+		if d.Variante != "" {
+			v := d.Variante
+			variante = &v
+		}
+		if _, err := db.Exec(ctx, `
+			INSERT INTO media.asset_derivatives (id, asset_id, kind, variant, key, bytes)
+			VALUES ($1,$2,$3,$4,$5,$6)`,
+			ids.New(), assetID, d.Kind, variante, d.Key, d.Bytes); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *MediaStore) DerivadosDeAsset(ctx context.Context, db dbx.DB,
+	assetID uuid.UUID) ([]media.Derivado, error) {
+	filas, err := db.Query(ctx, `
+		SELECT kind, coalesce(variant,''), key, bytes
+		  FROM media.asset_derivatives
+		 WHERE asset_id=$1
+		 ORDER BY kind, variant`, assetID)
+	if err != nil {
+		return nil, err
+	}
+	defer filas.Close()
+
+	var out []media.Derivado
+	for filas.Next() {
+		var d media.Derivado
+		if err := filas.Scan(&d.Kind, &d.Variante, &d.Key, &d.Bytes); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, filas.Err()
 }

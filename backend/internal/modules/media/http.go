@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -33,6 +34,16 @@ func (a *API) Routes(mux *http.ServeMux, auth httpx.Middleware,
 	mux.Handle("POST /api/v1/assets/{id}/complete", pi(a.completar))
 	mux.Handle("POST /api/v1/assets/{id}/abort", p(a.abortar))
 	mux.Handle("GET /api/v1/assets/{id}/content", p(a.contenido))
+
+	// El manifiesto maestro va autenticado como todo lo demás.
+	mux.Handle("GET /api/v1/assets/{id}/hls/master.m3u8", p(a.hlsMaster))
+	// Las playlists de variante NO: un reproductor pide cada documento del
+	// manifiesto por su cuenta y no lleva cabecera de autorización a ninguno.
+	// Lo que autoriza es la credencial de reproducción que el maestro incrusta
+	// en la URL, que caduca en media hora y no identifica a nadie. El patrón
+	// literal de arriba gana al comodín de abajo, así que master.m3u8 nunca
+	// cae aquí.
+	mux.Handle("GET /api/v1/assets/{id}/hls/{playlist}", http.HandlerFunc(a.hlsPlaylist))
 }
 
 func actor(r *http.Request) Actor {
@@ -109,7 +120,22 @@ func (a *API) ver(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, traducir(err))
 		return
 	}
-	httpx.JSON(w, http.StatusOK, vistaAsset(as))
+	vista := vistaAsset(as)
+
+	derivados, err := a.svc.Derivados(r.Context(), id, actor(r))
+	if err != nil {
+		httpx.Fail(w, r, traducir(err))
+		return
+	}
+	salidas := make([]map[string]any, 0, len(derivados))
+	for _, d := range derivados {
+		salidas = append(salidas, map[string]any{
+			"kind": d.Kind, "variant": d.Variante, "key": d.Key, "bytes": d.Bytes,
+		})
+	}
+	vista["derivatives"] = salidas
+
+	httpx.JSON(w, http.StatusOK, vista)
 }
 
 // estadoDeCarga es lo que permite reanudar: dice qué partes tiene ya el
@@ -247,6 +273,58 @@ func (a *API) contenido(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, destino.String(), http.StatusFound)
 }
 
+func (a *API) hlsMaster(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	manifiesto, err := a.svc.MasterFirmado(r.Context(), id, actor(r))
+	if err != nil {
+		httpx.Fail(w, r, traducir(err))
+		return
+	}
+	escribirManifiesto(w, manifiesto)
+}
+
+func (a *API) hlsPlaylist(w http.ResponseWriter, r *http.Request) {
+	archivo := r.PathValue("playlist")
+	if !strings.HasSuffix(archivo, ".m3u8") {
+		httpx.Fail(w, r, problem.NotFound("El archivo solicitado no existe."))
+		return
+	}
+	token := r.URL.Query().Get("t")
+	if token == "" {
+		httpx.Fail(w, r, problem.Unauthorized("Falta la credencial de reproducción."))
+		return
+	}
+
+	playlist, err := a.svc.PlaylistFirmada(r.Context(), token,
+		strings.TrimSuffix(archivo, ".m3u8"))
+	if err != nil {
+		httpx.Fail(w, r, traducir(err))
+		return
+	}
+	escribirManifiesto(w, playlist)
+}
+
+// Los manifiestos llevan URLs firmadas que caducan, así que no se cachean: un
+// intermediario que guarde este texto entrega enlaces muertos.
+func escribirManifiesto(w http.ResponseWriter, cuerpo string) {
+	w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
+	w.Header().Set("Cache-Control", "no-store")
+	// Un manifiesto es texto plano con un tipo propio. nosniff impide que un
+	// navegador decida por su cuenta tratarlo como HTML, que es la única forma
+	// en que este cuerpo podría ejecutar algo.
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(http.StatusOK)
+	// #nosec G705 -- no es HTML ni se sirve como tal: el cuerpo lo arma el
+	// servidor (el maestro) o sale del bucket de derivados con cada URI
+	// sustituida por una URL firmada que genera el propio almacén. Nada de lo
+	// que llega en la petición acaba dentro.
+	_, _ = w.Write([]byte(cuerpo))
+}
+
 func traducir(err error) error {
 	var verrs ValidationErrors
 	if errors.As(err, &verrs) {
@@ -263,6 +341,9 @@ func traducir(err error) error {
 		return problem.Forbidden("Este archivo no es tuyo.")
 	case errors.Is(err, ErrCargaVencida):
 		return problem.Conflict("upload.expired", "La carga expiró. Hay 24 horas para completarla.")
+	case errors.Is(err, ErrNoListo):
+		return problem.Conflict("asset.not_ready",
+			"El archivo aún no se ha transcodificado. Vuelve a intentarlo en unos segundos.")
 	case errors.Is(err, ErrEstado):
 		return problem.Conflict("asset.invalid_state", "La operación no es válida en el estado actual del archivo.")
 	default:

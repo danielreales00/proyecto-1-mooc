@@ -177,14 +177,33 @@ del bucket** y **detecta el tipo real por los bytes**, no por la extensión.
 Pruébalo con un PDF renombrado a `.mp4` y declarado como vídeo: se rechaza y va
 a cuarentena.
 
-**Lo que no puedes hacer es reproducirlo.** No hay transcodificación a HLS ni
-escaneo antimalware; son los pasos 2 y 3 de `arquitectura/media-plan.md`. Sí
-puedes descargarlo por URL firmada:
+Después de verificar, un segundo worker lo **transcodifica a HLS**. El asset
+pasa por `processing` y termina en `ready`, con sus derivados registrados. La
+escalera no inventa calidad: de un original de 360p sale una sola variante, no
+tres.
+
+Para reproducirlo, pide el manifiesto maestro:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8090/api/v1/assets/<asset_id>/hls/master.m3u8
+```
+
+Cada variante viene con una credencial de reproducción dentro de la URL. Ábrela
+y verás que **cada segmento sale como URL firmada** hacia MinIO: el bucket de
+derivados sigue cerrado, y aun así un reproductor puede consumirlo sin llevar
+cabecera de sesión, que es lo único que sabe hacer.
+
+El original tampoco se toca: sigue intacto en `mooc-originals`, y se descarga
+por URL firmada.
 
 ```bash
 curl -L -H "Authorization: Bearer $TOKEN" \
   http://localhost:8090/api/v1/assets/<asset_id>/content -o descargado.mp4
 ```
+
+Lo que aún no hay es **escaneo antimalware**: es el paso 2 de
+`arquitectura/media-plan.md`.
 
 ## 4 · A mano con curl
 
@@ -232,10 +251,9 @@ otra cuenta desde la misma máquina entra sin problema. Espera un minuto.
 **5 · La insignia tarda unos segundos.** La emite un worker, no la petición.
 Consulta `GET /api/v1/me/badges` un par de veces.
 
-Y uno que **sí es un límite real**: no se puede subir un vídeo y verlo. La carga
-funciona —con reanudación y verificación de checksum y tipo—, pero no hay
-transcodificación a HLS ni escaneo antimalware. Está en
-`arquitectura/media-plan.md`.
+Y uno que **sí es un límite real**: no hay escaneo antimalware. Un archivo
+infectado se cargaría, se verificaría y se transcodificaría como cualquier otro.
+Está en `arquitectura/media-plan.md`, paso 2.
 
 ## Si algo falla
 

@@ -29,6 +29,7 @@ type Almacen interface {
 	Abrir(ctx context.Context, bucket, key string) (io.ReadCloser, error)
 	Info(ctx context.Context, bucket, key string) (int64, error)
 	Mover(ctx context.Context, ob, ok, db, dk string) error
+	Subir(ctx context.Context, bucket, key, contentType string, datos []byte) error
 }
 
 // Parte se redeclara aquí para que el dominio no importe el adaptador.
@@ -49,6 +50,11 @@ type Store interface {
 	InsertarCarga(ctx context.Context, db dbx.DB, c Carga) error
 	CargaDeAsset(ctx context.Context, db dbx.DB, assetID uuid.UUID) (Carga, error)
 	CerrarCarga(ctx context.Context, db dbx.DB, assetID uuid.UUID, abortada bool) error
+
+	// Los derivados se reemplazan en bloque, no se acumulan: una reejecución
+	// del trabajo deja el mismo juego, no uno más (CA-03).
+	ReemplazarDerivados(ctx context.Context, db dbx.DB, assetID uuid.UUID, ds []Derivado) error
+	DerivadosDeAsset(ctx context.Context, db dbx.DB, assetID uuid.UUID) ([]Derivado, error)
 }
 
 type Publicador interface {
@@ -57,6 +63,7 @@ type Publicador interface {
 
 type Buckets struct {
 	Originales string
+	Derivados  string
 	Cuarentena string
 }
 
@@ -66,6 +73,10 @@ type Service struct {
 	queue   Publicador
 	audit   *audit.Recorder
 	buckets Buckets
+	// ffmpeg solo lo tiene el worker de medios: la API no transcodifica.
+	ffmpeg Transcodificador
+	// repro solo lo tiene la API: el worker no entrega manifiestos.
+	repro Reproduccion
 	// hostPermitido es el único destino al que se puede redirigir.
 	hostPermitido string
 	log           *slog.Logger
@@ -75,6 +86,13 @@ func NewService(s Store, a Almacen, q Publicador, rec *audit.Recorder, b Buckets
 	hostAlmacen string, log *slog.Logger) *Service {
 	return &Service{store: s, almacen: a, queue: q, audit: rec, buckets: b,
 		hostPermitido: hostAlmacen, log: log}
+}
+
+// ConTranscodificador se lo enchufa el worker de medios. La API construye el
+// mismo servicio sin él: no tiene FFmpeg en su imagen ni lo necesita.
+func (s *Service) ConTranscodificador(t Transcodificador) *Service {
+	s.ffmpeg = t
+	return s
 }
 
 type Actor struct {
@@ -432,13 +450,18 @@ func (s *Service) Verificar(ctx context.Context, data map[string]any) error {
 		}
 		s.log.Warn("asset rechazado", "asset_id", id, "motivo", motivo)
 	} else {
-		// Paso 1 del plan: sin escaneo antimalware todavía, el asset queda
-		// `clean`. Cuando entre media.scan, este estado pasará a `scanning`.
+		// Sin escaneo antimalware todavía, el asset queda `clean`. Cuando entre
+		// media.scan, este estado pasará a `scanning`.
 		asset.Status = EstadoLimpio
 		s.log.Info("asset verificado", "asset_id", id, "mime", mime, "bytes", tamaño)
 	}
 
-	return s.store.WithinTx(ctx, func(ctx context.Context, tx dbx.DB) error {
+	// Lo que se verificó bien y es audiovisual sigue a la transcodificación. El
+	// trabajo se registra dentro de la misma transacción que deja el asset
+	// limpio y se publica después del commit: si el proceso muere en medio, el
+	// reaper lo recupera (ADR-0004).
+	var claveHLS string
+	err = s.store.WithinTx(ctx, func(ctx context.Context, tx dbx.DB) error {
 		if err := s.store.ActualizarAsset(ctx, tx, asset); err != nil {
 			return err
 		}
@@ -446,10 +469,27 @@ func (s *Service) Verificar(ctx context.Context, data map[string]any) error {
 		if motivo != "" {
 			accion = "media.rejected"
 		}
-		return s.audit.Record(ctx, tx, audit.Event{
+		if err := s.audit.Record(ctx, tx, audit.Event{
 			ActorID: &asset.OwnerID, ActorRole: "teacher", Action: accion,
 			EntityType: "asset", EntityID: &asset.ID,
 			Metadata: map[string]any{"mime": mime, "bytes": tamaño, "motivo": motivo},
-		})
+		}); err != nil {
+			return err
+		}
+		if motivo != "" || !HLSAplicable(asset.Kind) {
+			return nil
+		}
+		claveHLS, err = s.EncolarTranscodificacion(ctx, tx, asset.ID)
+		return err
 	})
+	if err != nil || claveHLS == "" {
+		return err
+	}
+
+	if err := s.queue.Publish(ctx, claveHLS, jobs.TypeMediaTranscode, jobs.QueueBulk,
+		map[string]any{"asset_id": asset.ID.String()}, ""); err != nil {
+		s.log.Warn("no se pudo publicar la transcodificación; el reaper la recuperará",
+			"job_key", claveHLS, "error", err)
+	}
+	return nil
 }

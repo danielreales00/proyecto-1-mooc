@@ -2030,7 +2030,7 @@
             "description": "La API **no recibe los bytes**: crea el asset, abre la carga multipart y devuelve una URL prefirmada por parte. El cliente sube directamente al almacén (enunciado §4).\n\nEl `sha256` que se declara aquí es una promesa; el servidor lo recalculará leyendo del bucket.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"filename\": \"archivo-de-prueba.mp4\",\n  \"content_type\": \"video/mp4\",\n  \"size_bytes\": 262144,\n  \"sha256\": \"2f182426a670429e79b600ae44d477ada5ae141d5dae433da2eafa3da728c731\",\n  \"kind\": \"video\"\n}"
+              "raw": "{\n  \"filename\": \"archivo-de-prueba.mp4\",\n  \"content_type\": \"video/mp4\",\n  \"size_bytes\": 101541,\n  \"sha256\": \"0d4245fc56d42398c2856fb960075fbf6f95afa58b10d44787e037d0ff8c2321\",\n  \"kind\": \"video\"\n}"
             }
           },
           "response": [],
@@ -2251,16 +2251,28 @@
                   "",
                   "pm.test('200', () => pm.response.to.have.status(200));",
                   "",
-                  "const listo = ['clean', 'ready'].includes(cuerpo.status);",
+                  "// El asset ya no se detiene en 'clean': verificarlo encola la",
+                  "// transcodificación, que lo lleva a 'processing' y luego a 'ready'.",
+                  "// Se espera al estado final para que la aserción no dependa de",
+                  "// cuándo mire.",
+                  "const listo = ['ready', 'rejected', 'failed'].includes(cuerpo.status);",
                   "if (!listo && intentos < 12) {",
                   "  console.log('El worker todavía no termina (estado: ' + cuerpo.status +",
                   "              '). Reintento ' + intentos + ' de 12.');",
                   "  pm.execution.setNextRequest(pm.info.requestName);",
                   "} else {",
                   "  pm.collectionVariables.unset('intentos_verificacion');",
-                  "  pm.test('el archivo pasó la verificación', () => {",
+                  "  pm.test('el archivo pasó la verificación y se transcodificó', () => {",
                   "    pm.expect(cuerpo.status, 'si sigue en uploaded, el worker no corrió: '",
-                  "      + 'revisa `docker compose logs worker`').to.be.oneOf(['clean', 'ready']);",
+                  "      + 'revisa `docker compose logs worker worker-media`').to.eql('ready');",
+                  "  });",
+                  "  pm.test('la escalera HLS no hace upscaling (SEG-4)', () => {",
+                  "    const variantes = (cuerpo.derivatives || [])",
+                  "      .filter(d => d.kind === 'hls_variant').map(d => d.variant);",
+                  "    pm.expect(variantes, 'el original es 360p: 720p o 1080p serían inventados')",
+                  "      .to.eql(['360p']);",
+                  "    pm.expect((cuerpo.derivatives || []).map(d => d.kind))",
+                  "      .to.include('hls_master');",
                   "  });",
                   "  pm.test('el servidor detectó el tipo REAL por los bytes', () => {",
                   "    pm.expect(cuerpo.detected_mime).to.eql('video/mp4');",
@@ -2331,6 +2343,116 @@
           }
         },
         {
+          "name": "6b · Manifiesto HLS (master)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/{{asset_id}}/hls/master.m3u8",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{asset_id}}",
+                "hls",
+                "master.m3u8"
+              ]
+            },
+            "description": "El manifiesto maestro lo sirve la API, no el almacén: el bucket de derivados es privado (ADR-0005).\n\nCada variante se referencia con una **credencial de reproducción** de 30 minutos. Un reproductor no envía cabeceras de autorización a los sub-recursos de un manifiesto, así que la autorización tiene que viajar en la URL."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const cuerpo = pm.response.text();",
+                  "",
+                  "pm.test('es un manifiesto HLS', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('mpegurl');",
+                  "  pm.expect(cuerpo).to.include('#EXTM3U');",
+                  "});",
+                  "",
+                  "pm.test('anuncia solo la variante que existe', () => {",
+                  "  pm.expect(cuerpo).to.include('RESOLUTION=640x360');",
+                  "  pm.expect(cuerpo, 'el original es 360p: anunciar 720p sería mentir')",
+                  "    .to.not.include('1280x720');",
+                  "});",
+                  "",
+                  "// La variante se referencia con una credencial de reproducción: es lo",
+                  "// único que un reproductor puede llevar consigo entre los documentos del",
+                  "// manifiesto, porque no manda cabeceras a los sub-recursos.",
+                  "const linea = cuerpo.split('\\n').find(l => l.trim() && !l.startsWith('#'));",
+                  "pm.test('la variante lleva credencial de reproducción', () => {",
+                  "  pm.expect(linea).to.match(/^360p\\.m3u8\\?t=.+/);",
+                  "});",
+                  "pm.collectionVariables.set('hls_playlist', linea.trim());",
+                  "console.log('variante:', linea);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6c · Playlist de variante, SIN sesión",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/{{asset_id}}/hls/{{hls_playlist}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{asset_id}}",
+                "hls",
+                "{{hls_playlist}}"
+              ]
+            },
+            "description": "Se pide **sin `Authorization`**, como lo haría un reproductor. Autoriza la credencial que venía en el manifiesto maestro.\n\nCada segmento sale reescrito como URL firmada hacia MinIO: el bucket sigue cerrado y los bytes siguen sin pasar por la API."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 sin cabecera de sesión', () => pm.response.to.have.status(200));",
+                  "",
+                  "const cuerpo = pm.response.text();",
+                  "const segmentos = cuerpo.split('\\n').filter(l => l.trim() && !l.startsWith('#'));",
+                  "",
+                  "pm.test('tiene segmentos', () => pm.expect(segmentos.length).to.be.above(0));",
+                  "",
+                  "pm.test('cada segmento va firmado hacia el almacén', () => {",
+                  "  segmentos.forEach(s => {",
+                  "    pm.expect(s, 'un segmento relativo se resolvería sin firma y daría 403')",
+                  "      .to.include('X-Amz-Signature');",
+                  "  });",
+                  "});",
+                  "",
+                  "console.log('segmentos firmados:', segmentos.length);"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "7 · RECHAZO: checksum que no cuadra",
           "request": {
             "method": "POST",
@@ -2363,7 +2485,7 @@
             "description": "Declara un checksum falso. La carga se inicia sin problema —el servidor aún no ha visto los bytes—, pero al subir y completar, el worker recalcula, no cuadra, y el asset queda `rejected` y en cuarentena.\n\nPara verlo entero: sube la parte con la URL que devuelve esta petición, completa, y consulta el asset.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"filename\": \"mentira.mp4\",\n  \"content_type\": \"video/mp4\",\n  \"size_bytes\": 262144,\n  \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\",\n  \"kind\": \"video\"\n}"
+              "raw": "{\n  \"filename\": \"mentira.mp4\",\n  \"content_type\": \"video/mp4\",\n  \"size_bytes\": 101541,\n  \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\",\n  \"kind\": \"video\"\n}"
             }
           },
           "response": [],
@@ -3669,7 +3791,7 @@
     },
     {
       "key": "sha256_prueba",
-      "value": "2f182426a670429e79b600ae44d477ada5ae141d5dae433da2eafa3da728c731",
+      "value": "0d4245fc56d42398c2856fb960075fbf6f95afa58b10d44787e037d0ff8c2321",
       "type": "string"
     },
     {
@@ -3702,6 +3824,10 @@
     },
     {
       "key": "badge_image_url",
+      "value": ""
+    },
+    {
+      "key": "hls_playlist",
       "value": ""
     }
   ]

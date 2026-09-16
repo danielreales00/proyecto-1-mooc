@@ -357,7 +357,7 @@ Convenciones: token opaco en `Authorization: Bearer`, errores uniformes en
 
 ## Qué está hecho y qué no
 
-**61 de las 88 operaciones** responden hoy.
+**63 de las 89 operaciones** responden hoy.
 
 | Módulo | Estado |
 | --- | --- |
@@ -367,11 +367,11 @@ Convenciones: token opaco en `Authorization: Bearer`, errores uniformes en
 | `learning` | Completo: catálogo, inscripción, progreso, aprobación |
 | `assessment` | Completo: quizzes, intentos, calificación |
 | `badges` | Completo: emisión, verificación pública, revocación |
-| `media` | Carga multipart reanudable y verificación en servidor. Faltan ClamAV y FFmpeg; ver [`media-plan.md`](arquitectura/media-plan.md) |
+| `media` | Carga multipart reanudable, verificación en servidor y **transcodificación a HLS**. Falta ClamAV; ver [`media-plan.md`](arquitectura/media-plan.md) |
 | `admin` | Completo: invitación de profesores, roles, estados, sesiones ajenas, auditoría y cola |
 
-Trabajos asíncronos: `email.send`, `badge.issue` y el `reaper`. Faltan los de
-medios.
+Trabajos asíncronos: `email.send`, `badge.issue`, `media.probe`,
+`media.transcode_hls` y el `reaper`. Falta `media.scan`, que es ClamAV.
 
 El desglose completo módulo a módulo está en
 [`arquitectura/estado-modulos.md`](arquitectura/estado-modulos.md).
@@ -389,9 +389,9 @@ backend/
     platform/     config · logging · problem · httpx · ids · jobs
                   passwords · dbx · markdown
     adapters/     postgres · rediscli · sessions · objectstore
-                  mailer · queue
+                  mailer · queue · ffmpeg · playback
     modules/      identity · audit · authoring · learning
-                  assessment · badges
+                  assessment · badges · admin · media
   migrations/     SQL versionado, hacia adelante
   openapi/        openapi.yaml, servido en GET /openapi.yaml
 postman/          colección de la demostración

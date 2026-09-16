@@ -14,6 +14,7 @@ Equipo de 4 personas, 4–5 entregas en 13 semanas.
 | `arquitectura/alcance-entrega-1.md` | Qué se entrega ahora y qué queda para después. |
 | `arquitectura/adr/` | Decisiones de arquitectura. Una decisión por archivo, numeradas. |
 | `arquitectura/disenos/` | Modelo de datos, API, trabajos asíncronos, máquinas de estado, ruta a GCP. |
+| `arquitectura/guia-de-informes.md` | Convenciones de escritura de los informes de arquitectura. Valen para todas las entregas. |
 | `arquitectura/pendientes.md` | Notas de trabajo. No es entregable. |
 | `arquitectura/preguntas-profesor.md` | Dudas abiertas y sus respuestas. |
 | `2026-20 proyecto-plataforma-mooc.pdf` | El PDF original. |
@@ -83,11 +84,19 @@ leer el ADR correspondiente:
 
 ## Estado actual
 
-Entrega 1, a 13 de septiembre de 2026: backend y workers funcionando, sin
-frontend. **60 de 88 operaciones** responden; el resto lleva `x-estado:
-planificado` en el contrato. El flujo completo se recorre de punta a punta con
-`make demo` (33 aserciones) y la colección entera con `make postman-completo`
-(140). Falta el procesamiento de medios: ClamAV y la transcodificación a HLS.
+Entrega 1 entregada y grabada. **63 de 89 operaciones** responden; el resto
+lleva `x-estado: planificado` en el contrato. El flujo completo se recorre de
+punta a punta con `make demo` y la colección entera con `make postman-completo`.
+
+Después de grabar el video se añadió la **transcodificación a HLS**
+(`worker-media` con FFmpeg sobre la cola `bulk`) y la entrega firmada del
+manifiesto. Falta ClamAV: mientras no esté, `media.probe` deja el asset en
+`clean` y encola la transcodificación desde ahí. Ver
+[`arquitectura/media-plan.md`](arquitectura/media-plan.md) y la nota de estado
+al final del `adr/0011`.
+
+**El guion de `demo/guion.md` describe lo que se grabó**, no el estado actual
+del repositorio: no se actualiza hacia atrás.
 
 La demostración se hace con Postman. El guion del video está en
 `demo/guion.md`, dimensionado para el **máximo de 20 minutos**, y el reparto

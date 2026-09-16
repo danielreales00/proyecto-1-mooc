@@ -114,3 +114,32 @@ que no esté `ready` bloquea la publicación (`CA-01`, ADR-0007).
 - Declarar un `sha256` falso → `rejected`.
 - Subir un video de 480p → el `master.m3u8` no incluye `720p` ni `1080p`.
 - `FAIL_TRANSCODE=1` → 3 intentos, DLQ, alerta, y reencolado con la misma clave.
+
+## Estado de implementación (15 de septiembre de 2026)
+
+Esta decisión se implementó **en partes**, y en dos puntos el código se apartó
+de lo que dice arriba. Se anotan aquí en vez de dejar la contradicción callada:
+
+**Hecho.** Carga multipart con reanudación, verificación en servidor,
+transcodificación a HLS con la escalera sin *upscaling*, póster, imagen
+`worker-media` sobre la cola `bulk`, y entrega del manifiesto.
+
+**Sin hacer: el escaneo antimalware.** No hay contenedor de ClamAV ni trabajo
+`media.scan`. La consecuencia práctica es que el estado `scanning` no se usa y
+`media.probe` deja el asset en `clean`, desde donde encola la transcodificación.
+El orden que promete este ADR —escanear antes de procesar— **todavía no se
+cumple**; cuando entre `media.scan`, el encolado pasa a hacerlo él.
+
+**Cambio: quién emite la credencial de reproducción.** Este ADR y el ADR-0015
+(D2) daban por hecho que la credencial saldría de
+`POST /enrollments/{id}/media-sessions`. Lo implementado la emite el propio
+manifiesto maestro, con alcance de *asset*, porque es lo que hacía falta para
+que un vídeo se reproduzca: un reproductor pide cada documento del manifiesto
+por separado y no manda cabeceras de autorización a los sub-recursos, así que la
+autorización tiene que viajar dentro de la URL. La playlist de variante se sirve
+desde la API y reescribe cada segmento como URL firmada de 15 minutos; el bucket
+de derivados sigue privado.
+
+`media-sessions` no se cae del plan: es la misma credencial con alcance de
+inscripción, que es la que necesita el estudiante para reproducir desde el árbol
+del curso. El `scope` del contrato ya distingue `asset` de `course_version`.

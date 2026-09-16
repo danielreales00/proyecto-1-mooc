@@ -101,12 +101,14 @@ paso "5 · Completando"
 curl -fsS -X POST "$API/api/v1/assets/$ASSET/complete" -H "$A" -H "$J" -H "$(idem)" \
   -d "{\"parts\":$ETAGS}" | jq "'  estado: '+d['status']+'   (202: la API no espera al worker)'"
 
-paso "6 · El worker verifica checksum y tipo real"
-for _ in $(seq 1 30); do
+paso "6 · El worker verifica checksum y tipo real, y transcodifica"
+# Dos trabajos encadenados: media.probe deja el asset `clean` y encola
+# media.transcode_hls, que lo lleva a `ready`. Se sondea hasta el estado final
+# en vez de suponer cuánto tardan.
+for _ in $(seq 1 60); do
   S=$(curl -fsS "$API/api/v1/assets/$ASSET" -H "$A")
   EST=$(echo "$S" | jq "d['status']")
-  [ "$EST" != "uploaded" ] && break
-  sleep 2
+  case "$EST" in uploaded|clean|processing) sleep 2 ;; *) break ;; esac
 done
 echo "$S" | python3 -c "
 import json,sys;d=json.load(sys.stdin)
@@ -119,6 +121,17 @@ if d['last_error']: print('  motivo del rechazo:  ',d['last_error'])"
 case "$EST" in
   clean|ready)
     ok "el archivo pasó la verificación"
+    if [ "$EST" = ready ]; then
+      echo "$S" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+ds=d.get('derivatives') or []
+vs=[x['variant'] for x in ds if x['kind']=='hls_variant']
+print('  variantes HLS:        '+(', '.join(vs) or 'ninguna'))
+print('  sin upscaling:         el original mide '+str(d.get('height'))+'p')
+print('  derivados en el bucket:',len(ds))"
+      ok "transcodificado a HLS (CA-02: el original sigue intacto en mooc-originals)"
+    fi
     echo
     echo "${DIM}Para adjuntarlo a un curso, al crear el recurso:${OFF}"
     echo "${DIM}  {\"title\":\"Mi vídeo\",\"type\":\"$TIPO\",\"asset_id\":\"$ASSET\"}${OFF}"
@@ -126,8 +139,8 @@ case "$EST" in
     echo "${DIM}Descargarlo (302 a una URL firmada de 15 min):${OFF}"
     echo "${DIM}  curl -L -H \"Authorization: Bearer \\\$TOKEN\" $API/api/v1/assets/$ASSET/content${OFF}"
     echo
-    echo "${DIM}Reproducirlo NO se puede: la transcodificación a HLS aún no está.${OFF}"
-    echo "${DIM}Ver arquitectura/media-plan.md${OFF}"
+    echo "${DIM}Reproducirlo (el manifiesto lleva dentro las credenciales):${OFF}"
+    echo "${DIM}  curl -H \"Authorization: Bearer \\\$TOKEN\" $API/api/v1/assets/$ASSET/hls/master.m3u8${OFF}"
     ;;
   rejected)
     echo "  ${ROJO}el archivo fue rechazado y está en cuarentena${OFF}" ;;
