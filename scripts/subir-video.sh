@@ -101,14 +101,14 @@ paso "5 · Completando"
 curl -fsS -X POST "$API/api/v1/assets/$ASSET/complete" -H "$A" -H "$J" -H "$(idem)" \
   -d "{\"parts\":$ETAGS}" | jq "'  estado: '+d['status']+'   (202: la API no espera al worker)'"
 
-paso "6 · El worker verifica checksum y tipo real, y transcodifica"
-# Dos trabajos encadenados: media.probe deja el asset `clean` y encola
-# media.transcode_hls, que lo lleva a `ready`. Se sondea hasta el estado final
-# en vez de suponer cuánto tardan.
+paso "6 · Verificación, antivirus y transcodificación"
+# Tres trabajos encadenados: media.probe verifica y pasa a `scanning`,
+# media.scan da el veredicto y deja `clean`, y media.transcode_hls lleva a
+# `ready`. Se sondea hasta un estado final en vez de suponer cuánto tardan.
 for _ in $(seq 1 60); do
   S=$(curl -fsS "$API/api/v1/assets/$ASSET" -H "$A")
   EST=$(echo "$S" | jq "d['status']")
-  case "$EST" in uploaded|clean|processing) sleep 2 ;; *) break ;; esac
+  case "$EST" in uploaded|scanning|clean|processing) sleep 2 ;; *) break ;; esac
 done
 echo "$S" | python3 -c "
 import json,sys;d=json.load(sys.stdin)
@@ -116,6 +116,7 @@ print('  estado:              ',d['status'])
 print('  tipo declarado:      ',d['declared_mime'])
 print('  tipo REAL detectado: ',d['detected_mime'],' (por los bytes, no por la extensión)')
 print('  sha256 recalculado:  ',(d['sha256'] or '')[:32]+'…')
+if d.get('scan_result'): print('  antivirus:           ',d['scan_result'])
 if d['last_error']: print('  motivo del rechazo:  ',d['last_error'])"
 
 case "$EST" in
@@ -144,6 +145,9 @@ print('  derivados en el bucket:',len(ds))"
     ;;
   rejected)
     echo "  ${ROJO}el archivo fue rechazado y está en cuarentena${OFF}" ;;
+  infected)
+    echo "  ${ROJO}el antivirus lo detectó: está en cuarentena y NO se procesó${OFF}"
+    echo "  ${DIM}el original no se borra: un falso positivo hay que poder revisarlo${OFF}" ;;
   *)
     echo "  ${ROJO}quedó en estado $EST${OFF}" ;;
 esac

@@ -1,9 +1,10 @@
 # Módulo `media` — estado y plan
 
-**Los pasos 1, 3 y 4 están hechos.** La Entrega 1 llevó la carga multipart
-reanudable y la verificación en servidor; después se añadieron la
-transcodificación a HLS y la entrega firmada del manifiesto. Queda el escaneo
-antimalware. Este documento dice qué falta y en qué orden.
+**Los cuatro pasos están hechos.** La Entrega 1 llevó la carga multipart
+reanudable y la verificación en servidor; después se añadieron el escaneo
+antimalware, la transcodificación a HLS y la entrega firmada del manifiesto.
+Queda la sesión de reproducción por inscripción. Este documento dice qué queda
+y con qué evidencia se comprobó lo demás.
 
 Sirve para dos cosas: que el tribunal vea que la ausencia es una decisión con
 fecha, y que quien lo implemente no tenga que rehacer el diseño.
@@ -33,7 +34,7 @@ maquinaria que ya funciona, no una maquinaria nueva.
 | `internal/modules/media` | Dominio, servicio, store y HTTP | Bajo: el patrón está establecido en los otros cinco módulos |
 | Carga multipart prefirmada | `assets:init`, estado de partes, renovación de URLs, `complete`, `abort` | **Medio**: es la parte con más casos límite |
 | Worker `media.probe` | Recalcular SHA-256 leyendo del bucket, detectar MIME real por *magic bytes*, extraer duración y resolución con `ffprobe` | Bajo |
-| Worker `media.scan` | ClamAV por INSTREAM, cuarentena y auditoría | **Medio**: el contenedor tarda en arrancar y descargar firmas |
+| ~~Worker `media.scan`~~ | **Hecho** | — |
 | ~~Worker `media.transcode_hls`~~ | **Hecho** | — |
 | ~~Imagen `worker-media`~~ | **Hecha** | — |
 | `media-sessions` | Emisión de la credencial de reproducción (ADR-0015, D2) | Bajo: el contrato ya está cerrado |
@@ -56,11 +57,29 @@ Comprobado en vivo: subida de 2 de 3 partes, consulta de lo que falta, subida
 solo de la tercera, completado y verificación. Y los tres negativos: checksum
 falso, PDF disfrazado de vídeo, y ambos a cuarentena con el original intacto.
 
-### Paso 2 · Antimalware — completa SEG-3
+### ~~Paso 2 · Antimalware~~ — **HECHO**
 
-Contenedor de ClamAV con `healthcheck`, worker `media.scan`, cuarentena y
-evento de auditoría. Se prueba con el archivo **EICAR**, que es inofensivo y
-detectado por cualquier antivirus.
+Contenedor de ClamAV con healthcheck, worker `media.scan` en la cola `bulk`,
+cuarentena y evento de auditoría. El adaptador habla INSTREAM por TCP sin
+añadir dependencias (ADR-0002) y transmite el archivo por trozos de 64 KiB: no
+se carga en memoria para escanearlo.
+
+Comprobado en vivo con **EICAR**, el archivo de prueba estándar:
+
+- El asset termina en `infected` con `scan_result: Eicar-Test-Signature`.
+- El original queda en `mooc-quarantine` y **desaparece de `mooc-originals`**.
+- Hay evento de auditoría `media.infected`.
+- **Cero derivados y ningún trabajo de transcodificación**: el escaneo va antes,
+  así que lo infectado no llega a FFmpeg.
+
+La colección lo recorre entero en las peticiones `6d`…`6g` de SEG-3. La cadena
+de EICAR se arma en tiempo de ejecución desde tres trozos, para que no aparezca
+escrita en ningún archivo del repositorio: si estuviera, el antivirus de quien
+lo clone pondría la colección en cuarentena.
+
+**Falla cerrado.** Si clamd no responde, el trabajo devuelve error y se
+reintenta; el asset se queda en `scanning` y no pasa a transcodificarse. Un
+escáner caído no se convierte en un permiso de paso.
 
 ### ~~Paso 3 · Transcodificación~~ — **HECHO**
 

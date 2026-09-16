@@ -41,7 +41,8 @@ graph TB
 
   subgraph app[Aplicación sin estado]
     API["api (N instancias)<br/>cmd/api"]
-    WG["worker (N instancias)<br/>cmd/worker"]
+    WG["worker (N instancias)<br/>cmd/worker<br/>colas critical y default"]
+    WM["worker-media (N instancias)<br/>mismo binario + FFmpeg<br/>solo cola bulk"]
     MIG["migrate<br/>job de arranque"]
   end
 
@@ -53,6 +54,7 @@ graph TB
 
   subgraph apoyo[Servicios de apoyo]
     MAIL[mailpit<br/>SMTP local]
+    AV[clamav<br/>clamd · INSTREAM]
   end
 
   subgraph obs[Observabilidad]
@@ -71,12 +73,17 @@ graph TB
   MIG --> PG
 
   RD -- "cola 0" --> WG
+  RD -- "cola 0 · bulk" --> WM
   WG --> PG
   WG --> S3
   WG --> MAIL
+  WM --> PG
+  WM --> S3
+  WM -- "escanea antes de procesar" --> AV
 
   PROM -. "raspa /metrics" .-> API
   PROM -. "raspa /metrics" .-> WG
+  PROM -. "raspa /metrics" .-> WM
   GRAF --> PROM
 ```
 
@@ -103,6 +110,8 @@ graph TB
 | `email.send` | Verificación de correo e invitaciones de profesor | Mailpit, PostgreSQL |
 | `badge.issue` | Emite la insignia al aprobar y publica su imagen SVG en el bucket de lectura anónima | PostgreSQL, MinIO |
 | `media.probe` | Recalcula el SHA-256 leyendo del bucket y detecta el MIME real | PostgreSQL, MinIO |
+| `media.scan` | Escanea el original con ClamAV por INSTREAM; lo infectado va a cuarentena | PostgreSQL, MinIO, clamd |
+| `media.transcode_hls` | Genera la escalera HLS sin *upscaling* y el póster | PostgreSQL, MinIO, FFmpeg |
 | `jobs.reaper` | Cada 30 s republica los trabajos huérfanos | PostgreSQL |
 
 ### Lo que este diagrama no tiene
@@ -112,9 +121,9 @@ el diagrama no prometa de más:
 
 | Falta | Dónde está decidido |
 | --- | --- |
-| `worker-media` con FFmpeg y transcodificación a HLS | `../adr/0011-pipeline-de-medios-con-ffmpeg-y-clamav.md` |
-| ClamAV y el trabajo `media.scan` | `../adr/0011-…`, `../media-plan.md` |
 | Trazas distribuidas (Jaeger / OpenTelemetry) | `../pendientes.md` |
+| Prueba de carga con k6 | `../pendientes.md` |
+| Sesión de reproducción por inscripción (`media-sessions`) | `../adr/0015-…` (D2) |
 
 El esquema con todo eso, que es el del enunciado, está en
 `../recursos/diagrama-enunciado.png`.
@@ -175,8 +184,8 @@ sobrevivan a la petición o al job (ADR-0001, ADR-0006).
 | `clamav` | `clamav/clamav` | por defecto |
 | `prometheus` | `prom/prometheus` | `observability` |
 | `grafana` | `grafana/grafana-oss` | `observability` |
-| `jaeger` | `jaegertracing/all-in-one` | `observability` |
-| `k6` | `grafana/k6` | `carga` |
+
+No hay servicios de `jaeger` ni de `k6`: están decididos y sin implementar.
 
 Orden de arranque por healthcheck: `postgres`+`redis`+`minio` → `migrate` →
 `api`/`worker`. `clamav` bloquea solo a `worker-media`.

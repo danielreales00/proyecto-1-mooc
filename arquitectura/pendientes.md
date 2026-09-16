@@ -55,7 +55,7 @@ que se grabó y no se actualiza hacia atrás.
 | --- | --- | --- |
 | Operaciones de la API | 60 | 28 |
 | Módulos de dominio | 8: `identity`, `audit`, `authoring`, `learning`, `assessment`, `badges`, `admin`, `media` | Ninguno entero |
-| Tipos de trabajo asíncrono | 4 (`email.send`, `badge.issue`, `media.probe`, `media.transcode_hls`) + el `reaper` | 6, empezando por `media.scan` |
+| Tipos de trabajo asíncrono | 5 (`email.send`, `badge.issue`, `media.probe`, `media.scan`, `media.transcode_hls`) + el `reaper` | 5 |
 | Migraciones | 2 (esquema completo del dominio) | Ninguna bloqueante |
 | Carpetas de la colección con contenido | 9 de 10 | SEG-9, que se demuestra con `make demo` y `make scale` |
 

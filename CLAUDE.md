@@ -88,12 +88,12 @@ Entrega 1 entregada y grabada. **63 de 89 operaciones** responden; el resto
 lleva `x-estado: planificado` en el contrato. El flujo completo se recorre de
 punta a punta con `make demo` y la colección entera con `make postman-completo`.
 
-Después de grabar el video se añadió la **transcodificación a HLS**
-(`worker-media` con FFmpeg sobre la cola `bulk`) y la entrega firmada del
-manifiesto. Falta ClamAV: mientras no esté, `media.probe` deja el asset en
-`clean` y encola la transcodificación desde ahí. Ver
-[`arquitectura/media-plan.md`](arquitectura/media-plan.md) y la nota de estado
-al final del `adr/0011`.
+Después de grabar el video se completó el módulo `media`: **escaneo
+antimalware con ClamAV** y **transcodificación a HLS** (`worker-media` sobre la
+cola `bulk`), más la entrega firmada del manifiesto. La cadena es
+`uploaded → scanning → clean → processing → ready`, y lo infectado no llega a
+FFmpeg. Ver [`arquitectura/media-plan.md`](arquitectura/media-plan.md) y la nota
+de estado al final del `adr/0011`.
 
 **El guion de `demo/guion.md` describe lo que se grabó**, no el estado actual
 del repositorio: no se actualiza hacia atrás.

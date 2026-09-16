@@ -120,15 +120,28 @@ que no esté `ready` bloquea la publicación (`CA-01`, ADR-0007).
 Esta decisión se implementó **en partes**, y en dos puntos el código se apartó
 de lo que dice arriba. Se anotan aquí en vez de dejar la contradicción callada:
 
-**Hecho.** Carga multipart con reanudación, verificación en servidor,
-transcodificación a HLS con la escalera sin *upscaling*, póster, imagen
-`worker-media` sobre la cola `bulk`, y entrega del manifiesto.
+**Hecho, y en este orden:** carga multipart con reanudación → `media.probe`
+verifica y deja el asset en `scanning` → `media.scan` da el veredicto → lo
+limpio pasa a `media.transcode_hls`. Un infectado no llega nunca a FFmpeg, que
+es lo que este ADR pedía garantizar.
 
-**Sin hacer: el escaneo antimalware.** No hay contenedor de ClamAV ni trabajo
-`media.scan`. La consecuencia práctica es que el estado `scanning` no se usa y
-`media.probe` deja el asset en `clean`, desde donde encola la transcodificación.
-El orden que promete este ADR —escanear antes de procesar— **todavía no se
-cumple**; cuando entre `media.scan`, el encolado pasa a hacerlo él.
+**Cambio: `media.scan` va en la cola `bulk`, no en `default`.** Lo ejecuta
+`worker-media`, que es el único servicio que depende de clamd. Si fuera al revés,
+un antivirus caído impediría arrancar al worker que manda los correos de
+verificación: una avería del escáner dejaría a la gente sin poder registrarse.
+
+**Dos límites que conviene conocer:**
+
+- **Las firmas están congeladas en la etiqueta de la imagen.** `freshclam` queda
+  desactivado (`CLAMAV_NO_FRESHCLAMD`), de modo que clamd arranca en ~15 s sin
+  red y el mismo tag da el mismo veredicto en cualquier máquina y en el CI. Es
+  lo que se quiere para una demostración reproducible y **no** lo que se quiere
+  en producción, donde freshclam se deja activo.
+- **`StreamMaxLength` es de 512 MB** (`deploy/clamd.conf`). Un archivo mayor no
+  se puede analizar entero, y entonces **se rechaza y va a cuarentena**: no se
+  deja pasar sin escanear. El límite de carga del ADR son 5 GiB, así que entre
+  512 MB y 5 GiB hay una franja que hoy se rechaza. Subirlo cuesta memoria en
+  clamd; bajarlo, material legítimo.
 
 **Cambio: quién emite la credencial de reproducción.** Este ADR y el ADR-0015
 (D2) daban por hecho que la credencial saldría de

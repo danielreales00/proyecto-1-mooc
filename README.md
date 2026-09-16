@@ -367,11 +367,11 @@ Convenciones: token opaco en `Authorization: Bearer`, errores uniformes en
 | `learning` | Completo: catálogo, inscripción, progreso, aprobación |
 | `assessment` | Completo: quizzes, intentos, calificación |
 | `badges` | Completo: emisión, verificación pública, revocación |
-| `media` | Carga multipart reanudable, verificación en servidor y **transcodificación a HLS**. Falta ClamAV; ver [`media-plan.md`](arquitectura/media-plan.md) |
+| `media` | Carga multipart reanudable, verificación en servidor, **escaneo antimalware** y **transcodificación a HLS**. Falta la sesión de reproducción por inscripción; ver [`media-plan.md`](arquitectura/media-plan.md) |
 | `admin` | Completo: invitación de profesores, roles, estados, sesiones ajenas, auditoría y cola |
 
-Trabajos asíncronos: `email.send`, `badge.issue`, `media.probe`,
-`media.transcode_hls` y el `reaper`. Falta `media.scan`, que es ClamAV.
+Trabajos asíncronos: `email.send`, `badge.issue`, `media.probe`, `media.scan`,
+`media.transcode_hls` y el `reaper`.
 
 El desglose completo módulo a módulo está en
 [`arquitectura/estado-modulos.md`](arquitectura/estado-modulos.md).
@@ -389,7 +389,7 @@ backend/
     platform/     config · logging · problem · httpx · ids · jobs
                   passwords · dbx · markdown
     adapters/     postgres · rediscli · sessions · objectstore
-                  mailer · queue · ffmpeg · playback
+                  mailer · queue · ffmpeg · clamav · playback
     modules/      identity · audit · authoring · learning
                   assessment · badges · admin · media
   migrations/     SQL versionado, hacia adelante

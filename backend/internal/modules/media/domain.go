@@ -70,6 +70,8 @@ type Asset struct {
 	DurationSeconds  *float64
 	Width, Height    *int
 	Status           string
+	ScanResult       *string
+	ScannedAt        *time.Time
 	LastError        *string
 	CreatedAt        time.Time
 	UpdatedAt        time.Time

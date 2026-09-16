@@ -32,7 +32,7 @@ func nfm(err error) error {
 
 const colsAsset = `id, owner_id, kind, original_key, original_filename, declared_mime,
 	detected_mime, size_bytes, declared_sha256, sha256, duration_seconds, width, height,
-	status, last_error, created_at, updated_at`
+	status, scan_result, scanned_at, last_error, created_at, updated_at`
 
 func (s *MediaStore) InsertarAsset(ctx context.Context, db dbx.DB, a media.Asset) error {
 	_, err := db.Exec(ctx, `
@@ -50,7 +50,8 @@ func (s *MediaStore) AssetPorID(ctx context.Context, db dbx.DB, id uuid.UUID) (m
 	err := db.QueryRow(ctx, `SELECT `+colsAsset+` FROM media.assets WHERE id=$1`, id).
 		Scan(&a.ID, &a.OwnerID, &a.Kind, &a.OriginalKey, &a.OriginalFilename, &a.DeclaredMIME,
 			&a.DetectedMIME, &a.SizeBytes, &a.DeclaredSHA256, &a.SHA256, &a.DurationSeconds,
-			&a.Width, &a.Height, &a.Status, &a.LastError, &a.CreatedAt, &a.UpdatedAt)
+			&a.Width, &a.Height, &a.Status, &a.ScanResult, &a.ScannedAt, &a.LastError,
+			&a.CreatedAt, &a.UpdatedAt)
 	if err != nil {
 		return media.Asset{}, nfm(err)
 	}
@@ -61,10 +62,10 @@ func (s *MediaStore) ActualizarAsset(ctx context.Context, db dbx.DB, a media.Ass
 	_, err := db.Exec(ctx, `
 		UPDATE media.assets
 		   SET detected_mime=$2, sha256=$3, duration_seconds=$4, width=$5, height=$6,
-		       status=$7, last_error=$8, updated_at=$9
+		       status=$7, scan_result=$8, scanned_at=$9, last_error=$10, updated_at=$11
 		 WHERE id=$1`,
 		a.ID, a.DetectedMIME, a.SHA256, a.DurationSeconds, a.Width, a.Height,
-		a.Status, a.LastError, a.UpdatedAt)
+		a.Status, a.ScanResult, a.ScannedAt, a.LastError, a.UpdatedAt)
 	return err
 }
 

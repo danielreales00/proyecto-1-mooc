@@ -43,6 +43,9 @@ type Config struct {
 	SMTPAddr string
 	MailFrom string
 
+	// ClamAVAddr es el clamd al que habla el worker por INSTREAM (ADR-0011).
+	ClamAVAddr string
+
 	SessionTTL        time.Duration
 	SessionMaxTTL     time.Duration
 	VerifyTokenTTL    time.Duration
@@ -98,8 +101,9 @@ func Load() (Config, error) {
 			Quarantine: opt("S3_BUCKET_QUARANTINE", "mooc-quarantine"),
 		},
 
-		SMTPAddr: req("SMTP_ADDR"),
-		MailFrom: opt("MAIL_FROM", "no-reply@mooc.local"),
+		SMTPAddr:   req("SMTP_ADDR"),
+		MailFrom:   opt("MAIL_FROM", "no-reply@mooc.local"),
+		ClamAVAddr: opt("CLAMAV_ADDR", "clamav:3310"),
 
 		SessionTTL:        optDuration("SESSION_TTL", 12*time.Hour),
 		SessionMaxTTL:     optDuration("SESSION_MAX_TTL", 720*time.Hour),

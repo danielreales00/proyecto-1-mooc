@@ -75,6 +75,8 @@ type Service struct {
 	buckets Buckets
 	// ffmpeg solo lo tiene el worker de medios: la API no transcodifica.
 	ffmpeg Transcodificador
+	// antivirus solo lo tiene el worker: la API no escanea.
+	antivirus Antivirus
 	// repro solo lo tiene la API: el worker no entrega manifiestos.
 	repro Reproduccion
 	// hostPermitido es el único destino al que se puede redirigir.
@@ -381,7 +383,9 @@ func (s *Service) Verificar(ctx context.Context, data map[string]any) error {
 	if err != nil {
 		return err
 	}
-	if asset.Status == EstadoLimpio || asset.Status == EstadoListo || asset.Status == EstadoRechazado {
+	if asset.Status == EstadoEscaneando || asset.Status == EstadoLimpio ||
+		asset.Status == EstadoProcesando || asset.Status == EstadoListo ||
+		asset.Status == EstadoRechazado || asset.Status == EstadoInfectado {
 		s.log.Info("el asset ya estaba verificado", "asset_id", id, "status", asset.Status)
 		return nil
 	}
@@ -450,17 +454,16 @@ func (s *Service) Verificar(ctx context.Context, data map[string]any) error {
 		}
 		s.log.Warn("asset rechazado", "asset_id", id, "motivo", motivo)
 	} else {
-		// Sin escaneo antimalware todavía, el asset queda `clean`. Cuando entre
-		// media.scan, este estado pasará a `scanning`.
-		asset.Status = EstadoLimpio
+		// Verificado no es lo mismo que limpio: pasa a `scanning` y es el
+		// antivirus quien decide si sigue adelante (ADR-0011).
+		asset.Status = EstadoEscaneando
 		s.log.Info("asset verificado", "asset_id", id, "mime", mime, "bytes", tamaño)
 	}
 
-	// Lo que se verificó bien y es audiovisual sigue a la transcodificación. El
-	// trabajo se registra dentro de la misma transacción que deja el asset
-	// limpio y se publica después del commit: si el proceso muere en medio, el
-	// reaper lo recupera (ADR-0004).
-	var claveHLS string
+	// Lo que se verificó bien pasa al antivirus. El trabajo se registra dentro
+	// de la misma transacción que cambia el estado y se publica después del
+	// commit: si el proceso muere en medio, el reaper lo recupera (ADR-0004).
+	var claveEscaneo string
 	err = s.store.WithinTx(ctx, func(ctx context.Context, tx dbx.DB) error {
 		if err := s.store.ActualizarAsset(ctx, tx, asset); err != nil {
 			return err
@@ -476,20 +479,20 @@ func (s *Service) Verificar(ctx context.Context, data map[string]any) error {
 		}); err != nil {
 			return err
 		}
-		if motivo != "" || !HLSAplicable(asset.Kind) {
+		if motivo != "" {
 			return nil
 		}
-		claveHLS, err = s.EncolarTranscodificacion(ctx, tx, asset.ID)
+		claveEscaneo, err = s.EncolarEscaneo(ctx, tx, asset.ID)
 		return err
 	})
-	if err != nil || claveHLS == "" {
+	if err != nil || claveEscaneo == "" {
 		return err
 	}
 
-	if err := s.queue.Publish(ctx, claveHLS, jobs.TypeMediaTranscode, jobs.QueueBulk,
+	if err := s.queue.Publish(ctx, claveEscaneo, jobs.TypeMediaScan, jobs.QueueBulk,
 		map[string]any{"asset_id": asset.ID.String()}, ""); err != nil {
-		s.log.Warn("no se pudo publicar la transcodificación; el reaper la recuperará",
-			"job_key", claveHLS, "error", err)
+		s.log.Warn("no se pudo publicar el escaneo; el reaper lo recuperará",
+			"job_key", claveEscaneo, "error", err)
 	}
 	return nil
 }

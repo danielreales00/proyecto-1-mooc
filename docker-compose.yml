@@ -224,6 +224,28 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  # Antivirus (ADR-0011). La imagen trae la base de firmas, así que arranca en
+  # unos quince segundos y no depende de la red: el mismo tag da el mismo
+  # veredicto en cualquier máquina y en el CI. freshclam queda desactivado por
+  # eso mismo; en producción se invertiría.
+  #
+  # El worker espera a que esté sano: mientras no lo esté, el escaneo falla y se
+  # reintenta, y el asset se queda en `scanning`. Un antivirus caído no debe
+  # convertirse en un permiso de paso.
+  clamav:
+    image: clamav/clamav:1.4
+    environment:
+      CLAMAV_NO_FRESHCLAMD: "true"
+    volumes:
+      - ./deploy/clamd.conf:/etc/clamav/clamd.conf:ro
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+    restart: unless-stopped
+
   # Worker de medios: el mismo binario, con FFmpeg, consumiendo solo la cola
   # `bulk`. La transcodificación satura CPU y tarda minutos; separarla evita que
   # un vídeo largo retrase un correo de verificación (ADR-0004, ADR-0011).
@@ -243,6 +265,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      clamav:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully

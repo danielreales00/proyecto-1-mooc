@@ -2453,6 +2453,227 @@
           ]
         },
         {
+          "name": "6d · EICAR: declarar la carga",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/init",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "init"
+              ]
+            },
+            "description": "Sube el archivo de prueba **EICAR**: una cadena inofensiva que todo antivirus reconoce. No es malware, es el patrón acordado para comprobar que el escáner está vivo.\n\nSe declara como `file`, no como vídeo: lo que se demuestra aquí es el escaneo, no el tipo.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filename\": \"eicar.txt\",\n  \"content_type\": \"text/plain\",\n  \"size_bytes\": {{eicar_bytes}},\n  \"sha256\": \"{{eicar_sha256}}\",\n  \"kind\": \"file\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// EICAR: el archivo de prueba estándar, inofensivo y detectado por",
+                  "// cualquier antivirus. Se arma desde trozos a propósito: si la cadena",
+                  "// completa estuviera escrita en este archivo, el antivirus de quien clone",
+                  "// el repositorio pondría la colección en cuarentena.",
+                  "const eicar = ['X5O!P%@AP[4', '\\\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-',",
+                  "               'TEST-FILE!$H+H*'].join('');",
+                  "pm.collectionVariables.set('eicar', eicar);",
+                  "pm.collectionVariables.set('eicar_sha256', CryptoJS.SHA256(eicar).toString());",
+                  "pm.collectionVariables.set('eicar_bytes', eicar.length);",
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const c = pm.response.json();",
+                  "pm.collectionVariables.set('eicar_asset', c.asset_id);",
+                  "pm.collectionVariables.set('eicar_url', c.parts[0].url);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6e · EICAR: subir al almacén",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{eicar_url}}",
+              "host": [
+                "{{eicar_url}}"
+              ]
+            },
+            "description": "Va directo a MinIO con la URL prefirmada, sin pasar por la API.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{eicar}}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('eicar_etag', (pm.response.headers.get('ETag') || '').replace(/\"/g, ''));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6f · EICAR: completar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/{{eicar_asset}}/complete",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{eicar_asset}}",
+                "complete"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parts\": [{ \"part_number\": 1, \"etag\": \"{{eicar_etag}}\" }]\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));",
+                  "pm.collectionVariables.set('intentos_eicar', 0);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted', () => pm.response.to.have.status(202));",
+                  "console.log('Ahora lo verifica un worker y lo escanea el antivirus.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6g · EICAR: el antivirus lo detecta",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/{{eicar_asset}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{eicar_asset}}"
+              ]
+            },
+            "description": "El asset acaba en `infected`, el original se mueve a `mooc-quarantine` y queda un evento de auditoría.\n\nLo que importa del orden: el escaneo va **antes** de la transcodificación, así que un archivo infectado no llega nunca a FFmpeg. Fíjate en que no hay derivados."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cuerpo = pm.response.json();",
+                  "const intentos = Number(pm.collectionVariables.get('intentos_eicar')) + 1;",
+                  "pm.collectionVariables.set('intentos_eicar', intentos);",
+                  "",
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "",
+                  "// El veredicto lo dan dos trabajos en cadena: se sondea.",
+                  "const resuelto = ['infected', 'clean', 'ready', 'rejected', 'failed'].includes(cuerpo.status);",
+                  "if (!resuelto && intentos < 15) {",
+                  "  console.log('Todavía en ' + cuerpo.status + '. Reintento ' + intentos + ' de 15.');",
+                  "  pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "  pm.collectionVariables.unset('intentos_eicar');",
+                  "  pm.test('el antivirus lo marcó como infectado', () => {",
+                  "    pm.expect(cuerpo.status, 'si quedó clean, el antivirus no lo vio: '",
+                  "      + 'revisa `docker compose logs clamav worker`').to.eql('infected');",
+                  "    pm.expect(cuerpo.scan_result).to.include('Eicar');",
+                  "  });",
+                  "  pm.test('no se procesó lo que no está limpio', () => {",
+                  "    pm.expect(cuerpo.derivatives || [], 'un infectado no debe llegar a FFmpeg')",
+                  "      .to.be.an('array').that.is.empty;",
+                  "  });",
+                  "  console.log('veredicto:', cuerpo.scan_result);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "7 · RECHAZO: checksum que no cuadra",
           "request": {
             "method": "POST",
@@ -3828,6 +4049,34 @@
     },
     {
       "key": "hls_playlist",
+      "value": ""
+    },
+    {
+      "key": "eicar",
+      "value": ""
+    },
+    {
+      "key": "eicar_sha256",
+      "value": ""
+    },
+    {
+      "key": "eicar_bytes",
+      "value": ""
+    },
+    {
+      "key": "eicar_asset",
+      "value": ""
+    },
+    {
+      "key": "eicar_url",
+      "value": ""
+    },
+    {
+      "key": "eicar_etag",
+      "value": ""
+    },
+    {
+      "key": "intentos_eicar",
       "value": ""
     }
   ]

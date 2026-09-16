@@ -7,7 +7,7 @@ Implementación de las reglas del ADR-0004 y del ADR-0008.
 | Tipo | Cola | `job_key` | Qué hace |
 | --- | --- | --- | --- |
 | `media.probe` | `default` | `media.probe:{asset_id}` | Recalcula SHA-256 desde el bucket, detecta MIME real por *magic bytes*, extrae duración y resolución con `ffprobe` |
-| `media.scan` | `default` | `media.scan:{asset_id}` | ClamAV por INSTREAM. Infectado → `mooc-quarantine` + auditoría |
+| `media.scan` | `bulk` | `media.scan:{asset_id}` | ClamAV por INSTREAM. Infectado → `mooc-quarantine` + auditoría. Va en `bulk`, no en `default` como se planeó: lo ejecuta `worker-media`, el único que depende de clamd, para que un antivirus caído no detenga los correos de verificación |
 | `media.transcode_hls` | `bulk` | `media.transcode_hls:{asset_id}:{ladder_version}` | FFmpeg → HLS sin *upscaling*. Conserva el original |
 | `media.poster` | `bulk` | `media.poster:{asset_id}` | Fotograma del segundo 3 como JPEG |
 | `doc.convert_pdf` | `bulk` | `doc.convert_pdf:{asset_id}` | PPTX/ODP → PDF (`RO-01`, opcional) |

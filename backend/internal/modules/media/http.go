@@ -69,6 +69,7 @@ func vistaAsset(a Asset) map[string]any {
 		"size_bytes":        a.SizeBytes,
 		"sha256":            a.SHA256,
 		"duration_seconds":  a.DurationSeconds,
+		"scan_result":       a.ScanResult,
 		"status":            a.Status,
 		"last_error":        a.LastError,
 		"created_at":        a.CreatedAt,

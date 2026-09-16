@@ -16,6 +16,7 @@ import (
 
 	"github.com/hibiken/asynq"
 
+	"mooc/backend/internal/adapters/clamav"
 	"mooc/backend/internal/adapters/ffmpeg"
 	"mooc/backend/internal/adapters/mailer"
 	"mooc/backend/internal/adapters/objectstore"
@@ -81,17 +82,20 @@ func run() error {
 		publicadorBridge{publisher}, audit.NewRecorder(log),
 		media.Buckets{Originales: cfg.S3Buckets.Originals, Derivados: cfg.S3Buckets.Derived,
 			Cuarentena: cfg.S3Buckets.Quarantine},
-		cfg.S3PublicEndpoint, log).ConTranscodificador(ffmpeg.New())
+		cfg.S3PublicEndpoint, log).
+		ConTranscodificador(ffmpeg.New()).
+		ConAntivirus(clamav.New(cfg.ClamAVAddr))
 
 	// Los contadores deben existir en cero antes del primer suceso, o
 	// increase() no verá el salto y la alerta de DLQ nunca disparará.
 	metrics.Inicializar(jobs.TypeEmailSend, jobs.TypeBadgeIssue, jobs.TypeMediaProbe,
-		jobs.TypeMediaTranscode)
+		jobs.TypeMediaScan, jobs.TypeMediaTranscode)
 
 	mux := asynq.NewServeMux()
 	mux.HandleFunc(jobs.TypeEmailSend, runner.Wrap(jobs.TypeEmailSend, emails.Handle))
 	mux.HandleFunc(jobs.TypeBadgeIssue, runner.Wrap(jobs.TypeBadgeIssue, badgeSvc.Handle))
 	mux.HandleFunc(jobs.TypeMediaProbe, runner.Wrap(jobs.TypeMediaProbe, mediaSvc.Verificar))
+	mux.HandleFunc(jobs.TypeMediaScan, runner.Wrap(jobs.TypeMediaScan, mediaSvc.Escanear))
 	// Solo lo atiende de verdad el worker de medios: la transcodificación viaja
 	// por la cola `bulk` y el worker normal no la consume (ver docker-compose).
 	mux.HandleFunc(jobs.TypeMediaTranscode, runner.Wrap(jobs.TypeMediaTranscode, mediaSvc.Transcodificar))

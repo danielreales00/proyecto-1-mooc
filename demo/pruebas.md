@@ -202,8 +202,11 @@ curl -L -H "Authorization: Bearer $TOKEN" \
   http://localhost:8090/api/v1/assets/<asset_id>/content -o descargado.mp4
 ```
 
-Lo que aún no hay es **escaneo antimalware**: es el paso 2 de
-`arquitectura/media-plan.md`.
+Antes de transcodificar, el archivo pasa por **ClamAV**. Para verlo, sube el
+archivo de prueba EICAR: la carpeta SEG-3 de Postman lo hace en las peticiones
+`6d` a `6g`. El asset termina en `infected`, el original se mueve a
+`mooc-quarantine` y **no se genera ningún derivado**: lo infectado no llega a
+FFmpeg.
 
 ## 4 · A mano con curl
 
@@ -251,9 +254,10 @@ otra cuenta desde la misma máquina entra sin problema. Espera un minuto.
 **5 · La insignia tarda unos segundos.** La emite un worker, no la petición.
 Consulta `GET /api/v1/me/badges` un par de veces.
 
-Y uno que **sí es un límite real**: no hay escaneo antimalware. Un archivo
-infectado se cargaría, se verificaría y se transcodificaría como cualquier otro.
-Está en `arquitectura/media-plan.md`, paso 2.
+Y uno que **sí es un límite real**: las firmas del antivirus son las que trae
+la imagen de ClamAV, congeladas en su etiqueta. Es lo que hace reproducible la
+demostración —arranca sin red y da el mismo veredicto en cualquier máquina—, y
+es justo lo contrario de lo que se quiere en producción.
 
 ## Si algo falla
 
