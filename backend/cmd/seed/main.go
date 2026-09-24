@@ -54,7 +54,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	log := logging.New(cfg.LogLevel)
+	log := logging.New(cfg.LogLevel, cfg.LogFormat)
 
 	if cfg.Env != "development" && os.Getenv("SEED_FORCE") != "1" {
 		return fmt.Errorf("la semilla solo corre en APP_ENV=development (use SEED_FORCE=1 para forzar)")

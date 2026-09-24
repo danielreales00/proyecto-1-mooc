@@ -79,6 +79,10 @@ type Service struct {
 	antivirus Antivirus
 	// repro solo lo tiene la API: el worker no entrega manifiestos.
 	repro Reproduccion
+	// inscripciones y basePublica solo los tiene la API: son para abrir
+	// sesiones de reproducción a estudiantes.
+	inscripciones Inscripciones
+	basePublica   string
 	// hostPermitido es el único destino al que se puede redirigir.
 	hostPermitido string
 	log           *slog.Logger

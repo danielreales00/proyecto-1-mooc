@@ -7,17 +7,52 @@ import (
 	"strings"
 )
 
-func New(level string) *slog.Logger {
-	var l slog.Level
+// New devuelve el logger del proceso.
+//
+// `formato` decide el dialecto: `json` es el de siempre, y `gcp` renombra los
+// campos que Cloud Logging interpreta. No se elige por entorno adivinado sino
+// por variable, para que un despliegue distinto sea solo configuración distinta
+// (ADR-0010).
+func New(level, formato string) *slog.Logger {
+	opts := &slog.HandlerOptions{Level: nivel(level)}
+
+	if strings.ToLower(formato) == "gcp" {
+		opts.ReplaceAttr = aCloudLogging
+	}
+	return slog.New(slog.NewJSONHandler(os.Stdout, opts))
+}
+
+func nivel(level string) slog.Level {
 	switch strings.ToLower(level) {
 	case "debug":
-		l = slog.LevelDebug
+		return slog.LevelDebug
 	case "warn":
-		l = slog.LevelWarn
+		return slog.LevelWarn
 	case "error":
-		l = slog.LevelError
+		return slog.LevelError
 	default:
-		l = slog.LevelInfo
+		return slog.LevelInfo
 	}
-	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: l}))
+}
+
+// aCloudLogging traduce los nombres que slog escribe por defecto a los que
+// Cloud Logging reconoce.
+//
+// Sin esto, todas las entradas llegan con gravedad `default` y un WARN no se
+// distingue de un INFO en la consola ni en una alerta: el texto está, pero deja
+// de ser consultable. Es el único acomodo al proveedor en todo el código, y
+// vive en un solo sitio a propósito.
+func aCloudLogging(grupos []string, a slog.Attr) slog.Attr {
+	if len(grupos) > 0 {
+		return a
+	}
+	switch a.Key {
+	case slog.LevelKey:
+		return slog.Attr{Key: "severity", Value: a.Value}
+	case slog.MessageKey:
+		return slog.Attr{Key: "message", Value: a.Value}
+	case slog.TimeKey:
+		return slog.Attr{Key: "timestamp", Value: a.Value}
+	}
+	return a
 }

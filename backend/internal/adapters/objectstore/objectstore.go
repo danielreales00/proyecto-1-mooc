@@ -217,3 +217,30 @@ func (s *Store) Mover(ctx context.Context, origenBucket, origenKey, destinoBucke
 	}
 	return s.client.RemoveObject(ctx, origenBucket, origenKey, minio.RemoveObjectOptions{})
 }
+
+// Almacen es el contrato que cumple este adaptador y que tendrá que cumplir el
+// de Cloud Storage (ADR-0015, D1).
+//
+// Existe para que cambiar de proveedor sea elegir una implementación en el
+// arranque, no tocar los módulos: ni `media` ni `badges` conocen este paquete,
+// hablan con sus propios puertos y la composición hace de puente (ADR-0001).
+//
+// El tipo Parte se queda aquí a propósito: es del protocolo de carga por
+// partes, no del dominio.
+type Almacen interface {
+	Ping(ctx context.Context) error
+	CrearMultipart(ctx context.Context, bucket, key, contentType string) (string, error)
+	PresignPart(ctx context.Context, bucket, key, uploadID string, parte int, ttl time.Duration) (string, error)
+	PartesSubidas(ctx context.Context, bucket, key, uploadID string) ([]Parte, error)
+	CompletarMultipart(ctx context.Context, bucket, key, uploadID string, partes []Parte) error
+	AbortarMultipart(ctx context.Context, bucket, key, uploadID string) error
+	PresignGet(ctx context.Context, bucket, key string, ttl time.Duration) (string, error)
+	Abrir(ctx context.Context, bucket, key string) (io.ReadCloser, error)
+	Info(ctx context.Context, bucket, key string) (int64, error)
+	Subir(ctx context.Context, bucket, key, contentType string, datos []byte) error
+	Mover(ctx context.Context, origenBucket, origenKey, destinoBucket, destinoKey string) error
+}
+
+// Comprobación en tiempo de compilación: si alguien cambia una firma del
+// adaptador, el error sale aquí y no en el despliegue.
+var _ Almacen = (*Store)(nil)

@@ -1,7 +1,9 @@
 # ADR-0015 — Terraform y provisión de GCP
 
-- **Estado:** **Parcialmente aceptado** — D2 y D3 aceptados el 2026-09-05.
-  D1 y D4–D7 siguen Propuestos.
+- **Estado:** **Parcialmente aceptado** — D2 y D3 aceptados el 2026-09-05;
+  D1 aceptado el 2026-09-23, con una corrección importante. D4–D7 siguen
+  Propuestos y se resuelven durante el despliegue
+  (`../despliegue-gcp.md`).
 - **Fecha:** 2026-09-05
 - **Requisitos:** `RT-01`, `RT-06`, `CE-01`
 - **Refina:** ADR-0010 (portabilidad a GCP). Puede reemplazar parte de ADR-0005.
@@ -30,7 +32,7 @@ ADR separa unas de otras, para no pagar por adelantado lo que no hace falta.
 **Terraform se escribe en la Entrega 3, no antes.** Lo que se decide ahora es
 solo aquello cuyo aplazamiento obligaría a reescribir código o contratos.
 
-### D1 — Almacenamiento de objetos en GCP: SDK nativo, no interoperabilidad S3 · Propuesto
+### D1 — Almacenamiento de objetos en GCP: SDK nativo, no interoperabilidad S3 · **ACEPTADO (2026-09-23)**
 
 ADR-0005 apostó por hablar el protocolo S3 para tener un solo adaptador en local
 (MinIO) y en la nube (GCS por su endpoint XML). El problema es la credencial: el
@@ -45,6 +47,32 @@ que se diseñó (ADR-0001, ADR-0010).
 Coste: un adaptador más, unas 200 líneas, en la Entrega 3.
 Beneficio: cero credenciales de larga vida, y firmas de URL con la identidad de
 la carga de trabajo.
+
+#### Corrección del 2026-09-23: la carga multipart no existe en GCS
+
+Al preparar el despliegue apareció lo que esta decisión daba por hecho sin
+comprobarlo. El puerto incluye `CrearMultipart`, `PresignPart` y
+`CompletarMultipart`, y **Cloud Storage no tiene multipart con URLs prefirmadas
+por parte**: su API nativa ofrece cargas reanudables de una sola sesión
+secuencial, que no permite subir partes en paralelo ni preguntar cuáles faltan.
+La API S3-compatible sí lo tiene, pero exige claves HMAC — justo lo que D3
+prohíbe.
+
+**Se emula con `compose`:** cada parte se sube como objeto propio con su URL
+firmada y al completar se unen sin descargarlos. Máximo 32 objetos por operación
+y 1024 componentes por objeto resultante; con partes de 8 MiB eso son 8 GiB,
+suficiente para el tope de 5 GiB del ADR-0011 componiendo en dos niveles.
+
+**El contrato de la API no cambia**, que era el objetivo: se sigue devolviendo
+una URL por parte y se sigue pudiendo reanudar (RF-05). Lo que cambia es el
+tamaño del adaptador —de unas 200 líneas a unas 350— y dónde se escribe: contra
+GCS real, porque su parte delicada (firmar con la identidad de la carga, sin
+clave descargada) no se puede comprobar en Compose. El detalle está en
+`../despliegue-gcp.md`.
+
+El código ya está preparado para recibirlo: el puerto `objectstore.Almacen`
+existe, con comprobación en tiempo de compilación, y `OBJECT_STORE` es la única
+variable que nombra al proveedor.
 
 ### D2 — Entrega de HLS: cookie firmada de CDN, con endpoint propio · **ACEPTADO**
 
@@ -133,7 +161,7 @@ Lo que el equipo debe resolver, y cuándo.
 | --- | --- | --- | --- | --- | --- |
 | **D2** | Entrega de HLS | Firma por segmento · Cookie firmada de CDN | **✅ Aceptado 2026-09-05: cookie firmada.** El endpoint `media-sessions` ya está en el OpenAPI | El OpenAPI y los módulos `media` y `enrollment` | Resuelto |
 | **D3** | Credenciales hacia GCP | Claves JSON · Workload Identity Federation | **✅ Aceptado 2026-09-05: WIF. Prohibidas las claves JSON de cuenta de servicio** | La higiene del repositorio | Resuelto |
-| **D1** | Cliente de objetos en GCP | Interoperabilidad S3 (claves HMAC) · **Adaptador GCS nativo** | Propuesto. **D3 lo implica casi por completo**: las claves HMAC son también una credencial estática de larga vida | El puerto `objectstore` y, con él, ADR-0005 | Antes de la Entrega 3 |
+| **D1** | Cliente de objetos en GCP | Interoperabilidad S3 (claves HMAC) · **Adaptador GCS nativo** | **✅ Aceptado 2026-09-23: adaptador nativo, con multipart emulado por `compose`.** D3 lo implicaba casi por completo | El puerto `objectstore` y, con él, ADR-0005 | Resuelto |
 | **D4** | Cómputo de `worker-media` | Cloud Run · Grupo de instancias gestionado | Decidir en la Entrega 3, midiendo | Nada | Entrega 3 |
 | **D5** | Estructura de Terraform y estado remoto | Módulos + entornos · Un solo directorio | Módulos + entornos, estado en GCS | Nada | Entrega 3 |
 | **D6** | Tamaño de Cloud SQL y pool | Ajustar `MaxConns` · Intermediario de conexiones | Ajustar por variable; medir antes | Nada | Entrega 3 |
@@ -164,6 +192,8 @@ esto se pueda cambiar sin romper al cliente. Se decide al implementar `media`.
 | --- | --- |
 | D2 | `POST /api/v1/enrollments/{enrollmentId}/media-sessions` añadido a `backend/openapi/openapi.yaml` y a `disenos/api-v1.md`. En la Entrega 1 devolverá `delivery: "signed_url"` con una URL firmada de MinIO; en la Entrega 3 pasará a `delivery: "signed_cookie"` **sin cambiar el contrato** |
 | D3 | Regla registrada en `CLAUDE.md`. El CI ya falla si aparece una credencial en el repositorio |
+| D2 | **Implementado** el 2026-09-23: `POST /enrollments/{id}/media-sessions` emite la credencial tras comprobar la inscripción, y el manifiesto se sirve en `GET /media-sessions/{token}/master.m3u8`. Devuelve `delivery: "signed_url"`; la fase 5 del despliegue lo cambia a `signed_cookie` sin tocar el contrato |
+| D1 | **Preparado** el 2026-09-23: puerto `objectstore.Almacen` y variable `OBJECT_STORE`. El adaptador de GCS se escribe en la fase 3 del despliegue |
 
 ## Alternativas consideradas
 

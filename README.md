@@ -357,7 +357,7 @@ Convenciones: token opaco en `Authorization: Bearer`, errores uniformes en
 
 ## Qué está hecho y qué no
 
-**63 de las 89 operaciones** responden hoy.
+**65 de las 90 operaciones** responden hoy.
 
 | Módulo | Estado |
 | --- | --- |
@@ -367,7 +367,7 @@ Convenciones: token opaco en `Authorization: Bearer`, errores uniformes en
 | `learning` | Completo: catálogo, inscripción, progreso, aprobación |
 | `assessment` | Completo: quizzes, intentos, calificación |
 | `badges` | Completo: emisión, verificación pública, revocación |
-| `media` | Carga multipart reanudable, verificación en servidor, **escaneo antimalware** y **transcodificación a HLS**. Falta la sesión de reproducción por inscripción; ver [`media-plan.md`](arquitectura/media-plan.md) |
+| `media` | Completo: carga multipart reanudable, verificación en servidor, escaneo antimalware, transcodificación a HLS y entrega del manifiesto con credencial de reproducción |
 | `admin` | Completo: invitación de profesores, roles, estados, sesiones ajenas, auditoría y cola |
 
 Trabajos asíncronos: `email.send`, `badge.issue`, `media.probe`, `media.scan`,

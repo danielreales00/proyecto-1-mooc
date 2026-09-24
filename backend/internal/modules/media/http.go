@@ -44,6 +44,23 @@ func (a *API) Routes(mux *http.ServeMux, auth httpx.Middleware,
 	// literal de arriba gana al comodín de abajo, así que master.m3u8 nunca
 	// cae aquí.
 	mux.Handle("GET /api/v1/assets/{id}/hls/{playlist}", http.HandlerFunc(a.hlsPlaylist))
+
+	// Sesión de reproducción: la pide el ESTUDIANTE, así que no pasa por
+	// soloDocentes. Quien autoriza es la inscripción (CA-06), comprobada
+	// dentro del servicio.
+	mux.Handle("POST /api/v1/enrollments/{id}/media-sessions", auth(idemSiHay(idem, a.abrirSesion)))
+	// El manifiesto de esa sesión va sin autenticar, como las playlists: el
+	// testigo de la ruta es la credencial.
+	mux.Handle("GET /api/v1/media-sessions/{token}/master.m3u8", http.HandlerFunc(a.masterDeSesion))
+}
+
+// idemSiHay aplica el middleware de idempotencia cuando existe. Se repite el
+// patrón de `pi` porque esta ruta no pasa por soloDocentes.
+func idemSiHay(idem httpx.Middleware, h http.HandlerFunc) http.Handler {
+	if idem == nil {
+		return h
+	}
+	return idem(h)
 }
 
 func actor(r *http.Request) Actor {
@@ -272,6 +289,50 @@ func (a *API) contenido(w http.ResponseWriter, r *http.Request) {
 	// #nosec G710 -- el destino se acaba de validar contra el host del almacén
 	// configurado; no proviene de la petición.
 	http.Redirect(w, r, destino.String(), http.StatusFound)
+}
+
+func (a *API) abrirSesion(w http.ResponseWriter, r *http.Request) {
+	id, err := pathID(r)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	var in struct {
+		ResourceStableID string `json:"resource_stable_id"`
+	}
+	if err := httpx.Decode(w, r, &in); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	recurso, err := uuid.Parse(strings.TrimSpace(in.ResourceStableID))
+	if err != nil {
+		httpx.Fail(w, r, problem.Validation("La solicitud no es válida.").With(problem.FieldError{
+			Code: "invalid_uuid", Field: "resource_stable_id",
+			Detail: "Debe ser el identificador estable del recurso.",
+		}))
+		return
+	}
+
+	sesion, err := a.svc.AbrirSesion(r.Context(), id, recurso, actor(r))
+	if err != nil {
+		httpx.Fail(w, r, traducir(err))
+		return
+	}
+	httpx.JSON(w, http.StatusCreated, map[string]any{
+		"manifest_url": sesion.ManifestURL,
+		"delivery":     sesion.Delivery,
+		"scope":        sesion.Scope,
+		"expires_at":   sesion.ExpiresAt,
+	})
+}
+
+func (a *API) masterDeSesion(w http.ResponseWriter, r *http.Request) {
+	manifiesto, err := a.svc.MasterDeSesion(r.Context(), r.PathValue("token"))
+	if err != nil {
+		httpx.Fail(w, r, traducir(err))
+		return
+	}
+	escribirManifiesto(w, manifiesto)
 }
 
 func (a *API) hlsMaster(w http.ResponseWriter, r *http.Request) {

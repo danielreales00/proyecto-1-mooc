@@ -44,8 +44,13 @@ colección ya no se estorban en el limitador de tasa.
 
 ## Dónde estamos
 
-Estado a 15 de septiembre de 2026. Medido contra el contrato: **63 de 89
-operaciones** responden; las 26 restantes llevan `x-estado: planificado`.
+Estado a 23 de septiembre de 2026. Medido contra el contrato: **65 de 90
+operaciones** responden; las 25 restantes llevan `x-estado: planificado`.
+
+El módulo `media` quedó completo —antivirus, transcodificación y sesión de
+reproducción— y el backend está preparado para GCP: `PORT`, logs de Cloud
+Logging, TLS a Redis, pool por entorno y el puerto del almacén de objetos. Lo
+que falta del despliegue está en [`despliegue-gcp.md`](despliegue-gcp.md).
 
 Después de grabar el video de la Entrega 1 entró la transcodificación a HLS.
 El video no la muestra, y `demo/guion.md` tampoco: ese documento describe lo

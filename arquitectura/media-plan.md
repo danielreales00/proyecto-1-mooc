@@ -3,8 +3,10 @@
 **Los cuatro pasos están hechos.** La Entrega 1 llevó la carga multipart
 reanudable y la verificación en servidor; después se añadieron el escaneo
 antimalware, la transcodificación a HLS y la entrega firmada del manifiesto.
-Queda la sesión de reproducción por inscripción. Este documento dice qué queda
-y con qué evidencia se comprobó lo demás.
+Con la sesión de reproducción cerrada, el módulo está completo para la
+Entrega 1. Este documento dice con qué evidencia se comprobó cada paso; lo que
+queda de medios es cosa del despliegue (`despliegue-gcp.md`, fase 5: la misma
+credencial servida como cookie de CDN).
 
 Sirve para dos cosas: que el tribunal vea que la ausencia es una decisión con
 fecha, y que quien lo implemente no tenga que rehacer el diseño.

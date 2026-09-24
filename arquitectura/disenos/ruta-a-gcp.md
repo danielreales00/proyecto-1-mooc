@@ -76,6 +76,10 @@ graph TB
 
 ## Orden previsto
 
+> El plan ejecutable, con fases, comprobaciones y lo que hay que hacer a mano,
+> está en [`../despliegue-gcp.md`](../despliegue-gcp.md). Esta lista es el
+> resumen.
+
 1. Artifact Registry y build de imágenes en CI.
 2. Terraform: red, Cloud SQL, Memorystore, GCS, Secret Manager.
 3. Job de migración y despliegue de `api` en Cloud Run.

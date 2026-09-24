@@ -17,7 +17,7 @@ import (
 type health struct {
 	pool    *pgxpool.Pool
 	redis   *redis.Client
-	objects *objectstore.Store
+	objects objectstore.Almacen
 }
 
 func (h *health) live(w http.ResponseWriter, r *http.Request) {

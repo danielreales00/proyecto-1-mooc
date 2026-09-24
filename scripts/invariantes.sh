@@ -162,6 +162,74 @@ for caso in "GET /api/v1/me|" "GET /api/v1/courses/no-es-uuid|$PA" \
 done
 [ $malformados -eq 0 ] && ok "los 4xx comprobados responden en problem+json"
 
+# ─────────────────────────────────────────────────────────── ADR-0015 ──────
+bloque "ADR-0015 (D2) · la credencial de reproducción respeta la inscripción"
+
+# Se monta un curso con un vídeo de verdad: sin un asset en `ready` no hay nada
+# que reproducir, y el objetivo es comprobar la cadena entera, no un trozo.
+RV=$(curl -s -X POST "$API/api/v1/courses" -H "$(idem)" -H "$PA" -H "$J" \
+  -d '{"title":"Curso con vídeo","summary":"sesión de reproducción","category":"cloud","language":"es"}')
+CIDV=$(echo "$RV"|jq "d['course']['id']"); VIDV=$(echo "$RV"|jq "d['version']['id']")
+MIDV=$(curl -s -X POST "$API/api/v1/versions/$VIDV/modules" -H "$(idem)" -H "$PA" -H "$J" -d '{"title":"M1"}'|jq "d['id']")
+UIDV=$(curl -s -X POST "$API/api/v1/modules/$MIDV/units" -H "$PA" -H "$J" -d '{"title":"U1"}'|jq "d['id']")
+
+ARCHIVO="$(dirname "$0")/../postman/archivo-de-prueba.mp4"
+TAMV=$(wc -c < "$ARCHIVO" | tr -d ' ')
+SHAV=$(sha256sum "$ARCHIVO" | cut -d' ' -f1)
+INIT=$(curl -s -X POST "$API/api/v1/assets/init" -H "$PA" -H "$J" -H "$(idem)" \
+  -d "{\"filename\":\"clase.mp4\",\"content_type\":\"video/mp4\",\"size_bytes\":$TAMV,\"sha256\":\"$SHAV\",\"kind\":\"video\"}")
+ASSETV=$(echo "$INIT"|jq "d['asset_id']"); URLV=$(echo "$INIT"|jq "d['parts'][0]['url']")
+ETV=$(curl -s -X PUT --data-binary "@$ARCHIVO" -D- "$URLV" -o /dev/null | grep -i '^etag' | tr -d '\r"' | awk '{print $2}')
+curl -s -o /dev/null -X POST "$API/api/v1/assets/$ASSETV/complete" -H "$PA" -H "$J" -H "$(idem)" \
+  -d "{\"parts\":[{\"part_number\":1,\"etag\":\"$ETV\"}]}"
+
+# Tres trabajos encadenados —verificar, escanear, transcodificar—: se sondea
+# hasta un estado final en vez de suponer cuánto tardan.
+ESTV=""
+for _ in $(seq 1 60); do
+  ESTV=$(curl -s "$API/api/v1/assets/$ASSETV" -H "$PA"|jq "d['status']")
+  case "$ESTV" in uploaded|scanning|clean|processing) sleep 2 ;; *) break ;; esac
+done
+
+if [ "$ESTV" != ready ]; then
+  mal "el asset quedó en $ESTV: sin vídeo listo no se puede comprobar la sesión"
+else
+  ok "el vídeo llegó a ready pasando por antivirus y transcodificación"
+
+  SIDV=$(curl -s -X POST "$API/api/v1/units/$UIDV/resources" -H "$PA" -H "$J" \
+    -d "{\"title\":\"Clase 1\",\"type\":\"video\",\"asset_id\":\"$ASSETV\",\"required\":true}"|jq "d['stable_id']")
+  curl -fsS -o /dev/null -X POST "$API/api/v1/courses/$CIDV/versions/1/publish" -H "$(idem)" -H "$PA"
+  EIDV=$(curl -s -X POST "$API/api/v1/enrollments" -H "$(idem)" -H "$EA" -H "$J" -d "{\"course_id\":\"$CIDV\"}"|jq "d['id']")
+
+  SES=$(curl -s -X POST "$API/api/v1/enrollments/$EIDV/media-sessions" -H "$(idem)" -H "$EA" -H "$J" \
+    -d "{\"resource_stable_id\":\"$SIDV\"}")
+  MAN=$(echo "$SES"|jq "d.get('manifest_url','')")
+  if [ -z "$MAN" ]; then
+    mal "la sesión no devolvió manifest_url: $SES"
+  else
+    ok "el estudiante inscrito obtiene credencial ($(echo "$SES"|jq "d['delivery']+' · '+d['scope']"))"
+
+    CUERPO=$(curl -s "$MAN")
+    case "$CUERPO" in
+      \#EXTM3U*) ok "el manifiesto se sirve SIN cabecera de sesión: la credencial va en la URL" ;;
+      *) mal "el manifiesto de la sesión no es un m3u8" ;;
+    esac
+    VARU=$(echo "$CUERPO" | grep -v '^#' | head -1)
+    if curl -s "$VARU" | grep -q 'X-Amz-Signature'; then
+      ok "cada segmento sale firmado: el bucket de derivados sigue cerrado (ADR-0005)"
+    else
+      mal "los segmentos no vienen firmados"
+    fi
+  fi
+
+  # El derecho lo da la inscripción, no tener el identificador.
+  AJENO=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/api/v1/enrollments/$EIDV/media-sessions" \
+    -H "$(idem)" -H "Authorization: Bearer $(lg estudiante3@mooc.local)" -H "$J" \
+    -d "{\"resource_stable_id\":\"$SIDV\"}")
+  [ "$AJENO" = 403 ] && ok "la inscripción ajena responde 403 (CA-06)" \
+                     || mal "un tercero obtuvo $AJENO en vez de 403"
+fi
+
 echo
 if [ $fallos -gt 0 ]; then
   echo "${ROJO}${NEG}$fallos invariante(s) incumplido(s).${OFF}"

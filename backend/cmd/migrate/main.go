@@ -35,7 +35,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	log := logging.New(cfg.LogLevel)
+	log := logging.New(cfg.LogLevel, cfg.LogFormat)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()

@@ -6,15 +6,18 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/hibiken/asynq"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mooc/backend/internal/adapters/clamav"
 	"mooc/backend/internal/adapters/ffmpeg"
@@ -44,7 +47,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	log := logging.New(cfg.LogLevel)
+	log := logging.New(cfg.LogLevel, cfg.LogFormat)
 	// Para que los errores registrados fuera de un handler con logger propio
 	// (httpx.Fail) salgan en el mismo formato estructurado.
 	slog.SetDefault(log)
@@ -52,7 +55,11 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := postgres.Open(ctx, cfg.DatabaseURL)
+	pool, err := postgres.Open(ctx, cfg.DatabaseURL, func(c *pgxpool.Config) {
+		// Cada instancia abre su propio pool: en Cloud Run el total es este
+		// número por el de instancias (ADR-0015, D6).
+		c.MaxConns = cfg.DBMaxConns
+	})
 	if err != nil {
 		return err
 	}
@@ -70,8 +77,7 @@ func run() error {
 	emails := identity.NewEmailWorker(
 		mailer.New(cfg.SMTPAddr, cfg.MailFrom), cfg.PublicBaseURL, log)
 
-	almacen, err := objectstore.Open(cfg.S3Endpoint, cfg.S3PublicEndpoint, cfg.S3AccessKey, cfg.S3SecretKey,
-		cfg.S3UseSSL, cfg.S3Buckets.Originals)
+	almacen, err := abrirAlmacen(cfg)
 	if err != nil {
 		return err
 	}
@@ -159,7 +165,7 @@ func startHealth(log *slog.Logger) *http.Server {
 
 // almacenBridge y publicadorBridge adaptan los adaptadores a los puertos que
 // declara media. Viven aquí porque la composición es quien conoce ambos lados.
-type almacenBridge struct{ s *objectstore.Store }
+type almacenBridge struct{ s objectstore.Almacen }
 
 func (b almacenBridge) Subir(ctx context.Context, bucket, key, ct string, datos []byte) error {
 	return b.s.Subir(ctx, bucket, key, ct, datos)
@@ -230,3 +236,27 @@ func (l asynqLogger) Info(args ...any)  { l.log.Info("asynq", "msg", args) }
 func (l asynqLogger) Warn(args ...any)  { l.log.Warn("asynq", "msg", args) }
 func (l asynqLogger) Error(args ...any) { l.log.Error("asynq", "msg", args) }
 func (l asynqLogger) Fatal(args ...any) { l.log.Error("asynq fatal", "msg", args) }
+
+// abrirAlmacen elige la implementación del almacén de objetos.
+//
+// Es el único sitio donde el proveedor se nombra. `s3` cubre MinIO en Compose
+// y cualquier almacén compatible; `gcs` será el adaptador nativo de Cloud
+// Storage (ADR-0015, D1), que aún no existe: se escribe contra GCS real en la
+// fase 3 de `arquitectura/despliegue-gcp.md`, porque su parte delicada —firmar
+// URLs con la identidad de la carga, sin clave descargada— no se puede
+// comprobar en local.
+//
+// Falla al arrancar y no a mitad de una subida: un almacén mal configurado
+// tiene que notarse en el despliegue.
+func abrirAlmacen(cfg config.Config) (objectstore.Almacen, error) {
+	switch strings.ToLower(cfg.ObjectStore) {
+	case "", "s3":
+		return objectstore.Open(cfg.S3Endpoint, cfg.S3PublicEndpoint, cfg.S3AccessKey,
+			cfg.S3SecretKey, cfg.S3UseSSL, cfg.S3Buckets.Originals)
+	case "gcs":
+		return nil, fmt.Errorf("OBJECT_STORE=gcs: el adaptador de Cloud Storage " +
+			"todavía no está escrito; ver arquitectura/despliegue-gcp.md, fase 3")
+	default:
+		return nil, fmt.Errorf("OBJECT_STORE=%q no es una opción válida (s3, gcs)", cfg.ObjectStore)
+	}
+}

@@ -1434,6 +1434,41 @@ paths:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
 
+  /api/v1/media-sessions/{token}/master.m3u8:
+    parameters:
+      - name: token
+        in: path
+        required: true
+        description: Credencial de reproducción devuelta por `media-sessions`.
+        schema: { type: string }
+    get:
+      tags: [medios]
+      operationId: getSessionManifest
+      security: []
+      summary: Manifiesto maestro de una sesión de reproducción
+      description: |
+        Es el `manifest_url` que devuelve `POST /enrollments/{id}/media-sessions`.
+
+        No lleva sesión de usuario: autoriza el testigo de la ruta, que caduca
+        a la media hora. Un reproductor pide cada documento del manifiesto por
+        su cuenta y no envía cabeceras a los sub-recursos, así que la
+        autorización tiene que viajar dentro de la URL.
+
+        En la Entrega 3, detrás de Cloud CDN, esta misma respuesta se sirve con
+        una cookie firmada y el cliente no cambia (ADR-0015, D2).
+      responses:
+        "200":
+          description: Manifiesto
+          content:
+            application/vnd.apple.mpegurl:
+              schema: { type: string }
+        "404": { $ref: "#/components/responses/NoEncontrado" }
+        "409":
+          description: El recurso aún no está transcodificado
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
   /api/v1/assets/{assetId}/hls/{playlist}:
     parameters:
       - $ref: "#/components/parameters/AssetId"
@@ -1646,7 +1681,6 @@ paths:
     post:
       tags: [medios]
       operationId: createMediaSession
-      x-estado: planificado
       x-adr: ADR-0015 (D2)
       summary: Abrir una sesión de reproducción para un recurso
       description: |

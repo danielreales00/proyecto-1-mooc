@@ -15,6 +15,7 @@ Equipo de 4 personas, 4–5 entregas en 13 semanas.
 | `arquitectura/adr/` | Decisiones de arquitectura. Una decisión por archivo, numeradas. |
 | `arquitectura/disenos/` | Modelo de datos, API, trabajos asíncronos, máquinas de estado, ruta a GCP. |
 | `arquitectura/guia-de-informes.md` | Convenciones de escritura de los informes de arquitectura. Valen para todas las entregas. |
+| `arquitectura/despliegue-gcp.md` | **Plan ejecutable del despliegue en GCP.** Fases, comprobaciones y qué hace el usuario a mano. |
 | `arquitectura/pendientes.md` | Notas de trabajo. No es entregable. |
 | `arquitectura/preguntas-profesor.md` | Dudas abiertas y sus respuestas. |
 | `2026-20 proyecto-plataforma-mooc.pdf` | El PDF original. |
@@ -84,7 +85,7 @@ leer el ADR correspondiente:
 
 ## Estado actual
 
-Entrega 1 entregada y grabada. **63 de 89 operaciones** responden; el resto
+Entrega 1 entregada y grabada. **65 de 90 operaciones** responden; el resto
 lleva `x-estado: planificado` en el contrato. El flujo completo se recorre de
 punta a punta con `make demo` y la colección entera con `make postman-completo`.
 
@@ -95,8 +96,16 @@ cola `bulk`), más la entrega firmada del manifiesto. La cadena es
 FFmpeg. Ver [`arquitectura/media-plan.md`](arquitectura/media-plan.md) y la nota
 de estado al final del `adr/0011`.
 
+También se cerró `media-sessions`: la credencial de reproducción por
+inscripción, que en GCP pasa de URL firmada a cookie de CDN sin que el cliente
+cambie (ADR-0015, D2).
+
 **El guion de `demo/guion.md` describe lo que se grabó**, no el estado actual
 del repositorio: no se actualiza hacia atrás.
+
+**El despliegue en GCP se prepara en
+[`arquitectura/despliegue-gcp.md`](arquitectura/despliegue-gcp.md).** Ese
+documento es el punto de entrada de la conversación que lo ejecute.
 
 La demostración se hace con Postman. El guion del video está en
 `demo/guion.md`, dimensionado para el **máximo de 20 minutos**, y el reparto

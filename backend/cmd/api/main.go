@@ -7,11 +7,13 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -54,7 +56,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	log := logging.New(cfg.LogLevel)
+	log := logging.New(cfg.LogLevel, cfg.LogFormat)
 	// Para que los errores registrados fuera de un handler con logger propio
 	// (httpx.Fail) salgan en el mismo formato estructurado.
 	slog.SetDefault(log)
@@ -63,13 +65,17 @@ func run() error {
 	defer stop()
 
 	// --- adaptadores ------------------------------------------------------
-	pool, err := postgres.Open(ctx, cfg.DatabaseURL)
+	pool, err := postgres.Open(ctx, cfg.DatabaseURL, func(c *pgxpool.Config) {
+		// Cada instancia abre su propio pool: en Cloud Run el total es este
+		// número por el de instancias (ADR-0015, D6).
+		c.MaxConns = cfg.DBMaxConns
+	})
 	if err != nil {
 		return err
 	}
 	defer pool.Close()
 
-	sessionRedis, err := rediscli.Open(ctx, cfg.RedisAddr, cfg.RedisPassword, cfg.RedisSessionDB)
+	sessionRedis, err := rediscli.Open(ctx, cfg.RedisAddr, cfg.RedisPassword, cfg.RedisSessionDB, cfg.RedisTLS)
 	if err != nil {
 		return err
 	}
@@ -77,15 +83,14 @@ func run() error {
 
 	// Base lógica propia: los contadores de tasa no comparten espacio de
 	// claves con las sesiones ni con la cola (ADR-0004).
-	limitRedis, err := rediscli.Open(ctx, cfg.RedisAddr, cfg.RedisPassword, cfg.RedisLimitDB)
+	limitRedis, err := rediscli.Open(ctx, cfg.RedisAddr, cfg.RedisPassword, cfg.RedisLimitDB, cfg.RedisTLS)
 	if err != nil {
 		return err
 	}
 	defer limitRedis.Close()
 	limiter := ratelimit.New(limitRedis)
 
-	store, err := objectstore.Open(cfg.S3Endpoint, cfg.S3PublicEndpoint, cfg.S3AccessKey, cfg.S3SecretKey,
-		cfg.S3UseSSL, cfg.S3Buckets.Originals)
+	store, err := abrirAlmacen(cfg)
 	if err != nil {
 		return err
 	}
@@ -129,7 +134,9 @@ func run() error {
 		cfg.S3PublicEndpoint, log).
 		// Las credenciales de reproducción viven en la base de sesiones: son lo
 		// mismo que una sesión, con menos alcance y menos vida.
-		ConReproduccion(playback.New(sessionRedis))
+		ConReproduccion(playback.New(sessionRedis)).
+		ConBasePublica(cfg.PublicBaseURL).
+		ConInscripciones(inscripcionesBridge{learningSvc})
 
 	metrics.Inicializar(jobs.TypeEmailSend, jobs.TypeBadgeIssue)
 
@@ -235,7 +242,7 @@ func (b learningBridge) Publish(ctx context.Context, key, tipo, cola string,
 // almacenBridge adapta el adaptador de objetos al puerto que declara media.
 // Los tipos Parte son distintos a propósito: el dominio no importa el
 // adaptador (ADR-0001).
-type almacenBridge struct{ s *objectstore.Store }
+type almacenBridge struct{ s objectstore.Almacen }
 
 func (b almacenBridge) Subir(ctx context.Context, bucket, key, ct string, datos []byte) error {
 	return b.s.Subir(ctx, bucket, key, ct, datos)
@@ -310,4 +317,77 @@ func (t tamperAuditor) TamperingAttempt(r *http.Request, enrollmentID uuid.UUID,
 	})
 	t.log.Warn("intento de enviar progreso calculado por el cliente",
 		"enrollment_id", enrollmentID, "user_id", p.UserID, "body", cuerpo)
+}
+
+// inscripcionesBridge deja que `media` pregunte por una inscripción sin
+// importar `learning`: cada módulo habla con el otro por su interfaz de
+// servicio, nunca por sus tablas (ADR-0001).
+//
+// La comprobación de derecho la hace `learning.Content`, que ya aplica el
+// guard de propiedad; aquí solo se traduce el resultado.
+type inscripcionesBridge struct{ s *learning.Service }
+
+func (b inscripcionesBridge) AssetDeRecurso(ctx context.Context, enrollmentID,
+	resourceStableID uuid.UUID, a media.Actor) (uuid.UUID, error) {
+
+	_, recursos, err := b.s.Content(ctx, enrollmentID, learning.Actor{
+		UserID: a.UserID, Role: a.Role, IP: a.IP, Agent: a.Agent, Trace: a.Trace,
+	})
+	if err != nil {
+		return uuid.Nil, traducirLearning(err)
+	}
+
+	for _, r := range recursos {
+		if r.StableID != resourceStableID {
+			continue
+		}
+		if r.AssetID == nil {
+			// El recurso existe pero no tiene archivo: un bloque de texto o un
+			// quiz. No es un error del sistema, es que no hay nada que
+			// reproducir.
+			return uuid.Nil, media.ErrNotFound
+		}
+		return *r.AssetID, nil
+	}
+	// Un recurso que no está en el árbol de ESTA inscripción no existe para
+	// quien pregunta: no se distingue de uno inexistente, para no filtrar el
+	// contenido de otros cursos.
+	return uuid.Nil, media.ErrNotFound
+}
+
+// traducirLearning pasa los errores de un módulo a los del otro. Sin esto, la
+// capa HTTP de `media` no sabría qué código devolver.
+func traducirLearning(err error) error {
+	switch {
+	case errors.Is(err, learning.ErrProhibido):
+		return media.ErrProhibido
+	case errors.Is(err, learning.ErrNotFound):
+		return media.ErrNotFound
+	default:
+		return err
+	}
+}
+
+// abrirAlmacen elige la implementación del almacén de objetos.
+//
+// Es el único sitio donde el proveedor se nombra. `s3` cubre MinIO en Compose
+// y cualquier almacén compatible; `gcs` será el adaptador nativo de Cloud
+// Storage (ADR-0015, D1), que aún no existe: se escribe contra GCS real en la
+// fase 3 de `arquitectura/despliegue-gcp.md`, porque su parte delicada —firmar
+// URLs con la identidad de la carga, sin clave descargada— no se puede
+// comprobar en local.
+//
+// Falla al arrancar y no a mitad de una subida: un almacén mal configurado
+// tiene que notarse en el despliegue.
+func abrirAlmacen(cfg config.Config) (objectstore.Almacen, error) {
+	switch strings.ToLower(cfg.ObjectStore) {
+	case "", "s3":
+		return objectstore.Open(cfg.S3Endpoint, cfg.S3PublicEndpoint, cfg.S3AccessKey,
+			cfg.S3SecretKey, cfg.S3UseSSL, cfg.S3Buckets.Originals)
+	case "gcs":
+		return nil, fmt.Errorf("OBJECT_STORE=gcs: el adaptador de Cloud Storage " +
+			"todavía no está escrito; ver arquitectura/despliegue-gcp.md, fase 3")
+	default:
+		return nil, fmt.Errorf("OBJECT_STORE=%q no es una opción válida (s3, gcs)", cfg.ObjectStore)
+	}
 }
