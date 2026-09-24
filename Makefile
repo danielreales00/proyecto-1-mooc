@@ -5,6 +5,20 @@
 SHELL := /bin/bash
 COMPOSE := docker compose
 GO_IMAGE := golang:1.26-alpine
+
+# Herramientas de seguridad con versión fija, por lo mismo que las imágenes: el
+# CI y la máquina de cada quien deben ejecutar exactamente lo mismo. Subirlas es
+# una decisión, no algo que pase solo un martes.
+GOVULN_VERSION := v1.8.0
+GOSEC_VERSION  := v2.29.0
+
+# Cachés de Go. La de módulos ya estaba; faltaba LA DE COMPILACIÓN, que es la
+# que de verdad pesa: sin ella cada contenedor recompila el árbol entero de
+# dependencias desde cero, y por eso `vet`, `test` y `sec` tardaban lo mismo la
+# primera vez que la décima. La de binarios evita reinstalar govulncheck y gosec
+# en cada ejecución.
+GO_CACHE := -v mooc-gomodcache:/go/pkg/mod -v mooc-gobuildcache:/root/.cache/go-build
+EN_GO    := docker run --rm -v "$(PWD)/backend":/src -w /src $(GO_CACHE)
 HERRAMIENTAS := $(COMPOSE) run --rm herramientas
 
 .DEFAULT_GOAL := help
@@ -53,8 +67,7 @@ migrate: ## Aplica las migraciones pendientes
 
 .PHONY: tidy
 tidy: ## Resuelve go.mod y go.sum dentro de un contenedor
-	docker run --rm -v "$(PWD)/backend":/src -w /src \
-		-v mooc-gomodcache:/go/pkg/mod $(GO_IMAGE) go mod tidy
+	$(EN_GO) $(GO_IMAGE) go mod tidy
 
 .PHONY: fmt
 fmt: ## Formatea el código
@@ -62,8 +75,7 @@ fmt: ## Formatea el código
 
 .PHONY: vet
 vet: ## Análisis estático
-	docker run --rm -v "$(PWD)/backend":/src -w /src \
-		-v mooc-gomodcache:/go/pkg/mod $(GO_IMAGE) go vet ./...
+	$(EN_GO) $(GO_IMAGE) go vet ./...
 
 .PHONY: openapi
 openapi: ## Valida el contrato OpenAPI
@@ -76,23 +88,21 @@ contrato: env ## Comprueba que el contrato y la API no se hayan separado
 
 .PHONY: sec
 sec: ## Análisis de seguridad: govulncheck y gosec (lo mismo que el CI)
-	docker run --rm -v "$(PWD)/backend":/src -w /src \
-		-v mooc-gomodcache:/go/pkg/mod $(GO_IMAGE) sh -c "\
-		go install golang.org/x/vuln/cmd/govulncheck@latest && govulncheck ./... && \
-		go install github.com/securego/gosec/v2/cmd/gosec@latest && gosec -exclude-generated -quiet ./... && \
+	$(EN_GO) -v mooc-gobin:/go/bin $(GO_IMAGE) sh -c "\
+		command -v govulncheck >/dev/null || go install golang.org/x/vuln/cmd/govulncheck@$(GOVULN_VERSION); \
+		command -v gosec >/dev/null || go install github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VERSION); \
+		govulncheck ./... && gosec -exclude-generated -quiet ./... && \
 		echo 'sin hallazgos'"
 	@$(HERRAMIENTAS) ./scripts/sin-credenciales.sh
 
 .PHONY: test
 test: ## Pruebas unitarias con detector de carreras
-	docker run --rm -v "$(PWD)/backend":/src -w /src \
-		-v mooc-gomodcache:/go/pkg/mod $(GO_IMAGE) \
+	$(EN_GO) $(GO_IMAGE) \
 		sh -c "apk add --no-cache gcc musl-dev >/dev/null && go test -race ./..."
 
 .PHONY: cover
 cover: ## Pruebas con informe de cobertura
-	docker run --rm -v "$(PWD)/backend":/src -w /src \
-		-v mooc-gomodcache:/go/pkg/mod $(GO_IMAGE) \
+	$(EN_GO) $(GO_IMAGE) \
 		sh -c "go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out"
 
 .PHONY: seed
@@ -136,10 +146,25 @@ invariantes: env ## Comprueba los invariantes de los ADR que no cubre `make demo
 arch: env ## Comprueba las reglas de arquitectura de los ADR 0001, 0002 y 0010
 	@$(HERRAMIENTAS) ./scripts/arquitectura.sh
 
+.PHONY: rapido
+rapido: ## Comprobación de bucle corto: formato, arquitectura, vet y pruebas
+	@echo "── formato ──────────────────────────────────────────"
+	@$(EN_GO) $(GO_IMAGE) gofmt -l . | tee /tmp/mooc-fmt
+	@test ! -s /tmp/mooc-fmt || { echo "hay archivos sin formatear; ejecuta 'make fmt'"; exit 1; }
+	@$(MAKE) --no-print-directory arch
+	@echo "── go vet ───────────────────────────────────────────"
+	@$(EN_GO) $(GO_IMAGE) go vet ./...
+	@echo "── pruebas ──────────────────────────────────────────"
+	@# Sin -race: cuesta dos o tres veces más y aquí interesa la vuelta rápida.
+	@# El detector de carreras sigue corriendo en `make ci` y en el CI.
+	@$(EN_GO) $(GO_IMAGE) go test ./...
+	@echo
+	@echo "Verde en lo rápido. Antes de empujar, 'make ci'."
+
 .PHONY: ci
 ci: ## Corre TODO lo que corre el CI, en local. Úsalo antes de empujar.
 	@echo "── formato ──────────────────────────────────────────"
-	@docker run --rm -v "$(PWD)/backend":/src -w /src $(GO_IMAGE) gofmt -l . | tee /tmp/mooc-fmt
+	@$(EN_GO) $(GO_IMAGE) gofmt -l . | tee /tmp/mooc-fmt
 	@test ! -s /tmp/mooc-fmt || { echo "hay archivos sin formatear; ejecuta 'make fmt'"; exit 1; }
 	@echo "── arquitectura ─────────────────────────────────────"
 	@$(MAKE) --no-print-directory arch

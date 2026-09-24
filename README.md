@@ -312,12 +312,19 @@ Las pruebas unitarias corren contra dobles y no tocan la infraestructura. Lo que
 hay que demostrar solo se ve con todo levantado.
 
 ```bash
-make demo       # ~2 min: el flujo completo, 33 aserciones
-make smoke      # ~20 s: identidad de punta a punta
-make postman    # ~30 s: la colección, segmentos rápidos
-make contrato   # el contrato y la API no se han separado
-make sec        # govulncheck, gosec y credenciales
+make rapido     # ~13 s: formato, arquitectura, vet y pruebas. El bucle corto
+make ci         # ~1 min 35 s: TODO lo que corre el CI. Antes de empujar
+make demo       # ~1 min: el flujo completo, 33 aserciones
+make smoke      # ~4 s: identidad de punta a punta
+make postman    # ~27 s: la colección, segmentos rápidos
 ```
+
+Los tiempos son con las cachés calientes, que es el caso normal. **La primera
+ejecución tras clonar tarda unos tres minutos** porque llena las cachés de
+compilación de Go; a partir de ahí, `go vet` pasa de minuto y medio a un
+segundo. Si alguna vez tardan como el primer día, alguien borró los volúmenes
+`mooc-gobuildcache`, `mooc-gomodcache` o `mooc-gobin`. Ocupan unos 2 GB entre
+los tres: es disco a cambio de tiempo, y sale a cuenta.
 
 Ninguna de esas órdenes corre en la máquina: entran en la imagen
 `mooc-herramientas` (`scripts/Dockerfile`), con bash, coreutils, `python3` y

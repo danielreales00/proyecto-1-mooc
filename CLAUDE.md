@@ -114,6 +114,13 @@ entre las cuatro personas en `demo/reparto.md`. Ver
 
 **Antes de empujar, `make ci` y esperar su código de salida.** No basta leer
 «Todo en verde» dentro del log: eso lo imprime `make demo`, que es una parte.
+Durante el trabajo, `make rapido` (~13 s) cubre formato, arquitectura, `vet` y
+pruebas sin detector de carreras.
+
+Las órdenes de Go comparten tres volúmenes de caché —compilación, módulos y
+binarios de las herramientas—. Sin la de compilación cada contenedor recompila
+el árbol entero: es la diferencia entre `make ci` en minuto y medio y en doce.
+Un script nuevo que compile Go usa `$(EN_GO)`, no un `docker run` propio.
 
 En entregas siguientes: frontend y despliegue en **GCP**. Las decisiones de hoy
 se toman sin amarrarse al proveedor; el mapeo previsto está en
