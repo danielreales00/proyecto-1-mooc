@@ -111,7 +111,7 @@ hechos, así que conviene antes de repartir el dominio.
 
 | Pieza | Estado | Por qué importa |
 | --- | --- | --- |
-| Middleware de `Idempotency-Key` | **Hecho**: 11 operaciones no repetibles lo exigen. Repetir con la misma clave devuelve la respuesta guardada con `Idempotency-Replayed`; con cuerpo distinto, `422` | `RT-05` |
+| Middleware de `Idempotency-Key` | **Hecho**: 12 operaciones no repetibles lo exigen. Repetir con la misma clave devuelve la respuesta guardada con `Idempotency-Replayed`; con cuerpo distinto, `422` | `RT-05` |
 | Rate limiting en Redis | **Hecho**: login en dos niveles (cuenta e IP), registro, verificación y progreso. Base lógica 3 | `CE-02` |
 | `ETag` / `If-Match` | **Hecho** en el autosave. El ETag sale del contenido, así que guardar lo mismo da el mismo ETag (ADR-0014) | `RF-04` |
 | Paginación por cursor | **Hecho** en el catálogo, con `limit` y `cursor` opaco. Los demás listados siguen devolviendo `next_cursor: null` | `RT-05` |

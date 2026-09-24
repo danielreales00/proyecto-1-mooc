@@ -12,6 +12,10 @@ coverage.out
 /data/
 /backups/
 
+# Intermedios del PDF de los informes (SVG, PDF de diagramas y Markdown
+# preprocesado). El .md y el .pdf del informe sí se versionan.
+/arquitectura/recursos/informe-*/
+
 # Artefactos de pruebas
 /scripts/out/
 *.log

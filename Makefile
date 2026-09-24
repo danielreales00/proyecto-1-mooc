@@ -19,6 +19,13 @@ GOSEC_VERSION  := v2.29.0
 # en cada ejecución.
 GO_CACHE := -v mooc-gomodcache:/go/pkg/mod -v mooc-gobuildcache:/root/.cache/go-build
 EN_GO    := docker run --rm -v "$(PWD)/backend":/src -w /src $(GO_CACHE)
+
+# El PDF de los informes de arquitectura sale de estas dos imágenes públicas.
+# Versiones fijas por lo mismo que la imagen de herramientas: un clon nuevo debe
+# producir el mismo PDF. Se descargan la primera vez que se usa `make informe`.
+MERMAID_IMAGE := minlag/mermaid-cli:11.4.2
+PANDOC_IMAGE := pandoc/latex:3.5
+EN_REPO := docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR)":/data
 HERRAMIENTAS := $(COMPOSE) run --rm herramientas
 
 .DEFAULT_GOAL := help
@@ -145,6 +152,30 @@ invariantes: env ## Comprueba los invariantes de los ADR que no cubre `make demo
 .PHONY: arch
 arch: env ## Comprueba las reglas de arquitectura de los ADR 0001, 0002 y 0010
 	@$(HERRAMIENTAS) ./scripts/arquitectura.sh
+
+.PHONY: informe
+informe: ## Genera el PDF de un informe: make informe ENTREGA=1
+	@test -n "$(ENTREGA)" || { echo "uso: make informe ENTREGA=<n>"; exit 1; }
+	@test -f arquitectura/informe-entrega-$(ENTREGA).md \
+		|| { echo "no existe arquitectura/informe-entrega-$(ENTREGA).md"; exit 1; }
+	@mkdir -p arquitectura/recursos/informe-$(ENTREGA)
+	@# 1. Cada bloque mermaid sale a un SVG y el Markdown intermedio lo enlaza.
+	@$(EN_REPO) $(MERMAID_IMAGE) \
+		-i arquitectura/informe-entrega-$(ENTREGA).md \
+		-o arquitectura/recursos/informe-$(ENTREGA)/informe.md \
+		-e pdf --pdfFit -b white
+	@# 2. pandoc arma el PDF. Los diagramas ya son PDF vectoriales, que es lo
+	@#    que LaTeX incrusta sin intermediarios.
+	@$(EN_REPO) $(PANDOC_IMAGE) \
+		arquitectura/recursos/informe-$(ENTREGA)/informe.md \
+		-f markdown-implicit_figures \
+		--lua-filter=scripts/informe.lua \
+		--shift-heading-level-by=-1 \
+		--resource-path=arquitectura/recursos/informe-$(ENTREGA) \
+		-V lang=es -V geometry:a4paper,margin=2.5cm -V fontsize=11pt \
+		-V colorlinks=true -V linkcolor=black -V urlcolor=black \
+		-o arquitectura/informe-entrega-$(ENTREGA).pdf
+	@echo "arquitectura/informe-entrega-$(ENTREGA).pdf"
 
 .PHONY: rapido
 rapido: ## Comprobación de bucle corto: formato, arquitectura, vet y pruebas
