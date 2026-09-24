@@ -2,15 +2,14 @@
 
 Notas de trabajo del equipo. **No es entregable.**
 
-Estado a 5 de septiembre de 2026: documentación de arquitectura lista y
-**rebanada vertical funcionando** en `feat/esqueleto-backend` (Compose,
-migración 0001, plataforma, `identity` con registro/verificación/login/me y el
-worker `email.send`).
+**Entrega 1 entregada y grabada.** Después del video se cerró el módulo
+`media` —antivirus, transcodificación a HLS y sesión de reproducción— y se
+preparó el backend para GCP. Lo que viene es el despliegue, con su plan en
+[`despliegue-gcp.md`](despliegue-gcp.md).
 
-**Verificado en local:** `make up` levanta los 9 servicios, `make smoke` pasa sus
-12 comprobaciones, y `make scale` (3 api + 3 worker) las vuelve a pasar — la
-sesión se abre en una instancia y `/me` la resuelve otra, que es la evidencia de
-que la API no guarda estado (CE-01).
+Este documento se revisó el **23 de septiembre de 2026** contra el código, no
+contra la memoria: durante dos semanas dijo que no existía casi nada de lo que
+ya estaba hecho.
 
 ## Scripts portables entre sistemas — hecho
 
@@ -47,59 +46,63 @@ colección ya no se estorban en el limitador de tasa.
 Estado a 23 de septiembre de 2026. Medido contra el contrato: **65 de 90
 operaciones** responden; las 25 restantes llevan `x-estado: planificado`.
 
-El módulo `media` quedó completo —antivirus, transcodificación y sesión de
-reproducción— y el backend está preparado para GCP: `PORT`, logs de Cloud
-Logging, TLS a Redis, pool por entorno y el puerto del almacén de objetos. Lo
-que falta del despliegue está en [`despliegue-gcp.md`](despliegue-gcp.md).
+El backend está preparado para GCP: obedece `PORT`, sabe escribir logs de
+Cloud Logging, habla TLS con Redis, ajusta el pool por entorno y tiene el puerto
+del almacén de objetos con `OBJECT_STORE` como única variable que nombra al
+proveedor.
 
-Después de grabar el video de la Entrega 1 entró la transcodificación a HLS.
-El video no la muestra, y `demo/guion.md` tampoco: ese documento describe lo
-que se grabó y no se actualiza hacia atrás.
+Después de grabar el video entraron el antivirus, la transcodificación a HLS y
+la sesión de reproducción. El video no las muestra, y `demo/guion.md` tampoco:
+ese documento describe lo que se grabó y no se actualiza hacia atrás.
 
 | | Hecho | Falta |
 | --- | --- | --- |
-| Operaciones de la API | 60 | 28 |
-| Módulos de dominio | 8: `identity`, `audit`, `authoring`, `learning`, `assessment`, `badges`, `admin`, `media` | Ninguno entero |
-| Tipos de trabajo asíncrono | 5 (`email.send`, `badge.issue`, `media.probe`, `media.scan`, `media.transcode_hls`) + el `reaper` | 5 |
+| Operaciones de la API | 65 | 25 |
+| Módulos de dominio | 8: `identity`, `audit`, `authoring`, `learning`, `assessment`, `badges`, `admin`, `media` | Ninguno entero; `identity` es el más incompleto (5 de 12) |
+| Tipos de trabajo asíncrono | 5 (`email.send`, `badge.issue`, `media.probe`, `media.scan`, `media.transcode_hls`) + el `reaper` | 4: `progress.recompute` y tres programados (poda, expiración de intentos, barrido de cargas) |
 | Migraciones | 2 (esquema completo del dominio) | Ninguna bloqueante |
 | Carpetas de la colección con contenido | 9 de 10 | SEG-9, que se demuestra con `make demo` y `make scale` |
 
 **El flujo de trabajo completo funciona de punta a punta**: registro →
-verificación por correo → autoría → publicación → carga multimedia verificada →
-catálogo → inscripción → consumo → quiz → progreso → aprobación → insignia
-verificable con imagen pública. `make demo` recorre 33 aserciones y la colección
-entera 140.
-
-Lo que falta de verdad es **el procesamiento de medios**: el escaneo antimalware
-con ClamAV y la transcodificación a HLS. La carga, la reanudación y la
-verificación —checksum recalculado y MIME por *magic bytes*— sí están.
+verificación por correo → autoría → publicación → carga multimedia verificada,
+escaneada y transcodificada → catálogo → inscripción → consumo con manifiesto
+HLS → quiz → progreso → aprobación → insignia verificable con imagen pública.
 
 ### Evidencia ejecutable
 
-| Orden | Qué comprueba |
-| --- | --- |
-| `make demo` | 33 aserciones, el recorrido del video de punta a punta |
-| `make postman` | Segmentos rápidos, 112 aserciones; es lo que corre el CI |
-| `make postman-completo` | Las diez carpetas, 140 aserciones; necesita `make obs` |
-| `make invariantes` | Los invariantes de los ADR que `make demo` no cubre |
-| `make arch` | Reglas de los ADR 0001, 0002 y 0010 |
-| `make contrato` | Que el contrato y la API no se hayan separado |
-| `make ci` | Todo lo anterior más formato, lint, gosec y govulncheck |
+| Orden | Qué comprueba | Cuánto tarda |
+| --- | --- | --- |
+| `make rapido` | Formato, arquitectura, `vet` y pruebas sin detector de carreras | 13 s |
+| `make demo` | 33 aserciones, el recorrido del video de punta a punta | ~1 min |
+| `make postman` | Segmentos rápidos, ~138 aserciones (varía con los sondeos al worker); es lo que corre el CI | 27 s |
+| `make postman-completo` | Las diez carpetas, con los heartbeats reales | ~12 min, a propósito |
+| `make invariantes` | Los invariantes de los ADR que `make demo` no cubre, incluida la cadena entera de medios | 44 s |
+| `make arch` | Reglas de los ADR 0001, 0002 y 0010 | 3 s |
+| `make contrato` | Que el contrato y la API no se hayan separado | 2 s |
+| `make ci` | Todo lo anterior más formato, lint, gosec y govulncheck | **1 min 35 s** |
 
-## Qué falta — módulos de dominio## Qué falta — módulos de dominio
+Los tiempos son con las cachés calientes. Hasta el 23 de septiembre `make ci`
+tardaba unos doce minutos porque **ningún contenedor montaba la caché de
+compilación de Go**: `vet`, `test` y los analizadores recompilaban el árbol
+entero cada vez. Si vuelven a tardar así, alguien borró los volúmenes
+`mooc-gobuildcache`, `mooc-gomodcache` o `mooc-gobin`.
 
-Ninguno de estos existe todavía, salvo lo indicado en `identity`.
+## Qué falta — módulos de dominio
 
-| Módulo | Endpoints | Qué implica | Requisitos |
-| --- | --- | --- | --- |
-| ~~`authoring`~~ | **hecho** | El más grande. Cursos, versiones, módulos, unidades y recursos; reordenamiento; autosave; previsualización; validación de publicación con lista exhaustiva; versiones inmutables y `stable_id`. Incluye el normalizador de Markdown canónico | `RF-03`, `RF-04`, `CA-01`, `CE-03` |
-| ~~`assessment`~~ | **hecho** | Autoría de quizzes, snapshot del intento, guardado parcial, expiración, envío idempotente, calificación en servidor, retroalimentación por política | `RF-08`, `CA-04`, `CE-05` |
-| ~~`admin`~~ | **hecho** | Alta de profesores con invitación, roles, estados, sesiones ajenas, auditoría, cola y reencolado. Protección del último administrador con prueba de tabla | `RF-02`, `CE-02` |
-| `media` | 9 | **Lo único grande que falta.** Esquema, contrato y decisiones ya existen; falta el código. Plan de implementación en [`media-plan.md`](media-plan.md) | `RF-05`, `RF-06`, `RF-07`, `CA-02` |
-| ~~`catalog` + `enrollment`~~ | **hecho** (módulo `learning`) | Catálogo con búsqueda, filtros y cursores; inscripción, retiro y reinscripción conservando progreso | `RF-10` |
-| ~~`badges`~~ | **hecho** | Emisión única por inscripción, imagen, URL pública de verificación sin correo, revocación auditada | `RF-09`, `CA-07` |
-| ~~`progress`~~ | **hecho** (módulo `learning`) | Pocos endpoints, mucha regla: ingesta de evidencias, rechazo y auditoría de manipulación, cálculo sobre obligatorios, transición a `completed` y `approved` | `RF-09`, `CA-05`, `CE-06` |
-| `identity` | 7 de 12 | Faltan: reenvío de verificación, recuperación y restablecimiento de contraseña, `PATCH /me`, cambio de contraseña, listado y revocación de sesiones propias | `RF-01` |
+Los ocho existen y funcionan. Lo que queda son **25 operaciones** del contrato,
+todas marcadas `x-estado: planificado`, y ninguna bloquea el flujo completo.
+
+| Módulo | Estado | Qué falta |
+| --- | --- | --- |
+| `identity` | 5 de 12 | Reenvío de verificación, recuperación y restablecimiento de contraseña, `PATCH /me`, cambio de contraseña propia, listado y revocación de sesiones propias |
+| `authoring` | 16 de 27 | Borrados (curso, módulo, unidad, recurso), los tres `reorder`, `PATCH` de módulo y unidad, y el historial de revisiones de un recurso con su restauración |
+| `assessment` | 8 de 11 | CRUD de preguntas sueltas: hoy el quiz se define entero con `PUT /resources/{id}/quiz` |
+| `badges` | 3 de 5 | Detalle de una insignia propia y la imagen por código público |
+| `learning` | 7 de 9 | Detalle de un recurso dentro de la inscripción y la última posición de reproducción |
+| `admin`, `media`, catálogo, operación | **completos** | Nada |
+
+La más incompleta es `identity`, y es la que más se nota: sin recuperación de
+contraseña, quien la olvida no entra. Es el primer candidato de la Entrega 2.
 
 ## Qué falta — plataforma transversal
 
@@ -112,28 +115,30 @@ hechos, así que conviene antes de repartir el dominio.
 | Rate limiting en Redis | **Hecho**: login en dos niveles (cuenta e IP), registro, verificación y progreso. Base lógica 3 | `CE-02` |
 | `ETag` / `If-Match` | **Hecho** en el autosave. El ETag sale del contenido, así que guardar lo mismo da el mismo ETag (ADR-0014) | `RF-04` |
 | Paginación por cursor | **Hecho** en el catálogo, con `limit` y `cursor` opaco. Los demás listados siguen devolviendo `next_cursor: null` | `RT-05` |
-| OpenAPI 3.1 | **Completo**: las 88 operaciones del inventario, validadas con redocly sin advertencias. Las 80 que aún no responden llevan `x-estado: planificado`. La API lo sirve en `GET /openapi.yaml` y `make contrato` detecta la deriva | `RT-05` y entregable §8 |
+| OpenAPI 3.1 | **Completo**: 90 operaciones, validadas con redocly sin advertencias. Las 25 que aún no responden llevan `x-estado: planificado`. La API lo sirve en `GET /openapi.yaml` y `make contrato` detecta la deriva | `RT-05` y entregable §8 |
 | `/metrics` (Prometheus) | **Hecho**: API y worker, con Prometheus, Grafana y 4 reglas de alerta. La de DLQ verificada disparando | `CA-03`, `RNF-05` |
-| Trazas OpenTelemetry | Solo hay logs estructurados | `RT-06`, exigido explícitamente |
+| Trazas OpenTelemetry | **Falta.** Hay logs estructurados correlacionados por `trace_id` y métricas, pero no trazas | `RT-06`, exigido explícitamente |
 | Protección del último administrador | **Hecho**, comprobada dentro de la transacción y con prueba de tabla | `RF-02` |
 
 ## Qué falta — workers
 
-Solo corre `email.send`.
+Corren cinco tipos de trabajo más el `reaper`. Lo que falta son los
+**programados**: ninguno existe todavía, y sin ellos las tablas crecen sin
+límite y los intentos de quiz caducados se quedan abiertos.
 
 | Trabajo | Estado |
 | --- | --- |
 | `email.send` | **Hecho** |
-| `media.probe` | Falta — checksum real, MIME por *magic bytes*, duración y resolución |
-| `media.scan` | Falta — ClamAV por INSTREAM, cuarentena y auditoría |
-| `media.transcode_hls` | Falta — FFmpeg, escalera sin *upscaling*, original intacto |
-| `media.poster` | Falta |
 | `badge.issue` | **Hecho** |
-| `progress.recompute` | Falta |
+| `media.probe` | **Hecho** — checksum real, MIME por *magic bytes*, duración y resolución |
+| `media.scan` | **Hecho** — ClamAV por INSTREAM, cuarentena y auditoría |
+| `media.transcode_hls` | **Hecho** — FFmpeg, escalera sin *upscaling*, original intacto |
+| `media.poster` | **Hecho** — dentro de `media.transcode_hls`, no como trabajo aparte |
 | `jobs.reaper` (programado) | **Hecho**: recupera los `queued` huérfanos y los `running` sin heartbeat |
-| `assessment.expire_attempts` (programado) | Falta |
-| `media.sweep_uploads` (programado) | Falta |
-| Poda de `job_runs`, `progress_events` e `idempotency_keys` (programado) | Falta |
+| `progress.recompute` | Falta — hoy el progreso se recalcula dentro de la petición |
+| `assessment.expire_attempts` (programado) | Falta — un intento vencido no se cierra solo |
+| `media.sweep_uploads` (programado) | Falta — las cargas a medias se quedan; el ciclo de vida del bucket las limpiaría en GCP |
+| Poda de `job_runs`, `progress_events` e `idempotency_keys` (programado) | Falta — **es el que más urge**: esas tablas solo crecen |
 | `doc.convert_pdf` | Opcional (`RO-01`) |
 
 > **El `reaper` ya está.** Cierra la otra mitad de la garantía del outbox: el
@@ -147,43 +152,40 @@ Solo corre `email.send`.
 
 | Pieza | Estado |
 | --- | --- |
-| `clamav` en Compose | Falta |
-| `worker-media` (imagen con FFmpeg) | Falta |
-| Perfil `observability` | **Hecho** salvo Jaeger (trazas OTel siguen pendientes) |
-| Perfil `carga` (k6) | Falta |
-| Pruebas automáticas | **Andamiaje hecho**: dominio, contraseñas, capa HTTP con dobles y `ParseQueues`. Falta cubrir cada módulo nuevo |
+| `clamav` en Compose | **Hecho** — imagen con firmas precargadas, arranca en ~15 s sin red |
+| `worker-media` (imagen con FFmpeg) | **Hecho** — consume solo la cola `bulk` |
+| Imagen de herramientas (`mooc-herramientas`) | **Hecho** — los scripts y newman ya no corren en la máquina |
+| Perfil `observability` | **Hecho** salvo trazas: `/metrics`, Prometheus, Grafana y 4 reglas de alerta |
+| Perfil `carga` (k6) | **Falta.** Es una de las dos evidencias que el enunciado pide y no existen |
+| Backup, restauración y `make restore-test` | **Falta.** La otra. El RTO se demuestra restaurando y cronometrando |
+| Pruebas automáticas | **Hechas** por módulo: dominio, contraseñas, capa HTTP con dobles, escalera HLS, respuesta de ClamAV |
 | Semilla de datos sintéticos (`make seed`) | **Hecho** — 8 cuentas, idempotente |
-| Colección de Postman (SEG-1 … SEG-9) | **Estructura hecha**: SEG-1 con 13 peticiones y aserciones; SEG-2 a SEG-8 vacías a propósito |
-| Backup, restauración y `make restore-test` | Falta |
-| CI: build, lint, `gosec`/`govulncheck`, migraciones, pruebas | **Hecho** — 4 trabajos, incluido el extremo a extremo con Compose |
-| Fallos inyectables para SEG-4 (`FAIL_TRANSCODE`, `DUPLICATE_DELIVERY`) | Falta |
+| Colección de Postman (SEG-1 … SEG-9) | **Hecha**: 9 carpetas con contenido, ~138 aserciones en los segmentos rápidos |
+| CI | **Hecho** — 4 trabajos, incluido el extremo a extremo con Compose |
+| Fallos inyectables (`FAIL_TRANSCODE`, `DUPLICATE_DELIVERY`) | **No se harán.** Se diseñaron para poder demostrar la DLQ y el reencolado; `make demo` los demuestra con un trabajo real devuelto a la cola, que es mejor evidencia que un fallo simulado |
 
-El andamiaje de evidencia ya está montado (pruebas, semilla, Postman y CI). Lo
-que queda es **usarlo**: cada módulo nuevo entra con sus pruebas y su carpeta de
-Postman en el mismo PR. El enunciado es explícito en §10 — un comportamiento que
-no pueda reproducirse no acredita el requisito, aunque exista el código.
+Lo que queda de evidencia son las dos medidas que el enunciado pide y que no se
+pueden fingir: **la prueba de carga y la restauración cronometrada**. Las dos se
+hacen mejor contra el entorno desplegado que contra Compose, así que van después
+del despliegue.
 
 ## Orden propuesto
 
-Lo de arriba desbloquea lo de abajo.
+Reescrito el 23 de septiembre. La tabla anterior daba por pendiente casi todo lo
+que ya estaba hecho, que es la peor forma que tiene una lista de tareas de
+volverse inútil.
 
-| # | Tarea | Quién | Estado |
-| --- | --- | --- | --- |
-| 1 | **Revisar el contrato entre los cuatro** y acordar el resto de las migraciones. El OpenAPI ya está escrito con las 88 operaciones: es un borrador para enmendar, no un acuerdo | Todos | Pendiente |
-| 2 | Plataforma transversal: idempotencia HTTP, `ETag`, cursores (el rate limiting ya está) | — | Pendiente |
-| 3 | Cerrar el `reaper` y las tareas programadas | — | Pendiente |
-| 4 | Normalizador de Markdown canónico y su prueba de ida y vuelta (§11 recomienda hacerlo primero) | — | Pendiente |
-| 5 | `authoring` con validación de publicación e inmutabilidad | — | Pendiente |
-| 6 | `media` + workers de medios + ClamAV + FFmpeg (en paralelo con 5: es independiente y el que más tarda en afinarse) | — | Pendiente |
-| 7 | Completar `identity` y hacer `admin` | — | Pendiente |
-| 8 | `catalog` + `enrollment` | — | Pendiente |
-| 9 | `assessment` con snapshot y calificación | — | Pendiente |
-| 10 | `progress` + `badges` | — | Pendiente |
-| 11 | Observabilidad: `/metrics`, OTel, paneles y alerta de DLQ | — | Pendiente |
-| 12 | Llenar la carpeta de Postman de cada segmento a medida que entre su módulo | — | Pendiente |
-| 13 | Pruebas de carga con k6 y medición de p95 con `api=1` frente a `api=3` | — | Pendiente |
-| 14 | `make restore-test` y medición de RTO | — | Pendiente |
-| 15 | Grabar el video de la demostración | Todos | Pendiente |
+| # | Tarea | Estado |
+| --- | --- | --- |
+| 1 | **Desplegar en GCP**, por fases, siguiendo [`despliegue-gcp.md`](despliegue-gcp.md). Empieza por lo que solo puede hacer una persona: proyecto, facturación, región y presupuesto | Siguiente |
+| 2 | **Adaptador de Cloud Storage** (ADR-0015, D1). Multipart emulado con `compose`; se escribe contra GCS real porque firmar sin clave descargada no se puede comprobar en local | Con la fase 3 |
+| 3 | **Prueba de carga con k6** y p95 medido con `api=1` frente a `api=3`, contra el entorno desplegado | Después del despliegue |
+| 4 | **Restauración cronometrada** y `make restore-test`. El RTO se demuestra, no se declara | Después del despliegue |
+| 5 | **Trabajos programados**: poda de `job_runs`, `progress_events` e `idempotency_keys` primero; luego expiración de intentos y barrido de cargas | Pendiente |
+| 6 | **Completar `identity`**: recuperación de contraseña sobre todo. Sin ella, quien la olvida no entra | Pendiente |
+| 7 | **Trazas con OpenTelemetry** hacia Cloud Trace (`RT-06`) | Pendiente |
+| 8 | Resto de operaciones `planificado`: borrados y reordenamientos de `authoring`, CRUD de preguntas, detalles de insignia y recurso | Pendiente |
+| 9 | **Frontend** (Entrega 2). La tecnología sigue sin decidir | Pendiente |
 
 Las pruebas no son una fila de esta tabla a propósito: van con cada módulo, no al
 final. Un módulo sin prueba no está terminado (ver la definición de terminado en
@@ -193,16 +195,14 @@ final. Un módulo sin prueba no está terminado (ver la definición de terminado
 
 | Tarea | Detalle |
 | --- | --- |
-| Esqueleto del repo | `backend/` con `cmd/`, `internal/{platform,adapters,modules}`, `Dockerfile` multi-stage, `Makefile` |
-| `docker-compose.yml` | 9 servicios con healthchecks y orden de arranque; falta `clamav`, `worker-media` y observabilidad |
-| Migración `0001` | Esquemas `identity`, `audit` y `platform`, con el trigger de inmutabilidad de la auditoría |
-| Plataforma, parcial | Errores RFC 9457 con `trace_id`, logs estructurados, `job_runs` (outbox, idempotencia y DLQ), reclamo atómico, `/healthz` y `/readyz` |
-| `identity`, parcial | Registro, verificación de correo, login, `/me`, logout con revocación inmediata |
-| `audit` | Registro inmutable, verificado contra `UPDATE` |
-| Proxy y escalado | Caddy con reparto por turnos; `--scale api=3 --scale worker=3` verificado |
-| Contrato OpenAPI | Las 88 operaciones, validadas con redocly sin advertencias, servidas por la API. `scripts/contrato.sh` comprueba en CI que lo declarado como implementado exista de verdad |
-| ADR-0015, D2 y D3 | Aceptadas: cookie firmada con endpoint `media-sessions` (ya en el contrato) y prohibición de claves JSON (comprobada en el CI) |
-| Andamiaje de evidencia | Pruebas unitarias y de capa HTTP, `make seed`, colección de Postman por segmentos, CI con 4 trabajos y plantilla de PR |
+| Los ocho módulos de dominio | `identity`, `audit`, `authoring`, `learning`, `assessment`, `badges`, `admin` y `media`, con sus pruebas |
+| Plataforma | Errores RFC 9457 con `trace_id`, logs estructurados, outbox e idempotencia en `job_runs`, reclamo atómico, reaper, `ETag`, cursores, límites de tasa, `/healthz` y `/readyz` |
+| Medios completos | Carga multipart reanudable, verificación en servidor, antivirus, transcodificación a HLS sin *upscaling* y entrega del manifiesto con credencial de reproducción |
+| Contrato OpenAPI | 90 operaciones validadas; `scripts/contrato.sh` comprueba en el CI que lo declarado como implementado exista de verdad |
+| Evidencia | `make demo` (33 aserciones), colección de Postman (~138), invariantes de los ADR, `make arch`, semilla sintética y CI con 4 trabajos |
+| Infraestructura local | 12 servicios en Compose con healthchecks, escalado verificado, observabilidad y la imagen de herramientas |
+| Video de la Entrega 1 | Grabado |
+| Preparación para GCP | `PORT`, logs de Cloud Logging, TLS a Redis, pool por entorno, puerto del almacén de objetos y plan de despliegue |
 
 ## Revisión del 7 de septiembre de 2026
 
@@ -258,24 +258,24 @@ Cuando se resuelvan, cada una se convierte en un ADR.
 | --- | --- | --- | --- |
 | Caché del catálogo en Redis | Cachear la lista con invalidación al publicar / no cachear en E1 | Equipo | Depende de lo que muestre la prueba de carga. Medir antes de optimizar |
 | Búsqueda del catálogo | `tsvector` de PostgreSQL / `pg_trgm` para tolerar erratas | Equipo | Empezar con `tsvector`; ya cubre `RF-10` |
-| Generación de la imagen de insignia | Plantilla SVG → PNG en Go / composición con `ffmpeg` | Equipo | La SVG es más fácil de ajustar |
+| ~~Generación de la imagen de insignia~~ | — | — | **Resuelta**: SVG generado en Go, sin dependencias nuevas. `internal/modules/badges/imagen.go` |
 | Proxy de entrada | Caddy (TLS automático) / Nginx | Equipo | Caddy ya está en Compose; queda confirmarlo como definitivo |
 | `sqlc` para el acceso a datos | SQL a mano / `sqlc` | Equipo | Reconsiderar si el SQL a mano se vuelve pesado (ADR-0002) |
 | Tecnología del frontend (E2) | React / Angular / Svelte | Equipo | No bloquea la Entrega 1 |
 | Token en claro dentro de `job_runs.payload` | Dejarlo / cifrar el payload / que el worker genere el token | Equipo | Hoy el token de verificación viaja en claro en el payload del trabajo, porque el correo debe contenerlo y `one_time_tokens` solo guarda el hash. Acotado: expira en 24 h y la fila se poda. Ver `internal/modules/identity/service.go` |
-| Recorte de la escalera HLS para la demo | 360p+720p / la escalera completa | Equipo | La completa alarga mucho la grabación |
-| **Cliente de objetos en GCP** | Interoperabilidad S3 / **adaptador GCS nativo** | Equipo | ADR-0015 (D1). D3 ya lo implica casi por completo: las claves HMAC también son una credencial estática |
-| Alcance de la credencial de reproducción | Por asset / por versión de curso | Equipo | Consecuencia abierta de D2. **No toca el contrato**: la respuesta lleva un campo `scope`. Se decide al implementar `media` |
+| ~~Recorte de la escalera HLS para la demo~~ | — | — | **Sin objeto**: el video ya está grabado, y la escalera se recorta sola porque no hace *upscaling*. Un original de 360p da una variante |
+| ~~Cliente de objetos en GCP~~ | — | — | **Resuelta** el 23-09: adaptador GCS nativo, con la carga multipart emulada por `compose` porque GCS no la tiene. ADR-0015 (D1) |
+| ~~Alcance de la credencial de reproducción~~ | — | — | **Resuelta**: por asset. Por versión de curso obligaría a duplicar los derivados en cada versión nueva, que es justo lo que el `stable_id` evita. El campo `scope` deja cambiarlo sin romper al cliente |
 
 ## Riesgos vigilados
 
 | Riesgo | Señal temprana | Qué haríamos |
 | --- | --- | --- |
-| El alcance de E1 es amplio para 4 personas | La tarea 1 no está lista al final de la semana 1 | Congelar el contrato aunque esté imperfecto; se puede corregir con migraciones |
+| Que el despliegue se coma la Entrega 2 | La fase 1 de `despliegue-gcp.md` no está lista en una semana | Desplegar solo `dev` y dejar `prod` para después; el frontend no depende del despliegue |
 | Las pruebas se dejan para el final | Un módulo se da por hecho sin `_test.go` | La plantilla de PR lo pide como casilla explícita; el CI corre `go test` en cada empuje |
-| FFmpeg alarga la grabación de la demo | Un video de prueba tarda más de 5 min | Usar clips de 30 s y una escalera recortada |
-| ClamAV falla al arrancar en la máquina de la demo | El healthcheck no pasa en 3 min | Imagen con firmas precargadas; ensayar en la máquina donde se grabará |
-| La carga multipart es incómoda desde Postman | El script pre-request no parte bien el archivo | Un `scripts/upload.sh` con `curl` como respaldo, mostrado en el video |
+| El egreso de video dispara la factura de GCP | La alerta de presupuesto al 50 % llega en la primera semana | Medir antes de abrir el CDN; está en los riesgos de `despliegue-gcp.md` |
+| ~~ClamAV falla al arrancar~~ | — | **Resuelto**: la imagen trae las firmas dentro y clamd queda sano en ~15 s sin tocar la red. `freshclam` desactivado a propósito |
+| ~~La carga multipart es incómoda desde Postman~~ | — | **Resuelto**: SEG-3 la recorre entera, y `make subir` hace lo mismo desde la terminal con cualquier tamaño de archivo |
 | Dos personas tocan las mismas migraciones | Números repetidos en un PR | Verificación en CI; renumerar al rebasar |
 | Colisión de puertos con otros stacks de Docker de la máquina | `port is already allocated` al levantar | Ya resuelto: los puertos del host se parametrizan en `.env` y el proyecto usa un rango propio (8090, 8026, 9010/9011, 5433, 6380) |
 
