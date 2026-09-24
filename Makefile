@@ -23,6 +23,16 @@ EN_GO    := docker run --rm -v "$(PWD)/backend":/src -w /src $(GO_CACHE)
 # El PDF de los informes de arquitectura sale de estas dos imágenes públicas.
 # Versiones fijas por lo mismo que la imagen de herramientas: un clon nuevo debe
 # producir el mismo PDF. Se descargan la primera vez que se usa `make informe`.
+# La nube también se opera desde contenedores: en esta máquina no hay gcloud ni
+# terraform instalados, y no van a hacer falta. La credencial vive en el volumen
+# mooc-gcloud, nunca en el repositorio (ADR-0015, D3).
+GCLOUD_IMAGE    := google/cloud-sdk:586.0.0-slim
+TERRAFORM_IMAGE := hashicorp/terraform:1.16.4
+# -it solo cuando hay terminal: `gcloud auth login` la necesita y el CI no la
+# tiene.
+TTY := $(shell test -t 0 && printf -- '-it')
+EN_NUBE := docker run --rm $(TTY) -v mooc-gcloud:/root/.config/gcloud -v "$(CURDIR)":/repo
+
 MERMAID_IMAGE := minlag/mermaid-cli:11.4.2
 PANDOC_IMAGE := pandoc/latex:3.5
 EN_REPO := docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR)":/data
@@ -152,6 +162,21 @@ invariantes: env ## Comprueba los invariantes de los ADR que no cubre `make demo
 .PHONY: arch
 arch: env ## Comprueba las reglas de arquitectura de los ADR 0001, 0002 y 0010
 	@$(HERRAMIENTAS) ./scripts/arquitectura.sh
+
+.PHONY: gcloud
+gcloud: ## gcloud en contenedor: make gcloud ARGS="projects list"
+	@$(EN_NUBE) -w /repo $(GCLOUD_IMAGE) gcloud $(ARGS)
+
+.PHONY: tf
+tf: ## terraform de un entorno: make tf ENTORNO=dev ARGS="plan"
+	@test -n "$(ENTORNO)" || { echo 'uso: make tf ENTORNO=<dev|prod> ARGS="plan"'; exit 1; }
+	@test -d infra/environments/$(ENTORNO) \
+		|| { echo "no existe infra/environments/$(ENTORNO)"; exit 1; }
+	@# Terraform se autentica con las credenciales por defecto de la aplicación,
+	@# las que deja `gcloud auth application-default login` en el mismo volumen.
+	@$(EN_NUBE) -w /repo/infra/environments/$(ENTORNO) \
+		-e GOOGLE_APPLICATION_CREDENTIALS=/root/.config/gcloud/application_default_credentials.json \
+		$(TERRAFORM_IMAGE) $(ARGS)
 
 .PHONY: informe
 informe: ## Genera el PDF de un informe: make informe ENTREGA=1

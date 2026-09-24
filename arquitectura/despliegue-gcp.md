@@ -35,27 +35,68 @@ demostración local. Si algo solo funciona en GCP, se rompió el ADR-0010.
 
 ---
 
-## Antes de empezar (lo hace el usuario, a mano)
+## Herramientas
 
-Ninguna de estas cosas la puede hacer una conversación por ti, y todas bloquean
-la fase 0.
+En esta máquina **no se instala nada**, como en el resto del proyecto. `gcloud`
+y `terraform` corren en contenedor con versión fija, y la credencial vive en el
+volumen `mooc-gcloud`, nunca en el repositorio (ADR-0015, D3).
 
-1. **Proyecto de GCP con facturación activa.** Anota el `project_id`; se usa en
-   todo lo demás.
-2. **Región.** `us-central1` si no hay razón para otra: es la más barata y
+```bash
+make gcloud ARGS="projects list"          # cualquier orden de gcloud
+make tf ENTORNO=dev ARGS="plan"           # terraform de un entorno
+```
+
+La sesión de Claude no puede autenticarte: el navegador es tuyo. La primera vez
+corre tú estas dos, y quedan guardadas en el volumen para todo lo demás.
+
+```bash
+make gcloud ARGS="auth login --no-launch-browser"
+make gcloud ARGS="auth application-default login --no-launch-browser"
+```
+
+La primera te identifica a ti para `gcloud`. La segunda deja las **credenciales
+por defecto de la aplicación**, que son las que usa Terraform. Son tus
+credenciales de usuario, no una clave de cuenta de servicio: D3 sigue intacto.
+
+## Antes de empezar
+
+**Todo se hace con Terraform**, incluida la habilitación de las APIs. Lo manual
+se reduce a cuatro cosas, y tres son de una sola orden.
+
+1. **Proyecto con facturación activa.** Es lo único que Terraform no crea aquí:
+   sin organización, crear el proyecto desde Terraform exige permisos de
+   facturación que una cuenta personal no suele tener. Desde la consola, o:
+
+   ```bash
+   make gcloud ARGS="projects create mooc-<algo-unico> --name='Plataforma MOOC'"
+   ```
+
+   La facturación se enlaza desde la consola. Anota el `project_id`.
+
+2. **Región.** `us-central1` si no hay razón para otra: es de las más baratas y
    tiene todos los servicios. Una sola región para todo; cruzar regiones se
    paga en egreso y en latencia.
-3. **Cuota de facturación con alerta.** Pon un presupuesto con aviso al 50 %,
-   80 % y 100 %. El egreso de video es lo que se desmanda.
-4. **Permisos.** Tu cuenta necesita `roles/owner` en el proyecto, o como mínimo
-   `resourcemanager.projectIamAdmin`, `iam.workloadIdentityPoolAdmin` y los
-   administradores de cada servicio.
-5. **Dominio**, si quieres HTTPS con nombre propio. Sin dominio se puede
-   desplegar igual y usar la URL de `run.app`, pero entonces no hay CDN con
-   certificado gestionado.
 
-Apunta las respuestas en la tabla del final («Hoja de datos del entorno») antes
-de la primera fase. La conversación nueva las va a pedir.
+3. **Bucket del estado de Terraform**, con versionado. Es la única excepción a
+   «todo por Terraform», porque Terraform no puede crear el sitio donde guarda
+   su propio estado:
+
+   ```bash
+   make gcloud ARGS="storage buckets create gs://mooc-tfstate-<project_id> \
+     --project=<project_id> --location=us-central1 --uniform-bucket-level-access"
+   make gcloud ARGS="storage buckets update gs://mooc-tfstate-<project_id> --versioning"
+   ```
+
+4. **Presupuesto con alerta** al 50 %, 80 % y 100 %, desde la consola de
+   facturación. El egreso de video es lo que se desmanda, y una alerta tardía
+   se paga.
+
+Opcional: un **dominio**, si quieres HTTPS con nombre propio. Sin dominio se
+despliega igual con la URL de `run.app`, pero no hay CDN con certificado
+gestionado y la fase 5 se queda a medias.
+
+Apunta las respuestas en la tabla del final («Hoja de datos del entorno»). La
+conversación nueva las va a pedir.
 
 ---
 
@@ -113,23 +154,26 @@ comprobar en Compose.
 
 ## Fases
 
-### Fase 0 · Cimientos del proyecto
+### Fase 0 · Cimientos, ya en Terraform
 
-**Objetivo:** que exista dónde poner las cosas y cómo entrar sin claves.
+**Objetivo:** que exista dónde poner las cosas y cómo entrar sin claves. Con lo
+de «Antes de empezar» hecho, esto ya es HCL.
 
-1. Habilitar APIs: `run`, `sqladmin`, `redis`, `storage`, `secretmanager`,
-   `artifactregistry`, `compute`, `vpcaccess`, `iamcredentials`,
-   `cloudresourcemanager`, `monitoring`, `logging`.
-2. Crear a mano el **bucket del estado de Terraform**, con versionado. Es la
-   única excepción a «todo por Terraform»: Terraform no puede crear el sitio
-   donde guarda su propio estado.
+1. Estructura de `infra/` y el *backend* de estado apuntando al bucket, más
+   `versions.tf` con los proveedores fijados.
+2. **Habilitar las APIs con `google_project_service`**: `run`, `sqladmin`,
+   `redis`, `storage`, `secretmanager`, `artifactregistry`, `compute`,
+   `vpcaccess`, `iamcredentials`, `cloudresourcemanager`, `monitoring`,
+   `logging`. Con `disable_on_destroy = false`, o un `destroy` deja el proyecto
+   inservible.
 3. **Workload Identity Federation** para GitHub Actions: *pool*, proveedor OIDC
-   restringido al repositorio `danielreales00/proyecto-1-mooc`, y una cuenta de
-   servicio de despliegue con los roles mínimos.
+   **restringido al repositorio** `danielreales00/proyecto-1-mooc`, y una cuenta
+   de servicio de despliegue con los roles mínimos.
 
-**Comprobación:** un *workflow* de prueba en GitHub obtiene un token y ejecuta
-`gcloud auth list` sin que exista ninguna clave en el repositorio ni en los
-secretos de GitHub.
+**Comprobación:** `make tf ENTORNO=dev ARGS=apply`, y después
+`make tf ENTORNO=dev ARGS=plan` sin cambios pendientes. Luego, un *workflow* de
+prueba en GitHub que obtiene un token y ejecuta `gcloud auth list` sin que
+exista ninguna clave ni en el repositorio ni en los secretos de GitHub.
 
 > El `restricción por repositorio` del proveedor OIDC no es opcional. Sin ella,
 > cualquier repositorio de GitHub puede pedir credenciales de tu proyecto.
@@ -309,12 +353,24 @@ Rellénala antes de la fase 0 y tenla a mano en la conversación del despliegue.
 
 ## Cómo arrancar la conversación del despliegue
 
-Pégale esto:
+Pégale esto, con la hoja de datos rellenada:
 
 > Vamos a desplegar el proyecto en GCP siguiendo
-> `arquitectura/despliegue-gcp.md`. Lee ese documento y `adr/0015`. Estoy en la
-> fase N. Mis datos de entorno son los de la hoja del final, ya rellenada.
-> Empieza comprobando qué hay hecho ya en GCP antes de crear nada.
+> `arquitectura/despliegue-gcp.md`. Lee ese documento, `adr/0015` y
+> `disenos/ruta-a-gcp.md` antes de escribir nada.
+>
+> **Todo con infraestructura como código.** Nada de crear recursos a mano desde
+> la consola ni con `gcloud`: lo único manual es lo de «Antes de empezar», que
+> ya está hecho. `gcloud` se usa solo para consultar y comprobar.
+>
+> Mis datos: `project_id` = …, región = …, bucket de estado = …, dominio = …
+>
+> Estoy en la fase 0. Empieza comprobando con `make gcloud` qué hay creado ya en
+> el proyecto, antes de escribir HCL: si algo existe, o se importa al estado o
+> se borra, pero no se duplica.
+>
+> Trabaja por fases, y al final de cada una corre su comprobación y enséñame el
+> resultado antes de seguir. Si una comprobación no pasa, no avances.
 
-Y ten `gcloud` autenticado en la terminal: la sesión no puede autenticarte por
-ti. Si `gcloud auth login` hace falta, córrelo tú con `! gcloud auth login`.
+Y ten hechas las dos autenticaciones de la sección «Herramientas»: la sesión no
+puede autenticarte porque el navegador es tuyo.
