@@ -304,3 +304,22 @@ func (s *LearningStore) MinQuizScoreCumplida(ctx context.Context, db dbx.DB, enr
 	}
 	return pendientes == 0, nil
 }
+
+// PodarEvidencias borra las señales de progreso más viejas que `antiguedad`.
+//
+// Vive aquí, y no en el podador, porque la tabla es de `learning`: escribir en
+// el esquema de otro módulo se salta sus reglas, y `make arch` lo comprueba.
+// Que sea una poda no cambia de quién es el dato.
+//
+// Se borran aceptadas y rechazadas por igual. Conservar solo las rechazadas
+// dejaría la auditoría del CA-05 contando media historia, y al revés tampoco:
+// lo que prueba que el servidor descarta lo imposible es tener las dos.
+func PodarEvidencias(ctx context.Context, db dbx.DB, antiguedad time.Duration) (int64, error) {
+	tag, err := db.Exec(ctx, `
+		DELETE FROM progress.progress_events
+		 WHERE server_ts < now() - $1::interval`, antiguedad.String())
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}

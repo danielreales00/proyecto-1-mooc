@@ -17,10 +17,26 @@ Implementación de las reglas del ADR-0004 y del ADR-0008.
 | `assessment.expire_attempts` | `default` | programado | Cierra intentos vencidos que nadie envió |
 | `media.sweep_uploads` | `default` | programado | Aborta multipart con más de 24 h |
 | `jobs.reaper` | `critical` | programado | Reencola `running` sin heartbeat y `queued` que nunca llegaron a asynq |
+| `jobs.poda` | — | programado | Borra trabajos completados, claves de idempotencia vencidas y evidencias de progreso viejas |
 
-Programados con el `Scheduler` de asynq: `jobs.reaper` cada minuto,
-`assessment.expire_attempts` cada minuto, `media.sweep_uploads` cada hora,
-poda de `job_runs`, `progress_events` e `idempotency_keys` cada día.
+Pendientes de escribir: `assessment.expire_attempts` cada minuto y
+`media.sweep_uploads` cada hora.
+
+**Los dos programados que existen no pasan por la cola.** El diseño original los
+quería como tareas del `Scheduler` de asynq, y tanto `jobs.reaper` como
+`jobs.poda` corren como un ciclo dentro del proceso del worker: cada 30 segundos
+el primero, cada hora el segundo.
+
+La razón es que ninguno es trabajo de dominio. No tienen `job_key`, nadie los
+encola, no se reintentan y no pueden acabar en la cola de fallos; solo tocan
+tablas de plataforma. Meterlos en la cola habría añadido una fila de `job_runs`
+por cada pasada —la poda generando basura que luego ella misma poda— sin ganar
+nada a cambio.
+
+Con varias instancias de worker, la poda toma un **candado consultivo** de
+PostgreSQL: las tres lo intentan y poda una. La que no lo consigue no espera,
+porque la siguiente pasada llega igual. El reaper no lo necesita: republicar es
+seguro porque el reclamo atómico impide la doble ejecución.
 
 ## Encolado (patrón *outbox*)
 

@@ -74,6 +74,10 @@ func run() error {
 	publisher := queue.NewPublisher(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisQueueDB, cfg.RedisTLS)
 	defer publisher.Close()
 	queue.NewReaper(pool, publisher, log).Start(ctx, 30*time.Second)
+	// Las tablas que solo crecen: trabajos completados, claves de
+	// idempotencia vencidas y evidencias de progreso viejas. Cada hora basta;
+	// con varios workers, el candado deja que pode uno solo.
+	postgres.NewPodador(pool, log).Start(ctx, time.Hour)
 	emails := identity.NewEmailWorker(
 		mailer.New(cfg.SMTPAddr, cfg.MailFrom, cfg.SMTPUser, cfg.SMTPPassword), cfg.PublicBaseURL, log)
 

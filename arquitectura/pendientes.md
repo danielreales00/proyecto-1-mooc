@@ -59,7 +59,7 @@ ese documento describe lo que se grabó y no se actualiza hacia atrás.
 | --- | --- | --- |
 | Operaciones de la API | 65 | 25 |
 | Módulos de dominio | 8: `identity`, `audit`, `authoring`, `learning`, `assessment`, `badges`, `admin`, `media` | Ninguno entero; `identity` es el más incompleto (5 de 12) |
-| Tipos de trabajo asíncrono | 5 (`email.send`, `badge.issue`, `media.probe`, `media.scan`, `media.transcode_hls`) + el `reaper` | 4: `progress.recompute` y tres programados (poda, expiración de intentos, barrido de cargas) |
+| Tipos de trabajo asíncrono | 5 (`email.send`, `badge.issue`, `media.probe`, `media.scan`, `media.transcode_hls`) + el `reaper` y la poda | 3: `progress.recompute`, expiración de intentos y barrido de cargas |
 | Migraciones | 2 (esquema completo del dominio) | Ninguna bloqueante |
 | Carpetas de la colección con contenido | 9 de 10 | SEG-9, que se demuestra con `make demo` y `make scale` |
 
@@ -138,7 +138,7 @@ límite y los intentos de quiz caducados se quedan abiertos.
 | `progress.recompute` | Falta — hoy el progreso se recalcula dentro de la petición |
 | `assessment.expire_attempts` (programado) | Falta — un intento vencido no se cierra solo |
 | `media.sweep_uploads` (programado) | Falta — las cargas a medias se quedan; el ciclo de vida del bucket las limpiaría en GCP |
-| Poda de `job_runs`, `progress_events` e `idempotency_keys` (programado) | Falta — **es el que más urge**: esas tablas solo crecen |
+| Poda de `job_runs`, `progress_events` e `idempotency_keys` (programado) | **Hecho** — ciclo en el worker con candado consultivo. Conserva los trabajos muertos, que son la cola de fallos |
 | `doc.convert_pdf` | Opcional (`RO-01`) |
 
 > **El `reaper` ya está.** Cierra la otra mitad de la garantía del outbox: el
@@ -181,7 +181,7 @@ volverse inútil.
 | 2 | **Adaptador de Cloud Storage** (ADR-0015, D1). Multipart emulado con `compose`; se escribe contra GCS real porque firmar sin clave descargada no se puede comprobar en local | Con la fase 3 |
 | 3 | **Prueba de carga con k6** y p95 medido con `api=1` frente a `api=3`, contra el entorno desplegado | Después del despliegue |
 | 4 | **Restauración cronometrada** y `make restore-test`. El RTO se demuestra, no se declara | Después del despliegue |
-| 5 | **Trabajos programados**: poda de `job_runs`, `progress_events` e `idempotency_keys` primero; luego expiración de intentos y barrido de cargas | Pendiente |
+| 5 | **Trabajos programados**: la poda está hecha; quedan la expiración de intentos y el barrido de cargas vencidas | A medias |
 | 6 | **Completar `identity`**: recuperación de contraseña sobre todo. Sin ella, quien la olvida no entra | Pendiente |
 | 7 | **Trazas con OpenTelemetry** hacia Cloud Trace (`RT-06`) | Pendiente |
 | 8 | Resto de operaciones `planificado`: borrados y reordenamientos de `authoring`, CRUD de preguntas, detalles de insignia y recurso | Pendiente |

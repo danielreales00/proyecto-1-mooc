@@ -14,11 +14,13 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"mooc/backend/internal/platform/dbx"
 	"mooc/backend/internal/platform/httpx"
 	"mooc/backend/internal/platform/problem"
 )
@@ -204,10 +206,20 @@ func (m *Middleware) guardar(ctx context.Context, clave string, user uuid.UUID,
 	}
 }
 
-// Podar borra las claves vencidas. Se conservan 24 h (ADR-0008).
-func (m *Middleware) Podar(ctx context.Context) (int64, error) {
-	tag, err := m.db.Exec(ctx,
-		`DELETE FROM platform.idempotency_keys WHERE created_at < now() - interval '24 hours'`)
+// Retencion es cuánto vive una clave de idempotencia (ADR-0008). Pasada esa
+// ventana, repetir la petición vuelve a ejecutarla: el cliente que reintenta
+// un día después ya no está reintentando, está pidiendo otra vez.
+//
+// El valor vive aquí, junto a la regla que lo justifica, y no en quien ejecuta
+// la poda.
+const Retencion = 24 * time.Hour
+
+// Podar borra las claves vencidas. La llama el podador del worker, no la
+// petición: limpiar no es trabajo del camino caliente.
+func Podar(ctx context.Context, db dbx.DB) (int64, error) {
+	tag, err := db.Exec(ctx,
+		`DELETE FROM platform.idempotency_keys WHERE created_at < now() - $1::interval`,
+		Retencion.String())
 	if err != nil {
 		return 0, err
 	}
