@@ -213,6 +213,42 @@ solo se despliega `api`, `/docs` responde 404. O se despliega Swagger como un
 servicio más con su regla de ruta en el balanceador, o se decide que el contrato
 se consulta por `GET /openapi.yaml`, que la API ya sirve.
 
+## Dimensionado de `dev`: crear pequeño a propósito
+
+Las fases de abajo describen la forma **de producción**, que es la que salió del
+ADR: alta disponibilidad, réplica, una instancia siempre caliente. En `dev` eso
+es pagar por protecciones que no protegen nada.
+
+Terraform no cuesta nada —es gratis y corre en contenedor; el bucket del estado
+son céntimos—. Lo que se paga es lo que crea, exactamente igual que si se
+creara a mano. La diferencia a favor es que `terraform destroy` apaga justo lo
+que se creó: a mano siempre queda una instancia olvidada cobrando.
+
+**Los dos costos fijos que dominan son Cloud SQL y Memorystore**, porque están
+encendidos las 24 horas aunque nadie entre. Lo demás es por uso.
+
+| Pieza | Producción | `dev` | Por qué |
+| --- | --- | --- | --- |
+| Cloud SQL | HA regional, PITR | **Zonal**, el tier más pequeño disponible para PostgreSQL 17, copias diarias sin PITR | La HA cuesta el doble y en `dev` no hay nada que proteger. Comprobar en la fase 1 qué tiers admite la versión: los de núcleo compartido no siempre están |
+| Memorystore | Estándar con réplica | **Básico, 1 GB** | La réplica es para no perder la cola en producción |
+| Cloud Run `api` | `min-instances: 1` | **`0`** | El arranque en frío importa en el p95 de producción, no en `dev` |
+| Cloud Run `worker` | Siempre encendido | **`min-instances: 1`, el tamaño más pequeño** | Un worker que escala a cero no consume la cola: nadie le manda peticiones. Es el único fijo que no se puede quitar |
+| Cloud Run `worker-media` | Siempre encendido | **`0`, y se despierta cuando haga falta** | Lleva ClamAV al lado y pide más memoria. En `dev` sale más barato levantarlo a demanda o como *job* programado que tenerlo esperando |
+| Salida a la VPC | Conector de acceso sin servidor | **Salida directa a VPC** | El conector cobra instancias en marcha; la salida directa no |
+| Artifact Registry | — | Política que conserve las últimas imágenes | El almacenamiento es barato, pero cada empuje deja una imagen |
+| CDN y egreso | Fase 5 | Se deja para el final | Con los vídeos de prueba es ruido. En producción es lo que se desmanda |
+
+**Dos cosas que conviene saber para apagar el gasto:**
+
+Cloud SQL **se puede parar** y deja de cobrar el cómputo, conservando los datos.
+Memorystore **no**: cobra hasta que se borra. Si `dev` va a estar quieto una
+temporada, lo correcto es `terraform destroy` del entorno entero y volver a
+levantarlo después, que es precisamente lo que hace fiable tener la
+infraestructura como código.
+
+`prod` se levanta con los mismos módulos cambiando variables, cuando haya algo
+que proteger. No antes.
+
 ## Fases
 
 ### Fase 0 · Cimientos, ya en Terraform
@@ -409,7 +445,7 @@ Comprobado contra el proyecto el 26 de septiembre.
 | --- | --- | --- |
 | `project_id` | `mooc-509602` | Creado el 24-09, activo |
 | Cuenta de facturación | `01D669-827C63-9BFAA3` | **Enlazada** |
-| Región | `us-central1` | Propuesta; confirmar |
+| Región | `us-central1` | **Confirmada.** No hay una por defecto en GCP; es la de facto en la consola y de las más baratas. Fijada en `gcloud config` |
 | Bucket del estado de Terraform | `gs://mooc-tfstate-mooc-509602` | **Falta crearlo** |
 | Dominio | | Sin decidir. Sin dominio se despliega igual |
 | Repositorio de Artifact Registry | `mooc` | Lo crea Terraform |
