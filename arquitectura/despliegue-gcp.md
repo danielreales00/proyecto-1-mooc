@@ -403,15 +403,27 @@ el sentido de D3. Si alguna vez vuelven a hacer falta, algo se torció.
 
 Rellénala antes de la fase 0 y tenla a mano en la conversación del despliegue.
 
-| Dato | Valor |
-| --- | --- |
-| `project_id` | |
-| Región | |
-| Dominio (o «sin dominio») | |
-| Bucket del estado de Terraform | |
-| Repositorio de Artifact Registry | |
-| Correo saliente (proveedor) | |
-| Presupuesto mensual tope | |
+Comprobado contra el proyecto el 26 de septiembre.
+
+| Dato | Valor | Estado |
+| --- | --- | --- |
+| `project_id` | `mooc-509602` | Creado el 24-09, activo |
+| Cuenta de facturación | `01D669-827C63-9BFAA3` | **Enlazada** |
+| Región | `us-central1` | Propuesta; confirmar |
+| Bucket del estado de Terraform | `gs://mooc-tfstate-mooc-509602` | **Falta crearlo** |
+| Dominio | | Sin decidir. Sin dominio se despliega igual |
+| Repositorio de Artifact Registry | `mooc` | Lo crea Terraform |
+| Correo saliente (proveedor) | | **Sin elegir**; hace falta en la fase 3 |
+| Presupuesto mensual tope | | **Falta la alerta** |
+
+**El proyecto está vacío**: sin buckets, sin instancias de Cloud SQL, sin
+servicios de Cloud Run y sin repositorios de Artifact Registry. No hay nada que
+importar al estado de Terraform.
+
+De las APIs solo están las que trae un proyecto nuevo —BigQuery, logging,
+monitoring, `storage-api`, `cloudtrace`—. Las que hacen falta las habilita
+Terraform en la fase 0: `run`, `sqladmin`, `redis`, `secretmanager`,
+`artifactregistry`, `compute`, `vpcaccess` e `iamcredentials`.
 
 ---
 
@@ -427,7 +439,8 @@ Pégale esto, con la hoja de datos rellenada:
 > la consola ni con `gcloud`: lo único manual es lo de «Antes de empezar», que
 > ya está hecho. `gcloud` se usa solo para consultar y comprobar.
 >
-> Mis datos: `project_id` = …, región = …, bucket de estado = …, dominio = …
+> Mis datos están en la hoja del final del documento, comprobados contra el
+> proyecto: `mooc-509602`, `us-central1`.
 >
 > Estoy en la fase 0. Empieza comprobando con `make gcloud` qué hay creado ya en
 > el proyecto, antes de escribir HCL: si algo existe, o se importa al estado o
