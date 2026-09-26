@@ -152,6 +152,53 @@ comprobar en Compose.
 
 ---
 
+## Huecos del backend, encontrados el 26 de septiembre
+
+Revisando el código contra lo que exige GCP aparecieron cuatro cosas que
+funcionan en Compose y **no funcionarían desplegadas**. Ninguna es grande; lo
+peligroso es que tres fallan en silencio o tarde.
+
+### 1. La cola no habla TLS
+
+`REDIS_TLS` llegó a `rediscli.Open`, que es lo que usan las sesiones y los
+límites de tasa, pero **no a asynq**: `queue.NewPublisher` y el servidor del
+worker construyen `asynq.RedisClientOpt` sin `TLSConfig`. Con Memorystore y
+cifrado en tránsito, las sesiones funcionarían y la cola no conectaría. Son tres
+líneas y un parámetro más.
+
+### 2. El correo sale sin autenticar
+
+`mailer.go` llama a `smtp.SendMail(addr, nil, …)`. Ese `nil` es la
+autenticación, y vale con Mailpit porque acepta cualquier cosa. **Ningún
+proveedor real acepta correo sin autenticar**, así que hoy nadie podría
+registrarse en la nube: la verificación por correo nunca llegaría.
+
+Hace falta `SMTP_USER` y `SMTP_PASSWORD` en la configuración, `smtp.PlainAuth`
+en el adaptador, y **elegir proveedor** —GCP no da SMTP saliente—. El valor de
+la contraseña va a Secret Manager.
+
+### 3. El límite de tasa por IP se puede evadir detrás del balanceador
+
+`httpx.ClientIP` toma el **primer** valor de `X-Forwarded-For`. En Compose es
+correcto porque Caddy sobrescribe la cabecera con la dirección real
+(`header_up X-Forwarded-For {remote_host}`).
+
+Cloud Run y el balanceador de Google **añaden** a lo que venga, no sobrescriben.
+Un cliente que mande su propia cabecera queda como primer valor, así que le
+basta inventar una distinta en cada petición para saltarse el límite por IP. El
+de por cuenta seguiría frenándolo, pero el de IP dejaría de existir.
+
+La forma correcta es contar hops de confianza desde la derecha, con el número en
+una variable (`TRUSTED_PROXY_HOPS`) que en Compose vale 0 y en Cloud Run vale lo
+que haya delante.
+
+### 4. `/docs` se queda sin ruta
+
+Caddy manda `/docs` a Swagger UI y el resto a la API. En GCP no hay Caddy: si
+solo se despliega `api`, `/docs` responde 404. O se despliega Swagger como un
+servicio más con su regla de ruta en el balanceador, o se decide que el contrato
+se consulta por `GET /openapi.yaml`, que la API ya sirve.
+
 ## Fases
 
 ### Fase 0 · Cimientos, ya en Terraform
