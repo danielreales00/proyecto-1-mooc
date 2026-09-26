@@ -71,11 +71,11 @@ func run() error {
 	// pero nunca llegaron a la cola, y los que un worker dejó a medias
 	// (ADR-0004). Sin él, la promesa "perder Redis no pierde trabajo" solo se
 	// cumple a medias.
-	publisher := queue.NewPublisher(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisQueueDB)
+	publisher := queue.NewPublisher(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisQueueDB, cfg.RedisTLS)
 	defer publisher.Close()
 	queue.NewReaper(pool, publisher, log).Start(ctx, 30*time.Second)
 	emails := identity.NewEmailWorker(
-		mailer.New(cfg.SMTPAddr, cfg.MailFrom), cfg.PublicBaseURL, log)
+		mailer.New(cfg.SMTPAddr, cfg.MailFrom, cfg.SMTPUser, cfg.SMTPPassword), cfg.PublicBaseURL, log)
 
 	almacen, err := abrirAlmacen(cfg)
 	if err != nil {
@@ -107,7 +107,7 @@ func run() error {
 	mux.HandleFunc(jobs.TypeMediaTranscode, runner.Wrap(jobs.TypeMediaTranscode, mediaSvc.Transcodificar))
 
 	srv := asynq.NewServer(
-		asynq.RedisClientOpt{Addr: cfg.RedisAddr, Password: cfg.RedisPassword, DB: cfg.RedisQueueDB},
+		queue.OpcionesRedis(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisQueueDB, cfg.RedisTLS),
 		asynq.Config{
 			Concurrency: cfg.WorkerConcurrency,
 			Queues:      queue.ParseQueues(cfg.WorkerQueues),

@@ -57,6 +57,9 @@ func run() error {
 		return err
 	}
 	log := logging.New(cfg.LogLevel, cfg.LogFormat)
+	// Antes de atender nada: de esto depende que el límite por IP y la
+	// auditoría vean la dirección real y no la que quiera el cliente.
+	httpx.ConfigurarProxiesDeConfianza(cfg.TrustedProxyHops)
 	// Para que los errores registrados fuera de un handler con logger propio
 	// (httpx.Fail) salgan en el mismo formato estructurado.
 	slog.SetDefault(log)
@@ -95,7 +98,7 @@ func run() error {
 		return err
 	}
 
-	publisher := queue.NewPublisher(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisQueueDB)
+	publisher := queue.NewPublisher(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisQueueDB, cfg.RedisTLS)
 	defer publisher.Close()
 
 	// --- módulos ----------------------------------------------------------

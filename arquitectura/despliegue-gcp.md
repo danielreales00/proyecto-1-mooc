@@ -25,6 +25,9 @@ comprobado en local):
 | Pool de PostgreSQL | `DB_MAX_CONNS` por entorno. En Cloud Run el total es ese número **por instancia**, y es fácil agotar Cloud SQL (ADR-0015, D6) |
 | Almacén de objetos | Puerto `objectstore.Almacen` con comprobación en compilación, y `OBJECT_STORE` como única variable que nombra al proveedor. Añadir GCS es escribir una implementación, no tocar los módulos |
 | Sesión de reproducción | `POST /enrollments/{id}/media-sessions` implementado, con su manifiesto. Es el contrato que en GCP pasa de URL firmada a cookie de CDN **sin que el cliente cambie** (ADR-0015, D2) |
+| Cola con TLS | `REDIS_TLS` llega también a asynq, no solo a las sesiones |
+| Correo autenticado | `SMTP_USER` y `SMTP_PASSWORD`, con PLAIN sobre STARTTLS. Sin usuario sigue hablando con Mailpit |
+| IP real del cliente | `TRUSTED_PROXY_HOPS` cuenta desde la derecha de `X-Forwarded-For`, para que el límite por IP no se evada con una cabecera inventada |
 
 **Falta, y solo se puede hacer con GCP delante:** el adaptador de Cloud Storage
 (fase 3), la infraestructura (fases 0–1), el despliegue (fases 2–4) y la entrega
@@ -155,29 +158,37 @@ comprobar en Compose.
 ## Huecos del backend, encontrados el 26 de septiembre
 
 Revisando el código contra lo que exige GCP aparecieron cuatro cosas que
-funcionan en Compose y **no funcionarían desplegadas**. Ninguna es grande; lo
-peligroso es que tres fallan en silencio o tarde.
+funcionan en Compose y **no funcionarían desplegadas**. Ninguna era grande; lo
+peligroso es que tres fallaban en silencio o tarde.
 
-### 1. La cola no habla TLS
+**Los tres primeros están arreglados** (26 de septiembre). El cuarto es una
+decisión, y se toma al desplegar.
+
+### 1. La cola no habla TLS — **resuelto**
 
 `REDIS_TLS` llegó a `rediscli.Open`, que es lo que usan las sesiones y los
 límites de tasa, pero **no a asynq**: `queue.NewPublisher` y el servidor del
 worker construyen `asynq.RedisClientOpt` sin `TLSConfig`. Con Memorystore y
-cifrado en tránsito, las sesiones funcionarían y la cola no conectaría. Son tres
-líneas y un parámetro más.
+cifrado en tránsito, las sesiones funcionarían y la cola no conectaría.
 
-### 2. El correo sale sin autenticar
+`queue.OpcionesRedis` construye ahora la configuración que comparten el cliente
+y el servidor, y `REDIS_TLS` llega a las dos.
+
+### 2. El correo sale sin autenticar — **resuelto**
 
 `mailer.go` llama a `smtp.SendMail(addr, nil, …)`. Ese `nil` es la
 autenticación, y vale con Mailpit porque acepta cualquier cosa. **Ningún
 proveedor real acepta correo sin autenticar**, así que hoy nadie podría
 registrarse en la nube: la verificación por correo nunca llegaría.
 
-Hace falta `SMTP_USER` y `SMTP_PASSWORD` en la configuración, `smtp.PlainAuth`
-en el adaptador, y **elegir proveedor** —GCP no da SMTP saliente—. El valor de
-la contraseña va a Secret Manager.
+Ya están `SMTP_USER` y `SMTP_PASSWORD`. Con usuario vacío no se autentica, que
+es como sigue hablando Mailpit; con usuario se usa PLAIN, que el paquete `smtp`
+solo manda sobre una conexión cifrada.
 
-### 3. El límite de tasa por IP se puede evadir detrás del balanceador
+**Queda elegir proveedor** —GCP no da SMTP saliente— y cargar la contraseña en
+Secret Manager.
+
+### 3. El límite de tasa por IP se puede evadir detrás del balanceador — **resuelto**
 
 `httpx.ClientIP` toma el **primer** valor de `X-Forwarded-For`. En Compose es
 correcto porque Caddy sobrescribe la cabecera con la dirección real
@@ -188,11 +199,14 @@ Un cliente que mande su propia cabecera queda como primer valor, así que le
 basta inventar una distinta en cada petición para saltarse el límite por IP. El
 de por cuenta seguiría frenándolo, pero el de IP dejaría de existir.
 
-La forma correcta es contar hops de confianza desde la derecha, con el número en
-una variable (`TRUSTED_PROXY_HOPS`) que en Compose vale 0 y en Cloud Run vale lo
-que haya delante.
+Ahora se cuenta desde la derecha, con `TRUSTED_PROXY_HOPS`: 0 en Compose, y en
+Cloud Run lo que haya delante. La prueba cubre el caso adverso, el cliente que
+manda su propia cabecera para hacerse pasar por otro.
 
-### 4. `/docs` se queda sin ruta
+**Al desplegar hay que medir cuánto vale.** Una petición a `/readyz` con un
+`X-Forwarded-For` inventado dice cuántos saltos añade la infraestructura.
+
+### 4. `/docs` se queda sin ruta — decisión pendiente
 
 Caddy manda `/docs` a Swagger UI y el resto a la API. En GCP no hay Caddy: si
 solo se despliega `api`, `/docs` responde 404. O se despliega Swagger como un
@@ -359,7 +373,10 @@ Lo que cambia respecto a Compose. Lo que no aparece aquí, no cambia.
 | `OBJECT_STORE` | `gcs` | `gcs` | `gcs` | texto |
 | `S3_BUCKET_*` | nombres reales | ídem | ídem | texto |
 | `S3_ACCESS_KEY` / `S3_SECRET_KEY` | **no se ponen** | — | — | — |
-| `SMTP_ADDR` / `MAIL_FROM` | proveedor real | ídem | — | texto + secreto |
+| `SMTP_ADDR` / `MAIL_FROM` | proveedor real | ídem | — | texto |
+| `SMTP_USER` | del proveedor | ídem | — | texto |
+| `SMTP_PASSWORD` | del proveedor | ídem | — | **Secret Manager** |
+| `TRUSTED_PROXY_HOPS` | lo que añada la infraestructura, medido | — | — | texto |
 | `CLAMAV_ADDR` | — | — | `localhost:3310` | texto |
 | `WORKER_QUEUES` | — | `critical=6,default=3` | `bulk=1` | texto |
 

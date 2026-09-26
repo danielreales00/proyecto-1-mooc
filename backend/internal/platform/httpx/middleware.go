@@ -3,8 +3,10 @@ package httpx
 import (
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -146,14 +148,56 @@ func AccessLog(log *slog.Logger) Middleware {
 	}
 }
 
+// proxiesDeConfianza es cuántas direcciones añade la infraestructura a la
+// DERECHA de la IP real del cliente en X-Forwarded-For.
+//
+// Con Caddy delante vale 0: el proxy reescribe la cabecera entera con la
+// dirección del que llama, así que solo hay un valor y es el bueno. Detrás de
+// un balanceador de Google vale 1, porque añade la suya después de la del
+// cliente. El número se configura, no se adivina.
+var proxiesDeConfianza int
+
+// ConfigurarProxiesDeConfianza lo fija al arrancar. No hay candado porque se
+// llama una vez, antes de atender la primera petición.
+func ConfigurarProxiesDeConfianza(n int) {
+	if n < 0 {
+		n = 0
+	}
+	proxiesDeConfianza = n
+}
+
+// ClientIP devuelve la dirección del cliente para auditar y para limitar por
+// IP.
+//
+// Se cuenta desde la derecha a propósito. X-Forwarded-For es una lista que
+// cualquiera puede empezar: si el cliente manda la suya, queda a la IZQUIERDA
+// de la real, porque los proxies añaden al final. Tomar el primer valor —que
+// es lo que hacía esta función— convierte el límite por IP en decorativo
+// detrás de un balanceador que añade en vez de reescribir: basta inventar una
+// cabecera distinta en cada petición.
 func ClientIP(r *http.Request) string {
 	if v := r.Header.Get("X-Forwarded-For"); v != "" {
-		for i := 0; i < len(v); i++ {
-			if v[i] == ',' {
-				return v[:i]
-			}
+		partes := strings.Split(v, ",")
+		i := len(partes) - 1 - proxiesDeConfianza
+		if i < 0 {
+			// Vienen menos saltos de los configurados: alguien llega por un
+			// camino que no es el previsto. Se usa el más a la izquierda, que
+			// es el más antiguo de los que hay.
+			i = 0
 		}
-		return v
+		if ip := strings.TrimSpace(partes[i]); ip != "" {
+			return ip
+		}
 	}
-	return r.RemoteAddr
+	return sinPuerto(r.RemoteAddr)
+}
+
+// sinPuerto recorta el puerto de origen. Sin esto, dos peticiones del mismo
+// cliente son dos claves distintas en el límite de tasa, porque el puerto
+// efímero cambia en cada conexión.
+func sinPuerto(addr string) string {
+	if host, _, err := net.SplitHostPort(addr); err == nil {
+		return host
+	}
+	return addr
 }

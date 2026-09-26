@@ -7,8 +7,10 @@ package queue
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/hibiken/asynq"
@@ -29,10 +31,33 @@ type Publisher struct {
 	client *asynq.Client
 }
 
-func NewPublisher(addr, password string, db int) *Publisher {
-	return &Publisher{client: asynq.NewClient(asynq.RedisClientOpt{
-		Addr: addr, Password: password, DB: db,
-	})}
+// NewPublisher abre el cliente de la cola.
+//
+// `useTLS` lo exige Memorystore con cifrado en tránsito. Va aquí y no solo en
+// rediscli porque asynq abre su propia conexión: sin esto, las sesiones
+// hablarían cifrado y la cola no conectaría, que es un fallo raro de
+// diagnosticar —todo parece bien hasta que ningún trabajo se ejecuta—.
+func NewPublisher(addr, password string, db int, useTLS bool) *Publisher {
+	return &Publisher{client: asynq.NewClient(OpcionesRedis(addr, password, db, useTLS))}
+}
+
+// OpcionesRedis construye la configuración que comparten el cliente y el
+// servidor de asynq.
+func OpcionesRedis(addr, password string, db int, useTLS bool) asynq.RedisClientOpt {
+	opt := asynq.RedisClientOpt{Addr: addr, Password: password, DB: db}
+	if useTLS {
+		// Sin InsecureSkipVerify: un TLS que no verifica no es TLS.
+		opt.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12, ServerName: hostDe(addr)}
+	}
+	return opt
+}
+
+// hostDe recorta el puerto: el nombre del certificado es el host, no host:puerto.
+func hostDe(addr string) string {
+	if i := strings.LastIndex(addr, ":"); i > 0 {
+		return addr[:i]
+	}
+	return addr
 }
 
 func (p *Publisher) Close() error { return p.client.Close() }

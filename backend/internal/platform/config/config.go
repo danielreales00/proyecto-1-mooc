@@ -23,6 +23,10 @@ type Config struct {
 
 	HTTPAddr      string
 	PublicBaseURL string
+	// TrustedProxyHops es cuántas direcciones añade la infraestructura a la
+	// derecha de la IP real en X-Forwarded-For. Caddy la reescribe entera, así
+	// que en Compose vale 0; un balanceador de Google añade la suya y vale 1.
+	TrustedProxyHops int
 
 	DatabaseURL string
 	// DBMaxConns acota el pool de CADA instancia. En Cloud Run se multiplica
@@ -56,6 +60,10 @@ type Config struct {
 
 	SMTPAddr string
 	MailFrom string
+	// SMTPUser vacío significa sin autenticación: así habla Mailpit. Un
+	// proveedor real siempre la pide.
+	SMTPUser     string
+	SMTPPassword string
 
 	// ClamAVAddr es el clamd al que habla el worker por INSTREAM (ADR-0011).
 	ClamAVAddr string
@@ -95,8 +103,9 @@ func Load() (Config, error) {
 		// Cloud Run inyecta PORT y espera que el proceso escuche ahí. Manda
 		// sobre HTTP_ADDR para que la misma imagen sirva en Compose y en Cloud
 		// Run sin tocar nada (ADR-0010, regla 4).
-		HTTPAddr:      direccionHTTP(),
-		PublicBaseURL: opt("PUBLIC_BASE_URL", "http://localhost:8080"),
+		HTTPAddr:         direccionHTTP(),
+		PublicBaseURL:    opt("PUBLIC_BASE_URL", "http://localhost:8080"),
+		TrustedProxyHops: optInt("TRUSTED_PROXY_HOPS", 0),
 
 		DatabaseURL: req("DATABASE_URL"),
 		DBMaxConns:  optInt32("DB_MAX_CONNS", 10),
@@ -122,9 +131,11 @@ func Load() (Config, error) {
 			Quarantine: opt("S3_BUCKET_QUARANTINE", "mooc-quarantine"),
 		},
 
-		SMTPAddr:   req("SMTP_ADDR"),
-		MailFrom:   opt("MAIL_FROM", "no-reply@mooc.local"),
-		ClamAVAddr: opt("CLAMAV_ADDR", "clamav:3310"),
+		SMTPAddr:     req("SMTP_ADDR"),
+		MailFrom:     opt("MAIL_FROM", "no-reply@mooc.local"),
+		SMTPUser:     os.Getenv("SMTP_USER"),
+		SMTPPassword: os.Getenv("SMTP_PASSWORD"),
+		ClamAVAddr:   opt("CLAMAV_ADDR", "clamav:3310"),
 
 		SessionTTL:        optDuration("SESSION_TTL", 12*time.Hour),
 		SessionMaxTTL:     optDuration("SESSION_MAX_TTL", 720*time.Hour),
