@@ -37,16 +37,25 @@ services:
     restart: unless-stopped
 
   minio:
-    # quay.io, no Docker Hub: MinIO retiró de allí sus imágenes y el `docker
-    # pull` falla con "repository does not exist". Etiqueta fija a propósito,
-    # para que un clon nuevo levante lo mismo que este.
-    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
-    command: ["server", "/data", "--console-address", ":9001"]
+    # MinIO cerró el acceso anónimo a sus imágenes: primero en Docker Hub y el
+    # 26-09-2026 también en quay.io, donde `docker pull` empezó a responder
+    # "unauthorized" y dejó el CI sin poder levantar el stack.
+    #
+    # Esta es la MISMA versión del mismo software, publicada por Bitnami en su
+    # catálogo archivado, que sigue siendo público. Se elige por eso: cambiar de
+    # servidor S3 arriesgaría diferencias de comportamiento justo en la parte
+    # más delicada —multipart, URLs firmadas y políticas de bucket—, y MinIO
+    # desaparece igualmente al salir a GCP, donde el almacén es Cloud Storage.
+    #
+    # El catálogo también está congelado. Ver arquitectura/pendientes.md.
+    image: bitnamilegacy/minio:2025.7.23-debian-12-r5
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
-      - minio-data:/data
+      # Ruta de datos de esta imagen, y volumen nuevo: el anterior tiene los
+      # archivos como root y aquí el proceso corre con otro usuario.
+      - minio-data-bitnami:/bitnami/minio/data
     ports:
       - "${MINIO_API_PORT:-9010}:9000"
       - "${MINIO_CONSOLE_PORT:-9011}:9001"
@@ -60,20 +69,14 @@ services:
   # Crea los buckets del ADR-0005 y deja mooc-badges con lectura pública: la URL
   # de verificación de una insignia es pública (CA-07).
   minio-init:
-    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    build:
+      context: ./backend
+      target: buckets
+    image: mooc-buckets
+    env_file: [.env]
     depends_on:
       minio:
         condition: service_healthy
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD &&
-      mc mb -p local/mooc-originals local/mooc-derived local/mooc-badges local/mooc-quarantine &&
-      mc anonymous set download local/mooc-badges &&
-      echo 'buckets listos'
-      "
     restart: "no"
 
   mailpit:
@@ -315,5 +318,5 @@ services:
 volumes:
   postgres-data:
   redis-data:
-  minio-data:
+  minio-data-bitnami:
   grafana-data:

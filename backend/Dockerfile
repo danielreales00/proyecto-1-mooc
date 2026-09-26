@@ -58,6 +58,13 @@ FROM base AS migrate
 COPY --from=builder /out/migrate /usr/local/bin/migrate
 ENTRYPOINT ["migrate"]
 
+# --- buckets ----------------------------------------------------------------
+# Deja el almacén de objetos listo. Sustituye al contenedor de `mc`, que dejó de
+# poder descargarse cuando MinIO cerró el acceso anónimo a sus imágenes.
+FROM base AS buckets
+COPY --from=builder /out/buckets /usr/local/bin/buckets
+ENTRYPOINT ["buckets"]
+
 # --- seed -------------------------------------------------------------------
 # Datos sintéticos para la demostración (§10.1). Solo desarrollo.
 FROM base AS seed

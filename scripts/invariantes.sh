@@ -145,8 +145,30 @@ DIRECTO=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:9010/mooc-ori
   && ok "el bucket privado no responde sin firma ($DIRECTO)" \
   || mal "el bucket privado respondió $DIRECTO sin firma"
 
-PUB=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:9010/mooc-badges/")
-ok "el bucket de insignias es el único público (responde $PUB)"
+# El bucket de insignias deja LEER sus objetos sin credenciales, porque
+# verificar una insignia es público (CA-07), pero no deja LISTARLOS: la lista
+# sería el catálogo de todos los códigos emitidos, y con cada código se puede
+# consultar a nombre de quién está.
+LISTA=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:9010/mooc-badges/")
+[ "$LISTA" = "403" ] \
+  && ok "el bucket de insignias no se puede listar sin credenciales ($LISTA)" \
+  || mal "el bucket de insignias se pudo listar sin credenciales ($LISTA)"
+
+IMAGEN=""
+for _ in $(seq 1 10); do
+  IMAGEN=$(curl -s "$API/api/v1/me/badges" -H "$EA" \
+    | jq "([b.get('image_url','') for b in (d.get('items') or [])] or [''])[0]")
+  [ -n "$IMAGEN" ] && break
+  sleep 2
+done
+if [ -z "$IMAGEN" ]; then
+  mal "no se emitió ninguna insignia con imagen; sin ella no se puede comprobar la lectura pública"
+else
+  CODIGO=$(curl -s -o /dev/null -w '%{http_code}' "$IMAGEN")
+  [ "$CODIGO" = "200" ] \
+    && ok "la imagen de la insignia se descarga SIN credenciales (CA-07)" \
+    || mal "la imagen de la insignia respondió $CODIGO sin credenciales"
+fi
 
 # ─────────────────────────────────────────────────────────── ADR-0009 ──────
 bloque "ADR-0009 · todos los errores usan application/problem+json"

@@ -232,23 +232,47 @@ que el estudiante conserva su 100 % y su aprobación.
 
 `make arch` y `make invariantes` corren en `make ci` y en el CI.
 
-## MinIO es una dependencia congelada
+## MinIO: la dependencia congelada se cerró del todo
 
-MinIO terminó en octubre de 2025 la distribución de imágenes precompiladas y
-retiró sus repositorios de Docker Hub: `docker pull minio/mc` falla con
-«repository does not exist». `docker-compose.yml` apunta ahora a `quay.io` con
-etiqueta fija.
+**26 de septiembre de 2026.** MinIO cerró el acceso anónimo a sus imágenes
+también en quay.io, que era el sitio al que habíamos huido cuando retiró los
+repositorios de Docker Hub. `docker pull quay.io/minio/minio:<etiqueta>`
+responde `unauthorized`, y el CI dejó de poder levantar el stack: falla en
+«Levantar el stack» a los seis segundos, sin que nadie haya tocado nada.
 
-**Lo que hay que saber:** quay.io conserva las etiquetas históricas pero **no
-publicará versiones nuevas**. La que usamos es de septiembre de 2025, así que no
-habrá parches de seguridad por esa vía.
+Se hicieron dos cosas.
+
+**`mc` desapareció del proyecto.** Los buckets los crea ahora
+`backend/cmd/buckets`, un binario nuestro que usa el cliente de S3 que el
+backend ya traía. No añade dependencias, es idempotente y funciona contra
+cualquier almacén compatible. Una imagen de terceros menos de la que depender,
+y justo la que más veces nos ha roto.
+
+**El servidor pasa a `bitnamilegacy/minio`**, el mismo software y la misma
+versión, publicada por otro. Se eligió eso y no cambiar de servidor S3 porque
+las diferencias de comportamiento aparecerían en lo más delicado —carga
+multipart, URLs firmadas y políticas de bucket—, que es justo lo que costó
+afinar.
+
+**Lo que hay que saber:** el catálogo de Bitnami también está archivado, así que
+tampoco habrá versiones nuevas. Es el mismo trato de antes: sirve mientras dure.
 
 **Por qué se asume:** MinIO solo existe en el entorno local. En GCP el
-almacenamiento de objetos es GCS (ADR-0005, `disenos/ruta-a-gcp.md`), así que es
-una dependencia de desarrollo, no de producción.
+almacenamiento es Cloud Storage (ADR-0005, ADR-0015 D1), así que es una
+dependencia de desarrollo con fecha de caducidad conocida.
 
-**Si molesta más adelante:** cambiar a otra imagen compatible con S3 que siga
-mantenida, o compilarla. No es trabajo para las primeras entregas.
+**Si vuelve a romperse:** o un servidor S3 mantenido —SeaweedFS o Zenko
+CloudServer, con `make ci` como juez—, o una copia de la imagen en un registro
+propio. Lo primero es más trabajo y más duradero.
+
+### Efecto lateral: el bucket de insignias ya no se puede listar
+
+La política que ponía `mc anonymous set download` permitía además **listar** el
+bucket, y esa lista es el catálogo de todos los códigos de insignia emitidos;
+con cada código se consulta a nombre de quién está. La política que escribe
+`cmd/buckets` concede solo la lectura de objetos, que es lo que el CA-07 pide.
+`make invariantes` comprueba las dos caras: la imagen se descarga sin
+credenciales y el listado responde 403.
 
 ## Decisiones abiertas
 
