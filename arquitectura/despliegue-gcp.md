@@ -446,15 +446,19 @@ Comprobado contra el proyecto el 26 de septiembre.
 | `project_id` | `mooc-509602` | Creado el 24-09, activo |
 | Cuenta de facturación | `01D669-827C63-9BFAA3` | **Enlazada** |
 | Región | `us-central1` | **Confirmada.** No hay una por defecto en GCP; es la de facto en la consola y de las más baratas. Fijada en `gcloud config` |
-| Bucket del estado de Terraform | `gs://mooc-tfstate-mooc-509602` | **Falta crearlo** |
+| Bucket del estado de Terraform | `gs://mooc-tfstate-mooc-509602` | **Creado** el 26-09, en `us-central1`, con versionado y acceso uniforme |
 | Dominio | | Sin decidir. Sin dominio se despliega igual |
 | Repositorio de Artifact Registry | `mooc` | Lo crea Terraform |
 | Correo saliente (proveedor) | | **Sin elegir**; hace falta en la fase 3 |
 | Presupuesto mensual tope | | **Falta la alerta** |
 
-**El proyecto está vacío**: sin buckets, sin instancias de Cloud SQL, sin
-servicios de Cloud Run y sin repositorios de Artifact Registry. No hay nada que
-importar al estado de Terraform.
+**El proyecto está vacío** salvo el bucket del estado: sin instancias de Cloud
+SQL, sin servicios de Cloud Run y sin repositorios de Artifact Registry. No hay
+nada que importar al estado de Terraform.
+
+La autenticación está hecha, en el volumen `mooc-gcloud`: cuenta de usuario y
+credenciales por defecto de la aplicación de tipo `authorized_user`, que es lo
+que usa Terraform. Ninguna clave de cuenta de servicio, como manda D3.
 
 De las APIs solo están las que trae un proyecto nuevo —BigQuery, logging,
 monitoring, `storage-api`, `cloudtrace`—. Las que hacen falta las habilita
