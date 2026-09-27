@@ -7,6 +7,29 @@ Notas de trabajo del equipo. **No es entregable.**
 preparó el backend para GCP. Lo que viene es el despliegue, con su plan en
 [`despliegue-gcp.md`](despliegue-gcp.md).
 
+> **27 de septiembre: llegó el enunciado de la Entrega 2 y cambió la
+> arquitectura del despliegue.** Dos máquinas virtuales en vez de Cloud Run;
+> nada de CDN, balanceador, autoescalado ni alta disponibilidad. El alcance
+> está en [`alcance-entrega-2.md`](alcance-entrega-2.md) y la corrección de las
+> decisiones en [`adr/0016`](adr/0016-despliegue-iaas-en-dos-maquinas.md).
+>
+> Lo que abre trabajo de código nuevo, por orden de urgencia:
+>
+> 1. **Adaptador de Cloud Storage** con multipart emulado por `compose`. Sin él
+>    no hay entrega. Era lo previsto y sigue siéndolo.
+> 2. **Métricas de cola** —profundidad, antigüedad del trabajo más viejo y tasa
+>    de procesamiento—. El enunciado las exige como evidencia y **hoy no se
+>    exportan**: hay contadores de trabajos, no de cola. Bloquea el escenario 2.
+> 3. **Límites de tasa por IP configurables.** El generador de carga es una sola
+>    IP y `login_ip` admite 60/min: sin esto, la prueba mide al limitador y no a
+>    la plataforma. Los límites por cuenta y por sesión se dejan como están.
+> 4. **Generador de datos sintéticos** a escala. El `seed` actual crea cuatro
+>    cuentas de demostración; los escenarios necesitan 600 estudiantes y 20
+>    cursos, y hay que escribirlos en la base, no por la API (`register` admite
+>    60 por hora y por IP).
+> 5. Composiciones por máquina, *scripts* de arranque, Caddyfile de producción
+>    y guiones de k6.
+
 Este documento se revisó el **23 de septiembre de 2026** contra el código, no
 contra la memoria: durante dos semanas dijo que no existía casi nada de lo que
 ya estaba hecho.

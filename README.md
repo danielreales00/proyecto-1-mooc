@@ -385,11 +385,30 @@ El desglose completo módulo a módulo está en
 El detalle de lo que falta de plataforma y evidencia, en
 [`arquitectura/pendientes.md`](arquitectura/pendientes.md).
 
+## Entrega 2 — despliegue básico en la nube
+
+Entrega en curso. La plataforma se despliega en Google Cloud sobre **dos
+máquinas virtuales** —*Web Server* y *Worker Server*—, con PostgreSQL en el
+servicio administrado y los objetos en Cloud Storage. Sin CDN, sin balanceador,
+sin autoescalado y sin alta disponibilidad: lo que se evalúa es la capacidad
+medida de esa configuración fija.
+
+| Documento | Qué contiene |
+| --- | --- |
+| [`arquitectura/alcance-entrega-2.md`](arquitectura/alcance-entrega-2.md) | Qué entra, qué no y qué cambia respecto al plan anterior |
+| [`arquitectura/adr/0016`](arquitectura/adr/0016-despliegue-iaas-en-dos-maquinas.md) | La decisión de despliegue y lo que cuesta |
+| [`arquitectura/despliegue-gcp.md`](arquitectura/despliegue-gcp.md) | Plan ejecutable, por fases, con su comprobación |
+| [`capacity-planning/pruebas_de_carga_entrega2.md`](capacity-planning/pruebas_de_carga_entrega2.md) | Definición de los dos escenarios de carga e informe de capacidad |
+| `docs/entrega2/` | Documento de arquitectura de la entrega *(pendiente)* |
+| Video de sustentación | *(pendiente)* |
+
 ## Estructura del proyecto
 
 ```
 demo/             guion del video
 arquitectura/     enunciado, requisitos, ADRs, diseños, pendientes
+docs/entrega2/    documento de arquitectura de la Entrega 2
+capacity-planning/ escenarios de carga e informe de capacidad
 backend/
   cmd/            api · worker · migrate · seed
   internal/

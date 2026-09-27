@@ -9,7 +9,8 @@ Documentación de arquitectura del proyecto. Se lee en este orden.
 | [enunciado.md](enunciado.md) | Transcripción fiel del PDF del profesor. Fuente de verdad funcional |
 | [aclaraciones-profesor.md](aclaraciones-profesor.md) | Precisiones posteriores. **Prevalecen sobre el enunciado** |
 | [requisitos.md](requisitos.md) | Matriz con IDs trazables (`RF-`, `RO-`, `CA-`, `RT-`, `CE-`, `SEG-`, `RNF-`) |
-| [alcance-entrega-1.md](alcance-entrega-1.md) | Qué entra y qué no en esta entrega |
+| [alcance-entrega-1.md](alcance-entrega-1.md) | Qué entró y qué no en la Entrega 1 |
+| [alcance-entrega-2.md](alcance-entrega-2.md) | **Alcance de la entrega en curso**: despliegue básico en la nube |
 | [estado-modulos.md](estado-modulos.md) | Qué hace la aplicación hoy, módulo a módulo |
 | [media-plan.md](media-plan.md) | El módulo de multimedia: qué está diseñado, qué falta y en qué orden |
 

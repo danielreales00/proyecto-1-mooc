@@ -11,11 +11,14 @@ Equipo de 4 personas, 4–5 entregas en 13 semanas.
 | `arquitectura/enunciado.md` | Transcripción fiel del PDF del profesor. **Fuente de verdad funcional.** |
 | `arquitectura/aclaraciones-profesor.md` | Aclaraciones posteriores, por entrega. Prevalecen sobre el enunciado. |
 | `arquitectura/requisitos.md` | Matriz de requisitos con IDs trazables (`RF-`, `CA-`, `RT-`, `CE-`). |
-| `arquitectura/alcance-entrega-1.md` | Qué se entrega ahora y qué queda para después. |
+| `arquitectura/alcance-entrega-1.md` | Qué se entregó en la Entrega 1. |
+| `arquitectura/alcance-entrega-2.md` | **Alcance de la entrega en curso**: despliegue básico en la nube. |
 | `arquitectura/adr/` | Decisiones de arquitectura. Una decisión por archivo, numeradas. |
 | `arquitectura/disenos/` | Modelo de datos, API, trabajos asíncronos, máquinas de estado, ruta a GCP. |
 | `arquitectura/guia-de-informes.md` | Convenciones de escritura de los informes de arquitectura. Valen para todas las entregas. |
 | `arquitectura/despliegue-gcp.md` | **Plan ejecutable del despliegue en GCP.** Fases, comprobaciones y qué hace el usuario a mano. |
+| `capacity-planning/pruebas_de_carga_entrega2.md` | **Definición e informe de los dos escenarios de carga.** Ruta fijada por el enunciado. |
+| `docs/entrega2/` | Documento de arquitectura entregable. Ruta fijada por el enunciado. |
 | `arquitectura/pendientes.md` | Notas de trabajo. No es entregable. |
 | `arquitectura/preguntas-profesor.md` | Dudas abiertas y sus respuestas. |
 | `2026-20 proyecto-plataforma-mooc.pdf` | El PDF original. |
@@ -103,9 +106,14 @@ cambie (ADR-0015, D2).
 **El guion de `demo/guion.md` describe lo que se grabó**, no el estado actual
 del repositorio: no se actualiza hacia atrás.
 
-**El despliegue en GCP se prepara en
-[`arquitectura/despliegue-gcp.md`](arquitectura/despliegue-gcp.md).** Ese
-documento es el punto de entrada de la conversación que lo ejecute.
+**La Entrega 2 es el despliegue básico en la nube**, sobre **dos máquinas
+virtuales**: el enunciado prohíbe Cloud Run, CDN, balanceadores, autoescalado y
+alta disponibilidad, porque lo que evalúa es la capacidad medida de esa
+configuración fija. El alcance está en
+[`arquitectura/alcance-entrega-2.md`](arquitectura/alcance-entrega-2.md), la
+decisión en `adr/0016` —que corrige el `adr/0015`— y el plan ejecutable en
+[`arquitectura/despliegue-gcp.md`](arquitectura/despliegue-gcp.md), que es el
+punto de entrada de la conversación que lo ejecute.
 
 La demostración se hace con Postman. El guion del video está en
 `demo/guion.md`, dimensionado para el **máximo de 20 minutos**, y el reparto

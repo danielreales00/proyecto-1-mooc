@@ -7,6 +7,14 @@
 - **Fecha:** 2026-09-05
 - **Requisitos:** `RT-01`, `RT-06`, `CE-01`
 - **Refina:** ADR-0010 (portabilidad a GCP). Puede reemplazar parte de ADR-0005.
+- **Corregido por:** [ADR-0016](0016-despliegue-iaas-en-dos-maquinas.md) (2026-09-27).
+
+> **Aviso.** Este ADR describe la arquitectura objetivo con Cloud Run,
+> Memorystore y Cloud CDN. El enunciado de la Entrega 2 **prohíbe esos
+> servicios** y exige un despliegue sobre dos máquinas virtuales. Para el
+> despliegue que se está haciendo, manda **ADR-0016**: corrige D4, D6 y D7, y
+> deja D1, D2, D3 y D5 intactos. Lo de aquí sigue siendo el destino, no el
+> siguiente paso.
 
 ## Contexto
 

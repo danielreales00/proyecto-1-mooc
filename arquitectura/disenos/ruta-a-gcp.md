@@ -1,11 +1,17 @@
 # Ruta a GCP
 
-Plan para las entregas 3 y 4. **Nada de esto se implementa en la Entrega 1**
-(ADR-0010): existe para que las decisiones de hoy no se paguen después.
+**Arquitectura objetivo a largo plazo.** Es el destino, no el siguiente paso.
 
-> Las decisiones concretas y su plazo están en **ADR-0015**, en estado
-> Propuesto. Dos de ellas —la entrega de HLS y el cliente de objetos— tocan el
-> código de la Entrega 1.
+> **El despliegue de la Entrega 2 no es esto.** Su enunciado prohíbe Cloud Run,
+> Memorystore, Cloud CDN y el balanceador, y exige dos máquinas virtuales. Lo
+> que se está desplegando está en
+> [`../alcance-entrega-2.md`](../alcance-entrega-2.md),
+> [`../adr/0016`](../adr/0016-despliegue-iaas-en-dos-maquinas.md) y
+> [`../despliegue-gcp.md`](../despliegue-gcp.md). Este documento describe a
+> dónde se vuelve después.
+>
+> Donde abajo se lea «Entrega 3» junto a GCP, léase Entrega 2 o posterior: la
+> numeración de este documento es anterior al enunciado de la Entrega 2.
 
 ## Arquitectura destino
 
