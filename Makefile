@@ -191,14 +191,16 @@ publicar: ## Construye las imágenes para linux/amd64 y las sube a Artifact Regi
 	@# Token de una hora del ADC del volumen: ninguna clave queda guardada. Sin
 	@# $(TTY): con terminal, docker -t añadiría \r al token al pasar por el tubo.
 	@docker run --rm -v mooc-gcloud:/root/.config/gcloud $(GCLOUD_IMAGE) gcloud auth print-access-token \
-		| docker login -u oauth2accesstoken --password-stdin https://us-central1-docker.pkg.dev >/dev/null
+		| docker login -u oauth2accesstoken --password-stdin https://us-central1-docker.pkg.dev >/dev/null 2>&1
 	@sha=$$(git rev-parse --short=12 HEAD); \
 	for img in $(IMAGENES); do \
 		echo "── $$img:$$sha"; \
 		docker build -q --platform linux/amd64 --target $$img \
 			-t $(REGISTRO)/$$img:$$sha backend >/dev/null || exit 1; \
-		docker push -q $(REGISTRO)/$$img:$$sha || exit 1; \
-	done
+		docker push -q $(REGISTRO)/$$img:$$sha \
+			|| { docker logout us-central1-docker.pkg.dev >/dev/null; exit 1; }; \
+	done; \
+	docker logout us-central1-docker.pkg.dev >/dev/null
 
 .PHONY: tf
 tf: ## terraform de un entorno: make tf ENTORNO=dev ARGS="plan"
