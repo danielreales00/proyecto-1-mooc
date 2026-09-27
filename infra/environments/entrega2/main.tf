@@ -38,6 +38,7 @@ module "cloudsql" {
   region               = var.region
   zona                 = var.zona
   tier                 = var.cloudsql_tier
+  encendida            = var.cloudsql_encendida
   disco_gb             = var.cloudsql_disco_gb
   red_id               = module.red.red_id
   conexion_servicios   = module.red.conexion_servicios

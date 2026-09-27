@@ -359,6 +359,11 @@ degradación identificado y el cuello de botella sustentado con evidencia.
 6. **Procedimiento de reconstrucción**, probado. No es documentación de adorno:
    el equipo docente puede pedir sustentación síncrona y repetir una prueba, y
    si los recursos se borraron, recrearlos es responsabilidad del equipo.
+   **Entre sesiones de trabajo, la base se detiene, no se borra:**
+   `cloudsql_encendida = false` en `terraform.tfvars` y `apply`. Detenida no
+   cobra cómputo, solo disco y copias, y conserva IP, datos y clave. Falta
+   confirmar en la documentación de Google si se reactiva sola, que es una de
+   las condiciones que el enunciado pide incorporar al plan de uso.
 7. **Borrar la instancia de Cloud SQL** tras registrar las evidencias,
    conservando antes la copia y los *scripts*. Detener una máquina no elimina
    todos sus costos: quedan disco, IP estática, respaldos y objetos.

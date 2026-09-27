@@ -16,6 +16,11 @@ variable "tier" {
   type        = string
 }
 
+variable "encendida" {
+  description = "false detiene la instancia sin borrarla."
+  type        = bool
+}
+
 variable "disco_gb" {
   type = number
 }

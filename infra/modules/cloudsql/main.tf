@@ -17,8 +17,11 @@ resource "google_sql_database_instance" "pg" {
   settings {
     # PostgreSQL 17 crea Enterprise Plus si no se dice nada, y ese no admite
     # los tamaños pequeños.
-    edition           = "ENTERPRISE"
-    tier              = var.tier
+    edition = "ENTERPRISE"
+    tier    = var.tier
+    # Detenida no cobra cómputo, solo disco y copias, y conserva IP, datos y
+    # clave. Es la pausa entre sesiones de trabajo; borrarla es para C2.
+    activation_policy = var.encendida ? "ALWAYS" : "NEVER"
     availability_type = "ZONAL"
 
     disk_type = "PD_SSD"

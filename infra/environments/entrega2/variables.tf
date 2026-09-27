@@ -47,6 +47,11 @@ variable "cloudsql_tier" {
   type        = string
 }
 
+variable "cloudsql_encendida" {
+  description = "false detiene Cloud SQL sin borrarla. Se cambia en terraform.tfvars, nunca con -var."
+  type        = bool
+}
+
 variable "cloudsql_disco_gb" {
   type = number
 }
