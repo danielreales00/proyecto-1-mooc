@@ -23,6 +23,12 @@ variable "presupuesto_usd" {
   type        = number
 }
 
+variable "firmantes_desarrollo" {
+  description = "Personas (user:correo) que firman URL como mooc-web desde su máquina, para probar el adaptador de GCS."
+  type        = list(string)
+  default     = []
+}
+
 variable "cidr_subred" {
   description = "Subred de las máquinas."
   type        = string

@@ -57,6 +57,14 @@ func run() error {
 	}
 	log := logging.New(cfg.LogLevel, cfg.LogFormat)
 
+	// En Cloud Storage los buckets, su ciclo de vida y la lectura pública de
+	// insignias los crea Terraform (infra/modules/gcs), y las cuentas de las
+	// máquinas no tienen permiso para crear buckets. No hay nada que hacer.
+	if cfg.ObjectStore == "gcs" {
+		log.Info("OBJECT_STORE=gcs: los buckets los gestiona Terraform")
+		return nil
+	}
+
 	cliente, err := minio.New(cfg.S3Endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.S3AccessKey, cfg.S3SecretKey, ""),
 		Secure: cfg.S3UseSSL,

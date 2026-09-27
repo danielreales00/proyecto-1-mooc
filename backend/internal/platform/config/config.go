@@ -56,7 +56,14 @@ type Config struct {
 	S3AccessKey      string
 	S3SecretKey      string
 	S3UseSSL         bool
-	S3Buckets        Buckets
+	// Los nombres de bucket valen para los dos adaptadores: el prefijo S3_ es
+	// histórico, no dice nada del proveedor.
+	S3Buckets Buckets
+
+	// GCSSigner es la cuenta de servicio que firma las URL con OBJECT_STORE=gcs.
+	// Vacía en una máquina de GCP, que firma con la suya. Hace falta al firmar
+	// con el ADC de una persona, que no es una cuenta de servicio.
+	GCSSigner string
 
 	SMTPAddr string
 	MailFrom string
@@ -118,12 +125,13 @@ func Load() (Config, error) {
 		RedisCacheDB:   optInt("REDIS_CACHE_DB", 2),
 		RedisLimitDB:   optInt("REDIS_LIMIT_DB", 3),
 
-		ObjectStore:      opt("OBJECT_STORE", "s3"),
-		S3Endpoint:       req("S3_ENDPOINT"),
+		ObjectStore:      strings.ToLower(opt("OBJECT_STORE", "s3")),
+		S3Endpoint:       os.Getenv("S3_ENDPOINT"),
 		S3PublicEndpoint: opt("S3_PUBLIC_ENDPOINT", os.Getenv("S3_ENDPOINT")),
-		S3AccessKey:      req("S3_ACCESS_KEY"),
-		S3SecretKey:      req("S3_SECRET_KEY"),
+		S3AccessKey:      os.Getenv("S3_ACCESS_KEY"),
+		S3SecretKey:      os.Getenv("S3_SECRET_KEY"),
 		S3UseSSL:         optBool("S3_USE_SSL", false),
+		GCSSigner:        os.Getenv("GCS_SIGNER"),
 		S3Buckets: Buckets{
 			Originals:  opt("S3_BUCKET_ORIGINALS", "mooc-originals"),
 			Derived:    opt("S3_BUCKET_DERIVED", "mooc-derived"),
@@ -145,11 +153,29 @@ func Load() (Config, error) {
 		WorkerQueues:      opt("WORKER_QUEUES", "critical=6,default=3,bulk=1"),
 	}
 
+	if c.ObjectStore == "gcs" {
+		// Sin endpoint ni claves: el cliente nativo se autentica con la
+		// identidad de la máquina (ADR-0015, D3). Si alguna vez hacen falta
+		// S3_ACCESS_KEY o S3_SECRET_KEY aquí, algo se torció. El origen
+		// público es el de las URL firmadas y el de las imágenes de
+		// insignias.
+		c.S3PublicEndpoint = opt("S3_PUBLIC_ENDPOINT", HostGCS)
+		c.S3UseSSL = true
+	} else {
+		req("S3_ENDPOINT")
+		req("S3_ACCESS_KEY")
+		req("S3_SECRET_KEY")
+	}
+
 	if len(missing) > 0 {
 		return Config{}, fmt.Errorf("faltan variables de entorno: %s", strings.Join(missing, ", "))
 	}
 	return c, nil
 }
+
+// HostGCS es el host de las URL firmadas de Cloud Storage con el estilo de
+// ruta, que es el que usa la librería por defecto.
+const HostGCS = "storage.googleapis.com"
 
 func opt(key, def string) string {
 	if v := os.Getenv(key); v != "" {

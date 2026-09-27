@@ -37,6 +37,18 @@ Dependencias aprobadas para la Entrega 1:
 | `prometheus/client_golang` | Métricas | — |
 | `go.opentelemetry.io/otel` (+ exporter OTLP) | Trazas | **Exigido por el enunciado §7** |
 
+Añadidas en la Entrega 2:
+
+| Dependencia | Para qué | Por qué no la stdlib |
+| --- | --- | --- |
+| `cloud.google.com/go/storage` | Adaptador nativo de Cloud Storage | Lo decide ADR-0015 (D1): la interoperabilidad S3 exige claves HMAC. Resuelve autenticación con la identidad de la máquina, reintentos con *backoff* y firma V4 con signBlob, que a mano es tan arriesgada como la de S3 |
+| `google.golang.org/api` | `iterator.Done` al listar objetos | Viene con la anterior; se importa un solo paquete |
+
+El precio es el árbol indirecto: gRPC, OpenTelemetry y los clientes generados
+de Google entran en `go.sum`. Se acepta porque la alternativa es firmar y
+autenticar a mano, y lo acota que solo el paquete `internal/adapters/gcs` lo
+importa.
+
 Todo lo demás requiere ADR nuevo antes de entrar al `go.mod`.
 
 ## Alternativas consideradas

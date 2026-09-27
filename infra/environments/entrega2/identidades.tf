@@ -24,6 +24,17 @@ resource "google_service_account_iam_member" "web_firma_url" {
   member             = "serviceAccount:${google_service_account.web.email}"
 }
 
+# Quien desarrolla el adaptador de GCS firma desde su máquina, con su ADC de
+# usuario, en nombre de mooc-web: así la prueba firma con los mismos permisos
+# que la API desplegada. roles/owner no incluye este permiso; hay que darlo.
+resource "google_service_account_iam_member" "web_firma_desarrollo" {
+  for_each = toset(var.firmantes_desarrollo)
+
+  service_account_id = google_service_account.web.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = each.value
+}
+
 # Registros y métricas del agente de las máquinas (A3): memoria y disco no
 # están en las métricas por defecto, y el informe las pide.
 locals {

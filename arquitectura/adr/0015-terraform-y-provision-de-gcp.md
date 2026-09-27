@@ -202,6 +202,7 @@ esto se pueda cambiar sin romper al cliente. Se decide al implementar `media`.
 | D3 | Regla registrada en `CLAUDE.md`. El CI ya falla si aparece una credencial en el repositorio |
 | D2 | **Implementado** el 2026-09-23: `POST /enrollments/{id}/media-sessions` emite la credencial tras comprobar la inscripción, y el manifiesto se sirve en `GET /media-sessions/{token}/master.m3u8`. Devuelve `delivery: "signed_url"`; la fase 5 del despliegue lo cambia a `signed_cookie` sin tocar el contrato |
 | D1 | **Preparado** el 2026-09-23: puerto `objectstore.Almacen` y variable `OBJECT_STORE`. El adaptador de GCS se escribe en la fase 3 del despliegue |
+| D1 | **Implementado** el 2026-09-27: `internal/adapters/gcs`, multipart emulado con `compose` y firma V4 con `signBlob`. Pasa contra GCS real la misma suite de contrato que el adaptador de MinIO (`make prueba-gcs`). Dependencia registrada en ADR-0002 |
 
 ## Alternativas consideradas
 

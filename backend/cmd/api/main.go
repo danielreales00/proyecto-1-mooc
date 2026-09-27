@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"mooc/backend/internal/adapters/gcs"
 	"mooc/backend/internal/adapters/objectstore"
 	"mooc/backend/internal/adapters/playback"
 	"mooc/backend/internal/adapters/postgres"
@@ -374,11 +375,9 @@ func traducirLearning(err error) error {
 // abrirAlmacen elige la implementación del almacén de objetos.
 //
 // Es el único sitio donde el proveedor se nombra. `s3` cubre MinIO en Compose
-// y cualquier almacén compatible; `gcs` será el adaptador nativo de Cloud
-// Storage (ADR-0015, D1), que aún no existe: se escribe contra GCS real en la
-// fase 3 de `arquitectura/despliegue-gcp.md`, porque su parte delicada —firmar
-// URLs con la identidad de la carga, sin clave descargada— no se puede
-// comprobar en local.
+// y cualquier almacén compatible; `gcs` es el adaptador nativo de Cloud Storage
+// (ADR-0015, D1), que se autentica con la identidad de la máquina y firma sin
+// clave descargada.
 //
 // Falla al arrancar y no a mitad de una subida: un almacén mal configurado
 // tiene que notarse en el despliegue.
@@ -388,8 +387,7 @@ func abrirAlmacen(cfg config.Config) (objectstore.Almacen, error) {
 		return objectstore.Open(cfg.S3Endpoint, cfg.S3PublicEndpoint, cfg.S3AccessKey,
 			cfg.S3SecretKey, cfg.S3UseSSL, cfg.S3Buckets.Originals)
 	case "gcs":
-		return nil, fmt.Errorf("OBJECT_STORE=gcs: el adaptador de Cloud Storage " +
-			"todavía no está escrito; ver arquitectura/despliegue-gcp.md, fase 3")
+		return gcs.Open(context.Background(), cfg.GCSSigner, cfg.S3Buckets.Originals)
 	default:
 		return nil, fmt.Errorf("OBJECT_STORE=%q no es una opción válida (s3, gcs)", cfg.ObjectStore)
 	}

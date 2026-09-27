@@ -28,6 +28,7 @@ EN_GO    := docker run --rm -v "$(PWD)/backend":/src -w /src $(GO_CACHE)
 # mooc-gcloud, nunca en el repositorio (ADR-0015, D3).
 GCLOUD_IMAGE    := google/cloud-sdk:586.0.0-slim
 TERRAFORM_IMAGE := hashicorp/terraform:1.16.4
+GCP_PROYECTO    := mooc-509602
 # -it solo cuando hay terminal: `gcloud auth login` la necesita y el CI no la
 # tiene.
 TTY := $(shell test -t 0 && printf -- '-it')
@@ -166,6 +167,17 @@ arch: env ## Comprueba las reglas de arquitectura de los ADR 0001, 0002 y 0010
 .PHONY: gcloud
 gcloud: ## gcloud en contenedor: make gcloud ARGS="projects list"
 	@$(EN_NUBE) -w /repo $(GCLOUD_IMAGE) gcloud $(ARGS)
+
+.PHONY: prueba-gcs
+prueba-gcs: ## Suite del almacén contra Cloud Storage real, firmando como mooc-web
+	@# Usa el ADC del volumen mooc-gcloud. Firmar como mooc-web exige estar en
+	@# firmantes_desarrollo (infra/environments/entrega2/terraform.tfvars).
+	$(EN_GO) -v mooc-gcloud:/root/.config/gcloud:ro \
+		-e GOOGLE_APPLICATION_CREDENTIALS=/root/.config/gcloud/application_default_credentials.json \
+		-e GCS_PRUEBA_BUCKET=$(GCP_PROYECTO)-originals \
+		-e GCS_PRUEBA_CUARENTENA=$(GCP_PROYECTO)-quarantine \
+		-e GCS_SIGNER=mooc-web@$(GCP_PROYECTO).iam.gserviceaccount.com \
+		$(GO_IMAGE) go test -count=1 -v ./internal/adapters/gcs/
 
 .PHONY: tf
 tf: ## terraform de un entorno: make tf ENTORNO=dev ARGS="plan"

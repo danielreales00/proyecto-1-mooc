@@ -306,6 +306,23 @@ Solo necesita un bucket para probarse, que sale en A1. No espera a las máquinas
 reanudar tras interrumpir, completar, firmar una lectura y mover de cuarentena a
 originales.
 
+**Cómo quedó** (27-09): `internal/adapters/gcs`, con la suite de contrato en
+`internal/adapters/objectstore/contrato`, que pasan **los dos** adaptadores:
+MinIO en local y GCS real con `make prueba-gcs`. Detalles que no estaban en el
+plan:
+
+- Las partes van en `tmp/{uploadID}/`, no en `tmp/{asset_id}/`: el adaptador no
+  conoce el asset. Un marcador `tmp/{uploadID}/meta` guarda el destino y el
+  tipo MIME, que hacen falta al componer, y hace que una carga desconocida
+  falle como el `NoSuchUpload` de S3.
+- Completar exige, como S3, que cada ETag coincida con el MD5 de la parte.
+- `Ping` lista un objeto en vez de leer el bucket: `storage.buckets.get` no
+  está en `objectAdmin`, y las máquinas no lo necesitan para nada más.
+- Firmar desde una máquina del equipo necesita estar en
+  `firmantes_desarrollo` (Terraform): `roles/owner` no incluye `signBlob`.
+- Con `OBJECT_STORE=gcs` ya no se exigen las claves S3, y el comando `buckets`
+  no hace nada: los buckets son de Terraform.
+
 ### B2 · Instrumentación para poder medir
 
 **Objetivo:** que C1 tenga qué mirar. Se hace **antes** de generar carga; si se
@@ -410,7 +427,9 @@ Lo que cambia respecto a Compose. Lo que no aparece, no cambia.
 | `REDIS_TLS` | `false` | `false` | texto |
 | `OBJECT_STORE` | `gcs` | `gcs` | texto |
 | `S3_BUCKET_*` | nombres reales | ídem | texto |
-| `S3_ACCESS_KEY` / `S3_SECRET_KEY` | **no se ponen** | **no se ponen** | — |
+| `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_ENDPOINT` | **no se ponen** | **no se ponen** | — |
+| `S3_PUBLIC_ENDPOINT` | vacío: `storage.googleapis.com` por defecto | ídem | texto |
+| `GCS_SIGNER` | vacío: firma la identidad de la máquina | vacío | texto |
 | `SMTP_ADDR` / `MAIL_FROM` | proveedor real | — | texto |
 | `SMTP_USER` | del proveedor | — | texto |
 | `SMTP_PASSWORD` | del proveedor | — | **Secret Manager** |
