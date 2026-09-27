@@ -41,11 +41,16 @@ disco_maquinas_gb = 30
 
 # Qué imágenes corren: el SHA que imprimió `make publicar`. Se registra en cada
 # corrida de carga.
-version_imagenes = "d6a9e175d115"
+version_imagenes = "ef646a192a82"
 
 # 3 procesos x 10 = 30 conexiones, contra las 50 que admite db-g1-small (3 las
 # reserva Cloud SQL). A medir en C1.
 db_max_conns = 10
+
+# Multiplica los límites POR IP (login_ip, register, verify_email) durante las
+# pruebas de carga: el generador es una sola IP. 1 fuera de las pruebas. Es
+# una condición fija de cada corrida y se registra en el informe.
+factor_limite_ip = 100
 
 # Generador de carga: solo encendido mientras se mide (capacity-planning/).
 # 4 vCPU para que su CPU no pase del 60 % y no sea él quien limite.

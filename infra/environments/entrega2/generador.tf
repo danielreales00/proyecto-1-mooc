@@ -11,6 +11,8 @@ module "generador" {
   imagen       = var.imagen_maquinas
   subred_id    = module.red.subred_id
   red_id       = module.red.red_id
+
+  secreto_semilla = module.secretos.ids["seed-password"]
   repositorio  = "mooc"
   arranque     = file("${path.module}/../../../deploy/arranque-generador.sh")
 

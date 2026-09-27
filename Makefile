@@ -215,6 +215,7 @@ ssh: ## SSH por IAP: make ssh MAQUINA=mooc-worker [CMD="sudo docker ps"]
 # --- Verificación contra la nube (A4) ---------------------------------------
 # Nombre público del Web Server: `make tf ENTORNO=entrega2 ARGS="output nombre_publico"`.
 NUBE_HOST := 35-184-146-250.sslip.io
+VERSION_IMAGENES := $(shell sed -n 's/^version_imagenes *= *"\(.*\)"/\1/p' infra/environments/entrega2/terraform.tfvars)
 NUBE_RED  := mooc-nube
 GCLOUD    := docker run --rm -v mooc-gcloud:/root/.config/gcloud $(GCLOUD_IMAGE) gcloud
 
@@ -240,10 +241,79 @@ semilla-nube: ## Cuentas sintéticas en Cloud SQL, con la contraseña de Secret 
 	@# contraseña la lee la propia máquina con su identidad: no pasa por aquí.
 	@# El .env es de root con 0600: se lee con sudo, no se carga en el shell.
 	@# Sin pasar por `make ssh`: un make recursivo expandiría dos veces los $$.
+	@# CARGA=1 crea además las cuentas de las pruebas de carga (600 y 10).
 	@$(SSH_NUBE) mooc-web --command 'set -e; cd /opt/mooc; \
 		img=$$(sudo grep ^REGISTRO= .env | cut -d= -f2)/seed:$$(sudo grep ^VERSION= .env | cut -d= -f2); \
 		sudo docker run --rm --env-file .env -e SEED_FORCE=1 \
+		$(if $(CARGA),-e SEED_CARGA_ESTUDIANTES=600 -e SEED_CARGA_PROFESORES=10) \
 		-e SEED_PASSWORD="$$(sudo gcloud secrets versions access latest --secret=seed-password)" $$img'
+
+# --- Pruebas de carga (C1) -----------------------------------------------------
+# Todo corre en el generador (mooc-generador), fuera de las dos máquinas de la
+# aplicación. k6 corre en segundo plano en la máquina: una sesión SSH de
+# quince minutos por IAP se puede cortar, y la corrida no debe morir con ella.
+K6_IMAGE  := grafana/k6:2.3.0
+CARGA_DIR := /opt/carga
+
+.PHONY: carga-sincronizar
+carga-sincronizar: ## Copia los guiones de k6 y el generador de videos al generador
+	@docker run --rm -v mooc-gcloud:/root/.config/gcloud -v mooc-ssh:/root/.ssh -v "$(CURDIR)":/repo:ro \
+		$(GCLOUD_IMAGE) gcloud compute scp --zone us-central1-a --tunnel-through-iap --quiet \
+		/repo/capacity-planning/k6/comun.js /repo/capacity-planning/k6/preparar.js \
+		/repo/capacity-planning/k6/preparar-medios.js /repo/capacity-planning/k6/escenario1.js \
+		/repo/capacity-planning/k6/escenario2.js /repo/capacity-planning/k6/rafaga-login.js \
+		/repo/capacity-planning/k6/medios.js /repo/capacity-planning/medios/generar.sh \
+		mooc-generador:/tmp/ >/dev/null
+	@$(SSH_NUBE) mooc-generador --command 'sudo mv /tmp/generar.sh $(CARGA_DIR)/medios/ && sudo mv /tmp/*.js $(CARGA_DIR)/k6/ && ls $(CARGA_DIR)/k6'
+
+.PHONY: carga-medios
+carga-medios: ## Genera los tres videos en el generador, con el FFmpeg de worker-media
+	@$(SSH_NUBE) mooc-generador --command 'sudo docker run --rm --user root -v $(CARGA_DIR)/medios:/m \
+		--entrypoint sh $(REGISTRO)/worker-media:$(VERSION_IMAGENES) /m/generar.sh'
+
+# Uso: make carga K6=escenario1.js ETIQUETA=e1-L2 ARGS="-e TASA=8 -e DURACION=8m"
+.PHONY: carga
+carga: ## Lanza una corrida de k6 en el generador, en segundo plano
+	@test -n "$(K6)" -a -n "$(ETIQUETA)" || { echo 'uso: make carga K6=<guion.js> ETIQUETA=<nombre> [ARGS="-e ..."]'; exit 1; }
+	@$(SSH_NUBE) mooc-generador --command 'set -e; \
+		clave=$$(gcloud secrets versions access latest --secret=seed-password); \
+		sudo docker rm -f k6-$(ETIQUETA) >/dev/null 2>&1 || true; \
+		sudo docker run -d --name k6-$(ETIQUETA) --network host \
+		-v $(CARGA_DIR)/k6:/k6:ro -v $(CARGA_DIR)/resultados:/resultados -v $(CARGA_DIR)/medios:/medios:ro \
+		-e BASE_URL=https://$(NUBE_HOST) -e CLAVE="$$clave" -e ETIQUETA=$(ETIQUETA) $(ARGS) \
+		$(K6_IMAGE) run -q --no-color /k6/$(K6) >/dev/null && echo "k6-$(ETIQUETA) en marcha desde $$(date -u +%FT%TZ)"'
+
+.PHONY: carga-esperar
+carga-esperar: ## Espera a que termine una corrida y muestra su resumen: make carga-esperar ETIQUETA=e1-L2
+	@$(SSH_NUBE) mooc-generador --command 'sudo docker wait k6-$(ETIQUETA) >/dev/null; sudo docker logs k6-$(ETIQUETA) 2>&1 | grep -v level=info | tail -40'
+
+.PHONY: carga-traer
+carga-traer: ## Trae los resúmenes al repositorio, SIN los archivos con sesiones
+	@mkdir -p capacity-planning/resultados
+	@$(SSH_NUBE) mooc-generador --command 'cd $(CARGA_DIR)/resultados && sudo tar cz --exclude=datos.json --exclude=medios.json .' \
+		| tar xz -C capacity-planning/resultados
+	@ls capacity-planning/resultados
+
+# Un nivel completo: corrida, espera, resumen y métricas de su misma ventana.
+# Uso: make carga-nivel K6=escenario1.js ETIQUETA=e1-L2 ARGS="-e TASA=8 -e INTEGRIDAD=1"
+.PHONY: carga-nivel
+carga-nivel: ## Corre un nivel de carga y exporta sus métricas de la misma ventana
+	@desde=$$(date -u +%FT%TZ); \
+	$(MAKE) --no-print-directory carga K6=$(K6) ETIQUETA=$(ETIQUETA) ARGS='$(ARGS)' || exit 1; \
+	$(MAKE) --no-print-directory carga-esperar ETIQUETA=$(ETIQUETA) 2>&1 | grep -v -E 'NumPy|increasing_the_tcp|^Existing|^$$'; \
+	hasta=$$(date -u +%FT%TZ); echo "ventana: $$desde → $$hasta"; \
+	$(MAKE) --no-print-directory carga-metricas ETIQUETA=$(ETIQUETA) DESDE=$$desde HASTA=$$hasta; \
+	$(MAKE) --no-print-directory carga-traer >/dev/null
+
+# Uso: make carga-metricas ETIQUETA=e1-L2 DESDE=2026-09-27T21:00:00Z HASTA=2026-09-27T21:10:00Z
+.PHONY: carga-metricas
+carga-metricas: ## Exporta de Cloud Monitoring las métricas de una corrida
+	@test -n "$(ETIQUETA)" -a -n "$(DESDE)" -a -n "$(HASTA)" || { echo 'uso: make carga-metricas ETIQUETA=.. DESDE=.. HASTA=..'; exit 1; }
+	@mkdir -p capacity-planning/resultados
+	@docker run --rm -v mooc-gcloud:/root/.config/gcloud -v "$(CURDIR)/capacity-planning/metricas":/m:ro \
+		--entrypoint python3 $(GCLOUD_IMAGE) /m/exportar.py $(ETIQUETA) $(DESDE) $(HASTA) \
+		> capacity-planning/resultados/$(ETIQUETA)-metricas.json
+	@echo "capacity-planning/resultados/$(ETIQUETA)-metricas.json"
 
 .PHONY: postman-nube
 postman-nube: tunel-mailpit ## Colección entera contra la URL pública (tarda ~8 min)
@@ -274,15 +344,18 @@ tf: ## terraform de un entorno: make tf ENTORNO=dev ARGS="plan"
 		-e GOOGLE_APPLICATION_CREDENTIALS=/root/.config/gcloud/application_default_credentials.json \
 		$(TERRAFORM_IMAGE) $(ARGS)
 
+FUENTE_INFORME = $(firstword $(wildcard docs/entrega$(ENTREGA)/informe-entrega-$(ENTREGA).md) arquitectura/informe-entrega-$(ENTREGA).md)
+
 .PHONY: informe
-informe: ## Genera el PDF de un informe: make informe ENTREGA=1
+informe: ## Genera el PDF de un informe: make informe ENTREGA=2
 	@test -n "$(ENTREGA)" || { echo "uso: make informe ENTREGA=<n>"; exit 1; }
-	@test -f arquitectura/informe-entrega-$(ENTREGA).md \
-		|| { echo "no existe arquitectura/informe-entrega-$(ENTREGA).md"; exit 1; }
+	@# Desde la Entrega 2 el informe vive donde lo pide la entrega,
+	@# docs/entregaN/; el de la Entrega 1 sigue en arquitectura/.
+	@test -f $(FUENTE_INFORME) || { echo "no existe $(FUENTE_INFORME)"; exit 1; }
 	@mkdir -p arquitectura/recursos/informe-$(ENTREGA)
 	@# 1. Cada bloque mermaid sale a un SVG y el Markdown intermedio lo enlaza.
 	@$(EN_REPO) $(MERMAID_IMAGE) \
-		-i arquitectura/informe-entrega-$(ENTREGA).md \
+		-i $(FUENTE_INFORME) \
 		-o arquitectura/recursos/informe-$(ENTREGA)/informe.md \
 		-e pdf --pdfFit -b white
 	@# 2. pandoc arma el PDF. Los diagramas ya son PDF vectoriales, que es lo
@@ -295,8 +368,8 @@ informe: ## Genera el PDF de un informe: make informe ENTREGA=1
 		--resource-path=arquitectura/recursos/informe-$(ENTREGA) \
 		-V lang=es -V geometry:a4paper,margin=2.5cm -V fontsize=11pt \
 		-V colorlinks=true -V linkcolor=black -V urlcolor=black \
-		-o arquitectura/informe-entrega-$(ENTREGA).pdf
-	@echo "arquitectura/informe-entrega-$(ENTREGA).pdf"
+		-o $(basename $(FUENTE_INFORME)).pdf
+	@echo "$(basename $(FUENTE_INFORME)).pdf"
 
 .PHONY: rapido
 rapido: ## Comprobación de bucle corto: formato, arquitectura, vet y pruebas

@@ -34,3 +34,8 @@ variable "arranque" {
 variable "red_id" {
   type = string
 }
+
+variable "secreto_semilla" {
+  description = "Id del secreto seed-password."
+  type        = string
+}

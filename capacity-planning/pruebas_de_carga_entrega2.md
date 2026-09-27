@@ -3,10 +3,9 @@
 Informe de capacidad de la plataforma MOOC sobre el despliegue básico en la nube
 pública. La ruta de este archivo la fija el enunciado de la entrega.
 
-**Estado: definición. Sin resultados todavía.** Las secciones de resultados
-están vacías a propósito: se rellenan con lo medido, no con lo esperado. Lo que
-sí está cerrado es **qué se va a ejecutar y bajo qué condiciones**, que es lo
-que hay que decidir antes de tocar el generador.
+**Estado: en ejecución (27-09-2026).** La definición de abajo se fijó antes de
+tocar el generador; los ajustes que exigió la plataforma real están en §1.1 y
+§5.2.1, y los resultados en §9, con lo medido y no con lo esperado.
 
 El objetivo no es alcanzar una escala de producción ni demostrar los objetivos
 finales de concurrencia del producto. Es **determinar la capacidad sostenible de
@@ -23,12 +22,27 @@ resultados como una configuración distinta.
 | Elemento | Valor | Estado |
 | --- | --- | --- |
 | Proveedor y región | Google Cloud, `us-central1` | Fijado |
-| Web Server | 2 vCPU, 2 GiB, 30 GiB | Por confirmar el tipo exacto |
-| Worker Server | 2 vCPU, 2 GiB, 30 GiB | Por confirmar el tipo exacto |
-| Base administrada | Cloud SQL PostgreSQL 17, zonal, sin réplicas | Tier por decidir |
-| Almacenamiento de objetos | Cloud Storage, cuatro buckets | — |
-| Cola | Redis en contenedor, Worker Server | — |
-| Generador de carga | Tercera máquina, misma región, **fuera de las dos de la aplicación** | Por dimensionar |
+| Web Server | `e2-highcpu-2`: 2 vCPU no compartidas, 2048 MiB, 30 GiB `pd-balanced` | Fijado |
+| Worker Server | `e2-highcpu-2`: 2 vCPU no compartidas, 2048 MiB, 30 GiB `pd-balanced` | Fijado |
+| Base administrada | Cloud SQL PostgreSQL 17, `db-g1-small` (núcleo compartido, 1,7 GiB), 10 GiB SSD, zonal | Fijado |
+| Almacenamiento de objetos | Cloud Storage, cuatro buckets en `US-CENTRAL1` | Fijado |
+| Cola | Redis 7.4 en contenedor, Worker Server, AOF | Fijado |
+| Generador de carga | `mooc-generador`, `e2-standard-4` (4 vCPU, 16 GiB), `us-central1-a`, sin IP externa, sale por Cloud NAT | Fijado |
+| Versión de la aplicación | Imágenes `ef646a192a82` | Fijado |
+| Concurrencia de workers | `worker` 20 (`critical=6,default=3`); `worker-media` 1 (`bulk=1`) | Fijado |
+| Pool de conexiones | `DB_MAX_CONNS=10` por proceso | Fijado |
+| Límites por IP | `RATE_LIMIT_IP_FACTOR=100` (§3.1); por cuenta y sesión sin tocar | Fijado |
+| Caché de la aplicación | Redis, base 2, sin cambios respecto a la Entrega 1 | Fijado |
+
+### 1.1 Lo que cambió respecto a esta definición
+
+- **El tipo se llama `e2-highcpu-2`.** Es la combinación exacta de 2 vCPU no
+  compartidas y 2048 MiB. Pedido como `e2-custom-2-2048`, GCP lo normaliza a
+  este nombre del catálogo.
+- **La base es `db-g1-small`, de núcleo compartido.** El presupuesto real es de
+  50 USD, y un vCPU dedicado costaba el doble. Se registra como limitación: un
+  núcleo compartido puede ralentizarse sin aviso, y si la base resulta ser el
+  límite, parte de la variación entre repeticiones puede venir de ahí.
 
 ### El tipo de máquina no es un detalle
 
@@ -214,6 +228,28 @@ iteración dura del orden de 20 a 25 segundos.
 
 **La distribución de operaciones permanece constante entre niveles.** Lo único
 que cambia de un nivel a otro es la tasa de llegada.
+
+### 5.2.1 Ajustes del recorrido al medirlo
+
+La plataforma real obligó a cuatro ajustes. Se declaran aquí porque cambian lo
+que se mide.
+
+- **«Abrir un recurso» es la evidencia `open` de progreso.** El detalle de
+  recurso `GET /enrollments/{id}/resources/{rid}` está en el contrato como
+  planificado y responde 404. El contenido ya llega en `GET /content`.
+- **Los latidos respetan la cadencia de 10 s por recurso** (ADR-0012). El guion
+  lleva la cuenta por recurso y espera lo que falte. Por eso una iteración dura
+  unos 30 s y no 20 a 25.
+- **Las inscripciones.** La preparación inscribe al 85 % de las cuentas. El 15 %
+  restante se inscribe en cada iteración, y como la inscripción es un *upsert*,
+  repetirla devuelve la misma. Es el peso 0,15 de la tabla, con escrituras
+  reales.
+- **Los recursos son de texto.** Veinte cursos con 60 lecturas y 3 quizzes de 10
+  preguntas cada uno. El video se mide en el escenario 2.
+
+La mezcla efectiva por iteración: catálogo 1, ficha 1, inscripción 0,15,
+contenido 1, evidencias de progreso 5 (2 aperturas y 3 latidos), consulta de
+progreso 1 y quiz 0,3 (inicio, respuestas y envío). Son unas 11 peticiones.
 
 ### 5.3 Niveles de carga
 

@@ -51,6 +51,7 @@ module "maquinas" {
     HTTP_ADDR=:8080
     DOMINIO=${local.nombre_publico}
     TRUSTED_PROXY_HOPS=0
+    RATE_LIMIT_IP_FACTOR=${var.factor_limite_ip}
     REDIS_ADDR=${module.red.ip_interna_worker}:6379
     # La API no envía correo, pero la configuración lo exige.
     SMTP_ADDR=${module.red.ip_interna_worker}:1025

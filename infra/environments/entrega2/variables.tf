@@ -113,3 +113,9 @@ variable "tipo_generador" {
   type    = string
   default = "e2-standard-4"
 }
+
+variable "factor_limite_ip" {
+  description = "RATE_LIMIT_IP_FACTOR del Web Server. 1 en producción; más solo para pruebas de carga."
+  type        = number
+  default     = 1
+}

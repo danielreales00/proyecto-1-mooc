@@ -1,6 +1,5 @@
 # Generador de carga: una tercera máquina, fuera de las dos de la aplicación,
-# como exige el enunciado. Sin IP externa: sale por Cloud NAT y llega a la URL
-# pública igual que un cliente. Se crea solo mientras se mide.
+# como exige el enunciado. Se crea solo mientras se mide.
 
 resource "google_service_account" "generador" {
   account_id   = "mooc-generador"
@@ -40,6 +39,13 @@ resource "google_compute_instance" "generador" {
 
   network_interface {
     subnetwork = var.subred_id
+
+    # IP externa propia, efímera, como cualquier cliente de Internet. Por
+    # Cloud NAT la primera corrida perdió 813 conexiones: NAT reserva 64
+    # puertos por VM y destino, y k6 abre cientos hacia el mismo 443. El NAT
+    # no es parte del sistema que se mide. Ninguna regla deja entrar nada
+    # salvo SSH por IAP.
+    access_config {}
   }
 
   service_account {
@@ -79,4 +85,12 @@ resource "google_compute_firewall" "ssh_iap" {
 
   source_ranges           = ["35.235.240.0/20"]
   target_service_accounts = [google_service_account.generador.email]
+}
+
+# La contraseña de las cuentas sintéticas: k6 inicia sesión con ellas. La lee
+# la propia máquina de Secret Manager; no viaja por la línea de órdenes.
+resource "google_secret_manager_secret_iam_member" "semilla" {
+  secret_id = var.secreto_semilla
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.generador.email}"
 }

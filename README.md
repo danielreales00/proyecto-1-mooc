@@ -399,8 +399,31 @@ medida de esa configuración fija.
 | [`arquitectura/adr/0016`](arquitectura/adr/0016-despliegue-iaas-en-dos-maquinas.md) | La decisión de despliegue y lo que cuesta |
 | [`arquitectura/despliegue-gcp.md`](arquitectura/despliegue-gcp.md) | Plan ejecutable, por fases, con su comprobación |
 | [`capacity-planning/pruebas_de_carga_entrega2.md`](capacity-planning/pruebas_de_carga_entrega2.md) | Definición de los dos escenarios de carga e informe de capacidad |
-| `docs/entrega2/` | Documento de arquitectura de la entrega *(pendiente)* |
+| [`docs/entrega2/informe-entrega-2.md`](docs/entrega2/informe-entrega-2.md) | **Documento de arquitectura de la entrega**. El PDF sale de `make informe ENTREGA=2` |
 | Video de sustentación | *(pendiente)* |
+
+**URL de la aplicación:** `https://35-184-146-250.sslip.io` (documentación
+navegable en `/docs`). El acceso para el equipo docente se comunica por el
+medio privado del curso: las credenciales no se publican.
+
+### Operar el despliegue
+
+Todo corre en contenedores: ni `gcloud` ni `terraform` se instalan en la
+máquina de nadie. La credencial vive en el volumen `mooc-gcloud`.
+
+```bash
+make tf ENTORNO=entrega2 ARGS="plan -out=p.tfplan"   # revisar, y luego:
+make tf ENTORNO=entrega2 ARGS="apply p.tfplan"
+make publicar          # imágenes a Artifact Registry, etiquetadas con el commit
+make semilla-nube      # cuentas sintéticas en Cloud SQL (CARGA=1 añade las de carga)
+make postman-nube      # la colección de la Entrega 1 entera contra la nube
+make ssh MAQUINA=mooc-worker CMD="sudo docker ps"
+```
+
+Evidencias: el resultado de la colección y de cada fase está en
+[`arquitectura/despliegue-gcp.md`](arquitectura/despliegue-gcp.md), y los
+resultados de carga en
+[`capacity-planning/resultados/`](capacity-planning/resultados/).
 
 ## Estructura del proyecto
 
