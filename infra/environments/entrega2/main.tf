@@ -26,6 +26,9 @@ module "secretos" {
     # Se carga a mano cuando se elija proveedor de correo (A4). El correo lo
     # envía el worker (trabajo email.send), no la API.
     "smtp-password" = [google_service_account.worker.email]
+    # Contraseña de las cuentas sintéticas en la nube. La lee el Web Server,
+    # donde corre la semilla (semilla.tf).
+    "seed-password" = [google_service_account.web.email]
   }
 
   depends_on = [google_project_service.apis]

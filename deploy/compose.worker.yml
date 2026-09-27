@@ -25,10 +25,14 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # Mientras no se elija proveedor de correo (A4), el correo se queda aquí:
-  # el flujo se recorre igual y nada sale a Internet. Sin puerto publicado.
+  # Correo de la entrega: se queda aquí y nada sale a Internet. La interfaz
+  # se publica solo en el 127.0.0.1 de la máquina, que no es alcanzable desde
+  # fuera; la colección de Postman la lee por un túnel SSH a través de IAP
+  # (make tunel-mailpit).
   mailpit:
     image: axllent/mailpit:v1.27
+    ports:
+      - "127.0.0.1:8025:8025"
     healthcheck:
       test: ["CMD", "/mailpit", "readyz"]
       interval: 5s

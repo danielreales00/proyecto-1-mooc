@@ -211,6 +211,56 @@ ssh: ## SSH por IAP: make ssh MAQUINA=mooc-worker [CMD="sudo docker ps"]
 		$(GCLOUD_IMAGE) gcloud compute ssh $(MAQUINA) --zone us-central1-a \
 		--tunnel-through-iap --quiet $(if $(CMD),--command '$(CMD)')
 
+# --- Verificación contra la nube (A4) ---------------------------------------
+# Nombre público del Web Server: `make tf ENTORNO=entrega2 ARGS="output nombre_publico"`.
+NUBE_HOST := 35-184-146-250.sslip.io
+NUBE_RED  := mooc-nube
+GCLOUD    := docker run --rm -v mooc-gcloud:/root/.config/gcloud $(GCLOUD_IMAGE) gcloud
+
+.PHONY: tunel-mailpit
+tunel-mailpit: ## Túnel SSH por IAP al Mailpit del Worker Server (contenedor mooc-tunel)
+	@docker network inspect $(NUBE_RED) >/dev/null 2>&1 || docker network create $(NUBE_RED) >/dev/null
+	@docker rm -f mooc-tunel >/dev/null 2>&1 || true
+	@# Mailpit solo escucha en el 127.0.0.1 del Worker Server. El túnel lo trae
+	@# a mooc-tunel:8025 dentro de la red $(NUBE_RED); no se abre ningún puerto.
+	@docker run -d --name mooc-tunel --network $(NUBE_RED) \
+		-v mooc-gcloud:/root/.config/gcloud -v mooc-ssh:/root/.ssh $(GCLOUD_IMAGE) \
+		gcloud compute ssh mooc-worker --zone us-central1-a --tunnel-through-iap --quiet \
+		-- -N -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes \
+		-L 0.0.0.0:8025:127.0.0.1:8025 >/dev/null
+	@for i in $$(seq 1 30); do \
+		docker run --rm --network $(NUBE_RED) --entrypoint curl $(GCLOUD_IMAGE) \
+			-fsS -o /dev/null http://mooc-tunel:8025/api/v1/info 2>/dev/null && { echo "túnel listo: mooc-tunel:8025"; exit 0; }; \
+		sleep 2; done; echo "el túnel no respondió"; docker logs mooc-tunel | tail -5; exit 1
+
+.PHONY: semilla-nube
+semilla-nube: ## Cuentas sintéticas en Cloud SQL, con la contraseña de Secret Manager
+	@# Corre en el Web Server, que es quien llega a la IP privada de la base. La
+	@# contraseña la lee la propia máquina con su identidad: no pasa por aquí.
+	@# El .env es de root con 0600: se lee con sudo, no se carga en el shell.
+	@$(MAKE) --no-print-directory ssh MAQUINA=mooc-web CMD='set -e; cd /opt/mooc; \
+		img=$$(sudo grep ^REGISTRO= .env | cut -d= -f2)/seed:$$(sudo grep ^VERSION= .env | cut -d= -f2); \
+		sudo docker run --rm --env-file .env -e SEED_FORCE=1 \
+		-e SEED_PASSWORD="$$(sudo gcloud secrets versions access latest --secret=seed-password)" $$img'
+
+.PHONY: postman-nube
+postman-nube: tunel-mailpit ## Colección entera contra la URL pública (tarda ~8 min)
+	@echo "Contra https://$(NUBE_HOST). Los heartbeats exigen 10 s de separación: esto tarda."
+	@# La contraseña de las cuentas sintéticas se lee en el momento y viaja como
+	@# variable de entorno, no como argumento: no queda en el historial ni en
+	@# ningún archivo. prometheus_url vacía salta las tres peticiones de alertas,
+	@# que son del stack local.
+	@clave=$$($(GCLOUD) secrets versions access latest --secret=seed-password); \
+	docker run --rm --network $(NUBE_RED) -e DEMO_PASSWORD="$$clave" \
+		-v "$(CURDIR)":/repo -w /repo/postman --entrypoint sh mooc-herramientas -c \
+		'newman run mooc.postman_collection.json -e mooc.postman_environment.json \
+			--env-var base_url=https://$(NUBE_HOST) \
+			--env-var mailpit_url=http://mooc-tunel:8025 \
+			--env-var prometheus_url= \
+			--env-var demo_password="$$DEMO_PASSWORD" \
+			--delay-request 11000'; \
+	rc=$$?; docker rm -f mooc-tunel >/dev/null 2>&1; exit $$rc
+
 .PHONY: tf
 tf: ## terraform de un entorno: make tf ENTORNO=dev ARGS="plan"
 	@test -n "$(ENTORNO)" || { echo 'uso: make tf ENTORNO=<dev|prod> ARGS="plan"'; exit 1; }

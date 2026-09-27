@@ -2888,6 +2888,17 @@
           },
           "event": [
             {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Prometheus es del stack local. En la nube no se despliega (despliegue-gcp.md,",
+                  "// «Lo que se deja fuera a propósito»): con prometheus_url vacía, se salta.",
+                  "if (!pm.variables.get('prometheus_url')) { pm.execution.skipRequest(); }"
+                ]
+              }
+            },
+            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
@@ -2939,6 +2950,17 @@
           },
           "event": [
             {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Prometheus es del stack local. En la nube no se despliega (despliegue-gcp.md,",
+                  "// «Lo que se deja fuera a propósito»): con prometheus_url vacía, se salta.",
+                  "if (!pm.variables.get('prometheus_url')) { pm.execution.skipRequest(); }"
+                ]
+              }
+            },
+            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
@@ -2982,6 +3004,17 @@
             "description": "Tolerante a propósito: sin incidentes no hay alertas y eso no es un fallo. Después del bloque 8b del guion, aquí aparece la de la DLQ."
           },
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Prometheus es del stack local. En la nube no se despliega (despliegue-gcp.md,",
+                  "// «Lo que se deja fuera a propósito»): con prometheus_url vacía, se salta.",
+                  "if (!pm.variables.get('prometheus_url')) { pm.execution.skipRequest(); }"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {

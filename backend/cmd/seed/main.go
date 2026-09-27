@@ -20,8 +20,11 @@ import (
 	"mooc/backend/internal/platform/passwords"
 )
 
-// La contraseña es la misma para todas las cuentas sintéticas, a propósito:
-// esto solo corre en local y hace la demo reproducible. Nunca en producción.
+// La contraseña es la misma para todas las cuentas sintéticas, a propósito: en
+// local hace la demo reproducible. Fuera de local NO se usa: está publicada en
+// el repositorio, y en una URL pública daría la cuenta de administración a
+// cualquiera que lo lea. Allí la contraseña llega por SEED_PASSWORD, desde
+// Secret Manager (ver claveDeLaSemilla).
 const claveDemo = "Contrasena-Demo-2026"
 
 type cuenta struct {
@@ -56,8 +59,13 @@ func run() error {
 	}
 	log := logging.New(cfg.LogLevel, cfg.LogFormat)
 
-	if cfg.Env != "development" && os.Getenv("SEED_FORCE") != "1" {
+	local := cfg.Env == "development"
+	if !local && os.Getenv("SEED_FORCE") != "1" {
 		return fmt.Errorf("la semilla solo corre en APP_ENV=development (use SEED_FORCE=1 para forzar)")
+	}
+	clave, err := claveDeLaSemilla(local, os.Getenv("SEED_PASSWORD"))
+	if err != nil {
+		return err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
@@ -69,7 +77,7 @@ func run() error {
 	}
 	defer pool.Close()
 
-	hash, err := passwords.Hash(claveDemo)
+	hash, err := passwords.Hash(clave)
 	if err != nil {
 		return err
 	}
@@ -109,7 +117,12 @@ func run() error {
 	log.Info("semilla lista", "creadas", creadas, "ya_existían", existentes)
 
 	fmt.Println()
-	fmt.Println("Cuentas sintéticas — contraseña única:", claveDemo)
+	if local {
+		fmt.Println("Cuentas sintéticas — contraseña única:", clave)
+	} else {
+		// La salida acaba en registros y capturas: la contraseña no.
+		fmt.Println("Cuentas sintéticas — contraseña única: la de SEED_PASSWORD")
+	}
 	fmt.Println()
 	fmt.Printf("  %-26s %-9s %s\n", "CORREO", "ROL", "PARA QUÉ")
 	for _, c := range cuentas {
@@ -117,4 +130,20 @@ func run() error {
 	}
 	fmt.Println()
 	return nil
+}
+
+// claveDeLaSemilla decide la contraseña de las cuentas sintéticas. En local es
+// la de demostración, salvo que se pida otra. Fuera de local tiene que llegar
+// por SEED_PASSWORD y no puede ser la publicada en el repositorio.
+func claveDeLaSemilla(local bool, delEntorno string) (string, error) {
+	if delEntorno != "" {
+		if !local && delEntorno == claveDemo {
+			return "", fmt.Errorf("SEED_PASSWORD no puede ser la contraseña de demostración: está publicada en el repositorio")
+		}
+		return delEntorno, nil
+	}
+	if !local {
+		return "", fmt.Errorf("fuera de APP_ENV=development la semilla exige SEED_PASSWORD")
+	}
+	return claveDemo, nil
 }
