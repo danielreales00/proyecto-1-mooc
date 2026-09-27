@@ -23,9 +23,9 @@ module "secretos" {
   secretos = {
     # Lo escribe el módulo de Cloud SQL, con la clave que genera.
     "database-url" = [google_service_account.web.email, google_service_account.worker.email]
-    # Se carga a mano cuando se elija proveedor de correo (A4). Solo la API
-    # envía correo.
-    "smtp-password" = [google_service_account.web.email]
+    # Se carga a mano cuando se elija proveedor de correo (A4). El correo lo
+    # envía el worker (trabajo email.send), no la API.
+    "smtp-password" = [google_service_account.worker.email]
   }
 
   depends_on = [google_project_service.apis]

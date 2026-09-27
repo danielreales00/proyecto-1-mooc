@@ -73,3 +73,32 @@ variable "proteger_borrado" {
   type        = bool
   default     = true
 }
+
+variable "tipo_maquina" {
+  description = "Tipo de las dos máquinas: 2 vCPU y 2 GiB, lo que fija el enunciado."
+  type        = string
+}
+
+variable "imagen_maquinas" {
+  type = string
+}
+
+variable "disco_maquinas_gb" {
+  type = number
+}
+
+variable "version_imagenes" {
+  description = "SHA con que make publicar etiquetó las imágenes."
+  type        = string
+}
+
+variable "db_max_conns" {
+  description = "Pool por proceso. Tres procesos (api, worker, worker-media) contra el límite de la instancia."
+  type        = number
+}
+
+variable "nombre_publico" {
+  description = "Dominio propio. Vacío usa <ip>.sslip.io (ADR-0016, D4)."
+  type        = string
+  default     = ""
+}

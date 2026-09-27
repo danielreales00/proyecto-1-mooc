@@ -1,0 +1,28 @@
+# Proxy de entrada del Web Server (ADR-0016, D4). Mismo reparto que el
+# Caddyfile local, con dos diferencias: escucha en 80/443 con el nombre
+# público y obtiene el certificado de Let's Encrypt él solo.
+#
+# No hay balanceador delante: la IP que llega es la del cliente, y Caddy
+# SOBRESCRIBE X-Forwarded-For en vez de añadirle. Por eso TRUSTED_PROXY_HOPS=0.
+
+{
+	admin off
+}
+
+{$DOMINIO} {
+	log {
+		output stdout
+		format json
+	}
+
+	handle /docs* {
+		reverse_proxy swagger:8080
+	}
+
+	handle {
+		reverse_proxy api:8080 {
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+}

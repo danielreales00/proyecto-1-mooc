@@ -1,0 +1,96 @@
+# Worker Server (ADR-0016, D1): la cola y quien la consume. Sin IP pública;
+# sale a Internet por Cloud NAT.
+#
+# Los servicios son los de docker-compose.yml con imágenes de Artifact Registry
+# y la base en Cloud SQL. No usa `extends`: la máquina no tiene el repositorio,
+# solo recibe este archivo por los metadatos de la instancia.
+
+name: mooc
+
+services:
+  # Un solo Redis para cola, sesiones, caché y límites de tasa (ADR-0016, D2).
+  # Se publica solo en la IP privada: el firewall deja entrar el 6379 desde el
+  # Web Server y nada más.
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    ports:
+      - "${IP_PRIVADA}:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # Mientras no se elija proveedor de correo (A4), el correo se queda aquí:
+  # el flujo se recorre igual y nada sale a Internet. Sin puerto publicado.
+  mailpit:
+    image: axllent/mailpit:v1.27
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  worker:
+    image: ${REGISTRO}/worker:${VERSION}
+    env_file: [.env]
+    environment:
+      WORKER_QUEUES: critical=6,default=3
+    depends_on:
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # Firmas incluidas en la imagen y freshclam apagado, igual que en local: el
+  # mismo tag da el mismo veredicto en todas partes y la medición no depende
+  # de una descarga (ADR-0011).
+  clamav:
+    image: clamav/clamav:1.4
+    environment:
+      CLAMAV_NO_FRESHCLAMD: "true"
+    volumes:
+      - ./clamd.conf:/etc/clamav/clamd.conf:ro
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 60s
+    restart: unless-stopped
+
+  # Concurrencia 1: con 2 vCPU, un segundo FFmpeg solo le quitaría CPU al
+  # primero. Es un valor fijo que se registra en cada corrida de carga.
+  worker-media:
+    image: ${REGISTRO}/worker-media:${VERSION}
+    env_file: [.env]
+    environment:
+      WORKER_QUEUES: bulk=1
+      WORKER_CONCURRENCY: 1
+    depends_on:
+      redis:
+        condition: service_healthy
+      clamav:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  redis-data:

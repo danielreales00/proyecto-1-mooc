@@ -8,7 +8,11 @@ output "ip_externa_web" {
 
 # Nombre público mientras no haya dominio propio (ADR-0016, D4).
 output "nombre_publico" {
-  value = "${replace(module.red.ip_externa_web, ".", "-")}.sslip.io"
+  value = local.nombre_publico
+}
+
+output "maquinas" {
+  value = module.maquinas.nombres
 }
 
 output "redis_addr_web" {

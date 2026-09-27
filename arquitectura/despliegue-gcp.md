@@ -254,7 +254,8 @@ NAT.
 
 1. **Composiciones por máquina**: `deploy/compose.web.yml` (caddy, api, swagger)
    y `deploy/compose.worker.yml` (redis, worker, worker-media, clamav), que
-   heredan del `docker-compose.yml` de siempre.
+   repiten los servicios del `docker-compose.yml` de siempre (ver el matiz en
+   ADR-0016, D1: no usan `extends`, porque la máquina no tiene el repositorio).
 2. **Script de arranque** de cada máquina: instala Docker, se autentica contra
    Artifact Registry con la identidad de la instancia, **lee los secretos de
    Secret Manager y escribe el `.env` con permisos `0600`**, y levanta su
@@ -275,6 +276,50 @@ y capacidad, que es lo que el enunciado manda hacer en ese caso.
 **Comprobación:** `https://<host>/healthz` con certificado válido de una
 autoridad pública, `GET /readyz` con los tres en `ok`, y
 `gcloud compute instances list` mostrando **una sola IP externa**.
+
+**Cómo quedó** (27-09):
+
+- Todo llega por los **metadatos** de la instancia: `deploy/arranque.sh` como
+  `startup-script`, la composición, el `Caddyfile` o el `clamd.conf`, y un
+  `.env` sin secretos que genera Terraform (`infra/environments/entrega2/maquinas.tf`).
+  El script añade los secretos leyéndolos de Secret Manager con la identidad
+  de la máquina.
+- **Desplegar una versión nueva:** `make publicar`, poner el SHA en
+  `version_imagenes` (`terraform.tfvars`), `apply` —cambia solo los metadatos,
+  no recrea nada— y en cada máquina `sudo google_metadata_script_runner startup`.
+- **Debian 12**, no Container-Optimized OS: el agente de operaciones no corre
+  en COS, y sin él no hay memoria ni disco.
+- **Administración:** SSH solo por el túnel de IAP con OS Login
+  (`gcloud compute ssh mooc-worker --tunnel-through-iap`). No hay claves SSH en
+  los metadatos.
+- **Redis** se publica solo en `10.10.0.20:6379`, y el firewall solo deja
+  entrar desde la cuenta del Web Server.
+- **Correo, provisional:** el que envía es el **worker** (trabajo
+  `email.send`), no la API. Hasta A4 lo recibe un Mailpit en el Worker Server,
+  sin puerto publicado: el flujo se recorre y nada sale a Internet.
+- **ClamAV sin freshclam**, igual que en local: las firmas vienen en la imagen.
+  La salida por NAT queda para imágenes y paquetes.
+- **Tipo `e2-highcpu-2`**, no `e2-custom-2-2048`: es la misma forma, pero GCP
+  normaliza el nombre y Terraform veía una diferencia en cada plan que habría
+  «corregido» deteniendo las máquinas.
+- **El arranque reintenta** `docker compose up`: la API depende del Redis de la
+  otra máquina, y si el Web Server arranca primero, Compose aborta.
+- **SSH:** `make ssh MAQUINA=mooc-worker CMD="sudo docker ps"`. La clave se
+  guarda en el volumen `mooc-ssh`; sin él, cada ejecución registraría una clave
+  nueva en el perfil de OS Login.
+
+**Medido al levantar** (27-09, en reposo, sin carga):
+
+| | Web Server | Worker Server |
+| --- | --- | --- |
+| Memoria disponible | 1298 MiB de 1976 | **373 MiB** de 1976 |
+| Mayor consumidor | — | `clamd`, **966 MiB** residentes |
+| Disco usado | — | 4,0 GiB de 30 |
+| Agente de operaciones | activo | activo |
+
+ClamAV **cabe**, pero deja al Worker Server con 373 MiB y sin swap para
+FFmpeg, los dos workers y Redis. Es el primer candidato a fallo del escenario
+2: vigilar memoria desde el primer nivel.
 
 ### A4 · Verificación funcional
 
@@ -438,9 +483,9 @@ Lo que cambia respecto a Compose. Lo que no aparece, no cambia.
 | `S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_ENDPOINT` | **no se ponen** | **no se ponen** | — |
 | `S3_PUBLIC_ENDPOINT` | vacío: `storage.googleapis.com` por defecto | ídem | texto |
 | `GCS_SIGNER` | vacío: firma la identidad de la máquina | vacío | texto |
-| `SMTP_ADDR` / `MAIL_FROM` | proveedor real | — | texto |
-| `SMTP_USER` | del proveedor | — | texto |
-| `SMTP_PASSWORD` | del proveedor | — | **Secret Manager** |
+| `SMTP_ADDR` / `MAIL_FROM` | la exige la configuración, pero la API no envía | proveedor real; `mailpit:1025` hasta A4 | texto |
+| `SMTP_USER` | — | del proveedor | texto |
+| `SMTP_PASSWORD` | — | del proveedor | **Secret Manager** |
 | `TRUSTED_PROXY_HOPS` | `0` | — | texto |
 | `CLAMAV_ADDR` | — | `clamav:3310` | texto |
 | `WORKER_QUEUES` | — | `critical=6,default=3` y `bulk=1` | texto |
@@ -483,7 +528,7 @@ escenario 1 (ADR-0016, D2).
 | Región | `us-central1` | **Confirmada**, fijada en `gcloud config` |
 | Bucket del estado de Terraform | `gs://mooc-tfstate-mooc-509602` | **Creado**, con versionado y acceso uniforme |
 | Entorno de Terraform | `entrega2` | Único (ADR-0016, D6) |
-| Tipo de máquina | `e2-custom-2-2048`: 2 vCPU completas, 2048 MiB | **Confirmado** en `us-central1-a` |
+| Tipo de máquina | `e2-highcpu-2`: 2 vCPU completas, 2048 MiB, la combinación exacta | **Confirmado** en `us-central1-a`. Pedido como `e2-custom-2-2048`, GCP lo normaliza a este nombre |
 | Zona | `us-central1-a` | Máquinas y Cloud SQL en la misma |
 | Tier de Cloud SQL | `db-g1-small`: núcleo compartido, 1,7 GiB, 10 GiB SSD fijos | **Decidido** el 27-09. El enunciado lo deja al presupuesto, y con 50 USD cuesta la mitad que 1 vCPU dedicada. Limitación a registrar: núcleo compartido, sin SLA, puede ralentizarse sin aviso |
 | Red | VPC `mooc`, subred `10.10.0.0/24`, peering de servicios `10.20.0.0/20` | Web `10.10.0.10`, Worker `10.10.0.20`, fijas |

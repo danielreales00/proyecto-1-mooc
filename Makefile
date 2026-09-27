@@ -202,6 +202,15 @@ publicar: ## Construye las imágenes para linux/amd64 y las sube a Artifact Regi
 	done; \
 	docker logout us-central1-docker.pkg.dev >/dev/null
 
+.PHONY: ssh
+ssh: ## SSH por IAP: make ssh MAQUINA=mooc-worker [CMD="sudo docker ps"]
+	@test -n "$(MAQUINA)" || { echo 'uso: make ssh MAQUINA=<mooc-web|mooc-worker> [CMD="..."]'; exit 1; }
+	@# La clave vive en el volumen mooc-ssh: sin él, cada contenedor generaría
+	@# una nueva y la registraría en el perfil de OS Login de quien entra.
+	@docker run --rm $(TTY) -v mooc-gcloud:/root/.config/gcloud -v mooc-ssh:/root/.ssh \
+		$(GCLOUD_IMAGE) gcloud compute ssh $(MAQUINA) --zone us-central1-a \
+		--tunnel-through-iap --quiet $(if $(CMD),--command '$(CMD)')
+
 .PHONY: tf
 tf: ## terraform de un entorno: make tf ENTORNO=dev ARGS="plan"
 	@test -n "$(ENTORNO)" || { echo 'uso: make tf ENTORNO=<dev|prod> ARGS="plan"'; exit 1; }

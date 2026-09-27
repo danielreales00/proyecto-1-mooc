@@ -29,3 +29,20 @@ cloudsql_disco_gb = 10
 # volvería a encender sin que nadie lo note. Se versiona, así el equipo ve en
 # git si la base debería estar encendida.
 cloudsql_encendida = true
+
+# Máquinas: 2 vCPU completas y 2048 MiB, la combinación exacta del enunciado,
+# y 30 GiB de disco. Es el tipo del catálogo e2-highcpu-2: pedirlo como
+# e2-custom-2-2048 funciona, pero GCP lo normaliza a este nombre y Terraform ve
+# una diferencia en cada plan, y la «corregiría» deteniendo las máquinas. Debian 12 porque el agente de operaciones no corre en
+# Container-Optimized OS.
+tipo_maquina      = "e2-highcpu-2"
+imagen_maquinas   = "debian-cloud/debian-12"
+disco_maquinas_gb = 30
+
+# Qué imágenes corren: el SHA que imprimió `make publicar`. Se registra en cada
+# corrida de carga.
+version_imagenes = "48dd3d42b19a"
+
+# 3 procesos x 10 = 30 conexiones, contra las 50 que admite db-g1-small (3 las
+# reserva Cloud SQL). A medir en C1.
+db_max_conns = 10

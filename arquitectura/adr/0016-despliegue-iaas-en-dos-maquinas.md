@@ -54,6 +54,15 @@ local cambiando variables de entorno. Dos archivos de composición que heredan
 del mismo `docker-compose.yml` conservan esa propiedad; un mecanismo de arranque
 distinto la rompe el primer día.
 
+> **Matiz del 2026-09-27, al implementarlo.** «Heredan» es de contenido, no de
+> `extends`: las máquinas no tienen el repositorio —reciben solo su composición
+> por los metadatos de la instancia— y `extends` necesitaría el archivo base
+> al lado. `deploy/compose.web.yml` y `deploy/compose.worker.yml` repiten los
+> servicios de `docker-compose.yml` con los mismos *healthchecks* y variables, y
+> solo cambian lo que la nube cambia: imágenes del registro con el SHA, base en
+> Cloud SQL, Redis en el Worker Server. La propiedad que importa se mantiene:
+> los mismos binarios, leyendo las mismas variables.
+
 ### D2 — Redis único, en el Worker Server, y lo que eso cuesta
 
 El enunciado dice dónde va:

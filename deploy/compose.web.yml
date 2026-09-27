@@ -1,0 +1,73 @@
+# Web Server (ADR-0016, D1): entrada TLS, API y documentación. Es la única
+# máquina con IP pública.
+#
+# Los servicios son los de docker-compose.yml, con tres diferencias: las
+# imágenes vienen de Artifact Registry con el SHA del commit (no se construye
+# en una máquina de 2 GiB), la base es Cloud SQL y Redis vive en el Worker
+# Server. No usa `extends`: la máquina no tiene el repositorio, solo recibe
+# este archivo por los metadatos de la instancia.
+#
+# ${REGISTRO}, ${VERSION} y ${DOMINIO} salen del .env que escribe el script de
+# arranque, el mismo que lee la aplicación.
+
+name: mooc
+
+services:
+  # Aplica las migraciones pendientes contra Cloud SQL y termina. Es idempotente:
+  # en un arranque sin migraciones nuevas no hace nada (ADR-0003).
+  migrate:
+    image: ${REGISTRO}/migrate:${VERSION}
+    env_file: [.env]
+    restart: "no"
+
+  api:
+    image: ${REGISTRO}/api:${VERSION}
+    env_file: [.env]
+    expose:
+      - "8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  swagger:
+    image: swaggerapi/swagger-ui:v5.29.0
+    environment:
+      SWAGGER_JSON_URL: /openapi.yaml
+      BASE_URL: /docs
+      PERSIST_AUTHORIZATION: "true"
+      DISPLAY_REQUEST_DURATION: "true"
+      DOC_EXPANSION: none
+    restart: unless-stopped
+
+  # TLS termina aquí, con certificado de Let's Encrypt para ${DOMINIO}
+  # (ADR-0016, D4). Los certificados viven en un volumen: sin él, cada reinicio
+  # pediría uno nuevo y Let's Encrypt limita a cinco por semana para el mismo
+  # nombre.
+  proxy:
+    image: caddy:2.10-alpine
+    environment:
+      DOMINIO: ${DOMINIO}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      api:
+        condition: service_healthy
+      swagger:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  caddy-data:
+  caddy-config:
