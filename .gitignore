@@ -25,3 +25,7 @@ coverage.out
 .idea/
 .DS_Store
 
+
+# Terraform: proveedores descargados y planes locales. El lock sí se versiona.
+.terraform/
+*.tfplan

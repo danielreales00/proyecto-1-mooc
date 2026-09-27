@@ -108,6 +108,9 @@ de la aplicación de tipo `authorized_user`. Ninguna clave de cuenta de servicio
 | Proyecto, facturación, región | `mooc-509602`, facturación enlazada, `us-central1` |
 | Bucket del estado de Terraform | `gs://mooc-tfstate-mooc-509602`, con versionado |
 | Autenticación de `gcloud` y Terraform | En el volumen `mooc-gcloud` |
+| A0 · Cimientos | APIs y presupuesto en Terraform, `plan` sin cambios (27-09) |
+| A1 · Red, datos y secretos | 46 recursos, `plan` sin cambios, Cloud SQL sin IP pública (27-09) |
+| Red `default` borrada | La crea Compute Engine con 22 y 3389 abiertos a Internet. Importada y destruida con Terraform (`infra/environments/entrega2/red-default.tf`) (27-09) |
 | Preparación del backend | `PORT`, `LOG_FORMAT`, `DB_MAX_CONNS`, `OBJECT_STORE`, puerto `objectstore.Almacen`, `SMTP_USER`/`SMTP_PASSWORD`, `TRUSTED_PROXY_HOPS`, `REDIS_TLS` |
 
 ### Los cuatro huecos del 26 de septiembre, revisados contra el modelo IaaS
@@ -170,12 +173,23 @@ reanudación se mantiene, que es la condición de aceptación que importa (RF-05
 
    `compute`, `sqladmin`, `servicenetworking`, `storage`, `secretmanager`,
    `artifactregistry`, `iamcredentials`, `cloudresourcemanager`, `monitoring`,
-   `logging`, `iap`.
+   `logging`, `iap`, más `iam` (crear las cuentas de servicio) y
+   `billingbudgets` (el presupuesto), que faltaban en la primera versión.
+
+   `cloudresourcemanager` va **antes** que las demás: el proveedor comprueba
+   cada API a través de ella, y si se habilita en el mismo lote las que
+   terminan después fallan con 403. Pasó en el primer `apply`.
 
 3. **Presupuesto con alerta** al 50 %, 80 % y 100 % (`google_billing_budget`).
    Necesita permiso sobre la cuenta de facturación, no sobre el proyecto. Si la
    cuenta no lo permite, se hace desde la consola y **se documenta como
    limitación**, que es lo que el enunciado pide registrar.
+
+   Hecho en Terraform: la cuenta lo permite (`billing.admin`). Dos detalles:
+   con ADC de usuario la API de presupuestos exige proyecto de cuota
+   (`user_project_override` en el proveedor), y como la cuenta es de
+   educación y paga con créditos, el presupuesto **excluye los créditos**; si
+   no, el gasto neto sería cero y ninguna alerta saltaría.
 
 **Comprobación:** `apply` y luego `plan` sin cambios pendientes.
 
@@ -196,11 +210,11 @@ infra/
 | VPC y subred | Una subred `/24` en `us-central1`. Rango privado propio, documentado |
 | **Acceso privado a servicios** | Rango reservado + peering. **Sin esto Cloud SQL no tiene IP privada**, y el enunciado exige conexión privada |
 | Cloud NAT | El Worker Server no tiene IP externa y necesita salir para descargar imágenes y firmas de ClamAV. Es la «conectividad saliente» que el enunciado pide documentar |
-| Reglas de firewall | `443` y `80` desde Internet **solo al Web Server**; dentro de la subred, solo `6379` (Redis) y `5432` (Cloud SQL) entre las máquinas. Nada más entra |
+| Reglas de firewall | `443` y `80` desde Internet **solo al Web Server**; `6379` solo del Web Server al Worker Server; `22` solo desde el rango de IAP. Apuntan a **cuentas de servicio**, no a etiquetas. Una regla de denegación explícita con registro cierra el resto. El `5432` no lleva regla: Cloud SQL está al otro lado del peering y el firewall de esta VPC no la gobierna; la protege no tener IP pública |
 | IP externa estática | Para el Web Server. Una efímera cambia al reiniciar y rompe el certificado |
-| Cloud SQL PostgreSQL 17 | **Zonal, sin HA, sin réplicas, sin IP pública.** Copias diarias activadas: son la vía para borrar la instancia al final sin perder la evidencia. El tier se elige aquí y **se anota en el informe** |
+| Cloud SQL PostgreSQL 17 | **Zonal, sin HA, sin réplicas, sin IP pública.** Copias diarias activadas: son la vía para borrar la instancia al final sin perder la evidencia, y `retain_backups_on_delete` las conserva tras borrarla. El tier se elige aquí y **se anota en el informe**. Edición `ENTERPRISE` explícita: PostgreSQL 17 crea Enterprise Plus por defecto. Solo conexiones cifradas: `DATABASE_URL` lleva `sslmode=require`. El nombre lleva sufijo aleatorio porque un nombre borrado no se reutiliza en días, y C2 destruye y reconstruye |
 | Buckets | `originals`, `derived`, `badges`, `quarantine`. Todos privados salvo `badges` —lectura pública, sin listado, porque verificar una insignia es público (CA-07)—. Ciclo de vida: `tmp/` a 7 días |
-| Secret Manager | Solo los **contenedores**; los valores se cargan aparte. Un secreto en el estado de Terraform es un secreto en texto plano dentro de un bucket |
+| Secret Manager | Terraform crea los **contenedores**. La excepción es `database-url`: la clave de la base la genera Terraform como valor **efímero** y la escribe en el usuario de Cloud SQL y en el secreto con atributos **de solo escritura** (`password_wo`, `secret_data_wo`), que no llegan ni al estado ni al plan. Cumple el motivo de la regla —ningún secreto en el estado— sin dejar un paso a mano. `smtp-password` se carga aparte en A4 |
 | Artifact Registry | Repositorio Docker en la misma región |
 | Cuentas de servicio | Una por máquina, con lo mínimo. La del Web Server necesita `roles/iam.serviceAccountTokenCreator` **sobre sí misma**: es lo que permite firmar URLs sin clave descargada |
 
@@ -437,12 +451,18 @@ escenario 1 (ADR-0016, D2).
 | Región | `us-central1` | **Confirmada**, fijada en `gcloud config` |
 | Bucket del estado de Terraform | `gs://mooc-tfstate-mooc-509602` | **Creado**, con versionado y acceso uniforme |
 | Entorno de Terraform | `entrega2` | Único (ADR-0016, D6) |
-| Tipo de máquina | 2 vCPU dedicadas, 2048 MiB | **Por confirmar** en A1 |
-| Tier de Cloud SQL | | **Por decidir** en A1, y se anota en el informe |
-| Nombre público | | **Por decidir**: dominio propio o `sslip.io`. Hace falta en A3 |
+| Tipo de máquina | `e2-custom-2-2048`: 2 vCPU completas, 2048 MiB | **Confirmado** en `us-central1-a` |
+| Zona | `us-central1-a` | Máquinas y Cloud SQL en la misma |
+| Tier de Cloud SQL | `db-custom-1-3840`: 1 vCPU dedicada, 3,75 GiB, 10 GiB SSD fijos | **Decidido** en A1. Los de núcleo compartido se ralentizan sin aviso y ensuciarían la medición |
+| Red | VPC `mooc`, subred `10.10.0.0/24`, peering de servicios `10.20.0.0/20` | Web `10.10.0.10`, Worker `10.10.0.20`, fijas |
+| IP externa del Web Server | `35.184.146.250`, estática | **Reservada** en A1 |
+| Nombre público | `35-184-146-250.sslip.io` si no hay dominio propio | **Por decidir** en A3 |
+| Cloud SQL | `mooc-pg-55e5`, IP privada `10.20.0.3`, base y usuario `mooc` | **Creada** en A1. `DATABASE_URL` ya está en Secret Manager |
+| Buckets | `mooc-509602-{originals,derived,badges,quarantine}` | **Creados** en A1 |
+| Cuentas de servicio | `mooc-web`, `mooc-worker` | **Creadas** en A1 |
 | Repositorio de Artifact Registry | `mooc` | Lo crea Terraform |
 | Correo saliente (proveedor) | | **Sin elegir**; hace falta en A4 |
-| Presupuesto con alerta | | Se crea en A0 |
+| Presupuesto con alerta | `mooc-entrega2`, 50 USD/mes, 50/80/100 %, sin créditos | **Creado** en A0. **Es la cifra real** disponible: se puede ampliar, pero se presupuesta con ella |
 
 **El proyecto está vacío** salvo el bucket del estado. No hay nada que importar.
 
