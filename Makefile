@@ -179,6 +179,27 @@ prueba-gcs: ## Suite del almacén contra Cloud Storage real, firmando como mooc-
 		-e GCS_SIGNER=mooc-web@$(GCP_PROYECTO).iam.gserviceaccount.com \
 		$(GO_IMAGE) go test -count=1 -v ./internal/adapters/gcs/
 
+REGISTRO := us-central1-docker.pkg.dev/$(GCP_PROYECTO)/mooc
+IMAGENES := api worker worker-media migrate buckets seed
+
+.PHONY: publicar
+publicar: ## Construye las imágenes para linux/amd64 y las sube a Artifact Registry con el SHA
+	@# La etiqueta es el commit: si hay cambios sin confirmar, mentiría sobre
+	@# qué código lleva la imagen, y el informe registra esa versión por corrida.
+	@test -z "$$(git status --porcelain)" \
+		|| { echo "hay cambios sin confirmar; la etiqueta no correspondería al código"; exit 1; }
+	@# Token de una hora del ADC del volumen: ninguna clave queda guardada. Sin
+	@# $(TTY): con terminal, docker -t añadiría \r al token al pasar por el tubo.
+	@docker run --rm -v mooc-gcloud:/root/.config/gcloud $(GCLOUD_IMAGE) gcloud auth print-access-token \
+		| docker login -u oauth2accesstoken --password-stdin https://us-central1-docker.pkg.dev >/dev/null
+	@sha=$$(git rev-parse --short=12 HEAD); \
+	for img in $(IMAGENES); do \
+		echo "── $$img:$$sha"; \
+		docker build -q --platform linux/amd64 --target $$img \
+			-t $(REGISTRO)/$$img:$$sha backend >/dev/null || exit 1; \
+		docker push -q $(REGISTRO)/$$img:$$sha || exit 1; \
+	done
+
 .PHONY: tf
 tf: ## terraform de un entorno: make tf ENTORNO=dev ARGS="plan"
 	@test -n "$(ENTORNO)" || { echo 'uso: make tf ENTORNO=<dev|prod> ARGS="plan"'; exit 1; }

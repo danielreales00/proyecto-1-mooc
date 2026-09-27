@@ -240,6 +240,14 @@ equipo**, no desde el CI (ver «Lo que se deja fuera»).
 **Comprobación:** `gcloud artifacts docker images list` muestra las imágenes con
 el SHA del commit.
 
+**Cómo se hace:** `make publicar`. Se niega si hay cambios sin confirmar,
+construye los seis *targets* para `linux/amd64`, se autentica con un token de
+una hora sacado del ADC y sube cada imagen como
+`us-central1-docker.pkg.dev/mooc-509602/mooc/<imagen>:<sha de 12>`. Las de
+terceros —`redis`, `clamav`, `caddy`, `swagger-ui`— se descargan de Docker Hub
+en cada máquina: el Web Server por su IP externa, el Worker Server por Cloud
+NAT.
+
 ### A3 · Las dos máquinas
 
 **Objetivo:** que la plataforma responda en la URL pública.
