@@ -202,7 +202,7 @@
                   "pm.test(`llegó en ${intento + 1} intento(s)`, () => pm.expect(true).to.be.true);",
                   "",
                   "const id = mensajes[0].ID;",
-                  "pm.sendRequest(`${pm.collectionVariables.get('mailpit_url')}/api/v1/message/${id}`, (err, res) => {",
+                  "pm.sendRequest(`${pm.variables.get('mailpit_url')}/api/v1/message/${id}`, (err, res) => {",
                   "  pm.test('el cuerpo del correo se puede leer', () => pm.expect(err).to.be.null);",
                   "  // El token va en una línea propia; el \\r del CRLF forma parte de ella.",
                   "  const m = res.json().Text.match(/^([A-Za-z0-9_-]{40,})\\r?$/m);",
@@ -2055,7 +2055,7 @@
                   "pm.collectionVariables.set('parte_1_url', d.parts[0].url);",
                   "pm.test('una sola parte para este archivo', () => pm.expect(d.total_parts).to.eql(1));",
                   "pm.test('la URL viene prefirmada', () =>",
-                  "  pm.expect(d.parts[0].url).to.include('X-Amz-Signature'));",
+                  "  pm.expect(d.parts[0].url).to.match(/X-(Amz|Goog)-Signature/));",
                   "console.log('parte 1 →', d.parts[0].url.split('?')[0]);"
                 ]
               }
@@ -2329,8 +2329,8 @@
                   "});",
                   "const destino = pm.response.headers.get('Location') || '';",
                   "pm.test('redirige al almacén de objetos con una URL firmada', () => {",
-                  "  pm.expect(destino).to.include('X-Amz-Signature');",
-                  "  pm.expect(destino).to.include('X-Amz-Expires');",
+                  "  pm.expect(destino).to.match(/X-(Amz|Goog)-Signature/);",
+                  "  pm.expect(destino).to.match(/X-(Amz|Goog)-Expires/);",
                   "});",
                   "console.log('La API nunca sirve los bytes; delega en una URL que caduca.');",
                   "console.log('Destino:', destino.split('?')[0]);"
@@ -2442,7 +2442,7 @@
                   "pm.test('cada segmento va firmado hacia el almacén', () => {",
                   "  segmentos.forEach(s => {",
                   "    pm.expect(s, 'un segmento relativo se resolvería sin firma y daría 403')",
-                  "      .to.include('X-Amz-Signature');",
+                  "      .to.match(/X-(Amz|Goog)-Signature/);",
                   "  });",
                   "});",
                   "",

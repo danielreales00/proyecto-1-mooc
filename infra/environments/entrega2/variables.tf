@@ -102,3 +102,14 @@ variable "nombre_publico" {
   type        = string
   default     = ""
 }
+
+variable "generador_encendido" {
+  description = "Crea la máquina del generador de carga. false la borra."
+  type        = bool
+  default     = false
+}
+
+variable "tipo_generador" {
+  type    = string
+  default = "e2-standard-4"
+}

@@ -77,7 +77,7 @@ func (l *Limiter) Middleware(regla Regla, sujeto Sujeto, log *slog.Logger) httpx
 				log.Error("el limitador de tasa falló", "regla", regla.Nombre, "error", err)
 			}
 
-			w.Header().Set("RateLimit-Limit", strconv.Itoa(regla.Limite))
+			w.Header().Set("RateLimit-Limit", strconv.Itoa(l.LimiteDe(regla)))
 			w.Header().Set("RateLimit-Remaining", strconv.Itoa(v.Restantes))
 			w.Header().Set("RateLimit-Reset", strconv.Itoa(int(v.ReintentarEn.Seconds())))
 

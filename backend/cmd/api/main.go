@@ -92,7 +92,12 @@ func run() error {
 		return err
 	}
 	defer limitRedis.Close()
-	limiter := ratelimit.New(limitRedis)
+	limiter := ratelimit.New(limitRedis).ConFactorIP(cfg.RateLimitIPFactor)
+	if cfg.RateLimitIPFactor > 1 {
+		// Tiene que verse en los registros de cada corrida: es una condición
+		// de la prueba, no de producción.
+		log.Warn("límites por IP multiplicados para prueba de carga", "factor", cfg.RateLimitIPFactor)
+	}
 
 	store, err := abrirAlmacen(cfg)
 	if err != nil {

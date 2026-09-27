@@ -335,6 +335,50 @@ FFmpeg, los dos workers y Redis. Es el primer candidato a fallo del escenario
 evidencia de la Entrega 1 contra otra infraestructura, y vale más que cualquier
 captura.
 
+**Cómo se hace** (27-09):
+
+```bash
+make semilla-nube     # cuentas sintéticas en Cloud SQL, desde el Web Server
+make postman-nube     # la colección entera contra https://<host>, ~8 min
+```
+
+1. **Migraciones:** las aplica el servicio `migrate` de `compose.web.yml` en
+   cada arranque del Web Server, antes que la API; es idempotente. Aplicadas
+   `0001_init` y `0002_dominio` el 27-09.
+2. **Semilla:** `make semilla-nube` corre la imagen `seed` en el Web Server,
+   que es quien llega a la IP privada de la base.
+   - **La contraseña de demostración no vale en la nube.** Está publicada en
+     el repositorio, y en una URL pública daría la cuenta de administración a
+     cualquiera. Fuera de `APP_ENV=development` la semilla exige
+     `SEED_PASSWORD`, rechaza la de demostración y no la imprime. La genera
+     Terraform en el secreto `seed-password` (`semilla.tf`), con atributos de
+     solo escritura. Comprobado: la de demostración responde **401**.
+3. **Integridad de objetos:** no hay objetos que traer de MinIO —los de local
+   son de prueba y no se migran—. Los crea la propia colección en la nube, y
+   el trabajo `media.probe` recalcula el SHA-256 leyendo de Cloud Storage y lo
+   compara con el declarado y con la referencia de la base (RF-05): es la
+   verificación de integridad y de correspondencia, ejecutada contra el
+   almacén administrado.
+4. **Colección:** `make postman-nube`.
+   - **Mailpit** es el correo de la entrega (decidido el 27-09): vive en el
+     Worker Server, escucha solo en su `127.0.0.1`, y la colección lo lee por
+     un túnel SSH a través de IAP (`make tunel-mailpit`). No se abre ningún
+     puerto y nada sale a Internet.
+   - La contraseña de las cuentas se lee de Secret Manager en el momento y
+     viaja como variable de entorno: no queda en el historial ni en archivos.
+   - Las tres peticiones de SEG-4 que consultan las alertas del Prometheus
+     local **se saltan**: en la nube no hay Prometheus (ver «Lo que se deja
+     fuera a propósito»). `/metrics`, `/healthz` y `/readyz` sí se comprueban.
+
+**Resultado (27-09): `make postman-nube` en verde contra
+`https://35-184-146-250.sslip.io`: 73 peticiones, 149 aserciones, 0 fallos**, en
+14 min 11 s. Es la colección de la Entrega 1, sin cambiar el recorrido, contra
+Cloud SQL, Cloud Storage y las dos máquinas. Para llegar ahí hubo que
+corregir dos cosas de la colección, no de la plataforma: un script leía
+`mailpit_url` de las variables de colección e ignoraba la del entorno, y tres
+aserciones buscaban la firma de S3 (`X-Amz-Signature`); ahora aceptan también
+la de GCS (`X-Goog-Signature`).
+
 ---
 
 # Vía B · Código
@@ -538,7 +582,7 @@ escenario 1 (ADR-0016, D2).
 | Buckets | `mooc-509602-{originals,derived,badges,quarantine}` | **Creados** en A1 |
 | Cuentas de servicio | `mooc-web`, `mooc-worker` | **Creadas** en A1 |
 | Repositorio de Artifact Registry | `mooc` | Lo crea Terraform |
-| Correo saliente (proveedor) | | **Sin elegir**; hace falta en A4 |
+| Correo saliente | Mailpit en el Worker Server, sin salida a Internet | **Decidido** el 27-09: basta para la entrega y la demostración |
 | Presupuesto con alerta | `mooc-entrega2`, 50 USD/mes, 50/80/100 %, sin créditos | **Creado** en A0. **Es la cifra real** disponible: se puede ampliar, pero se presupuesta con ella |
 
 **El proyecto está vacío** salvo el bucket del estado. No hay nada que importar.

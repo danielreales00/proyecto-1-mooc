@@ -23,8 +23,10 @@ services:
   api:
     image: ${REGISTRO}/api:${VERSION}
     env_file: [.env]
-    expose:
-      - "8080"
+    # Solo en el 127.0.0.1 de la máquina: lo lee el agente de operaciones para
+    # llevar /metrics a Cloud Monitoring. La entrada pública es el proxy.
+    ports:
+      - "127.0.0.1:8080:8080"
     depends_on:
       migrate:
         condition: service_completed_successfully

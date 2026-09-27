@@ -65,6 +65,10 @@ type Config struct {
 	// con el ADC de una persona, que no es una cuenta de servicio.
 	GCSSigner string
 
+	// RateLimitIPFactor multiplica los límites por IP; 1 en producción. Solo
+	// para pruebas de carga desde una sola IP (ratelimit.ConFactorIP).
+	RateLimitIPFactor int
+
 	SMTPAddr string
 	MailFrom string
 	// SMTPUser vacío significa sin autenticación: así habla Mailpit. Un
@@ -132,6 +136,8 @@ func Load() (Config, error) {
 		S3SecretKey:      os.Getenv("S3_SECRET_KEY"),
 		S3UseSSL:         optBool("S3_USE_SSL", false),
 		GCSSigner:        os.Getenv("GCS_SIGNER"),
+
+		RateLimitIPFactor: optInt("RATE_LIMIT_IP_FACTOR", 1),
 		S3Buckets: Buckets{
 			Originals:  opt("S3_BUCKET_ORIGINALS", "mooc-originals"),
 			Derived:    opt("S3_BUCKET_DERIVED", "mooc-derived"),

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strconv"
 	"time"
 
 	"mooc/backend/internal/adapters/postgres"
@@ -115,6 +116,36 @@ func run() error {
 	}
 
 	log.Info("semilla lista", "creadas", creadas, "ya_existían", existentes)
+
+	// Cuentas para las pruebas de carga (capacity-planning/). Se escriben en
+	// la base y no por la API: `register` admite 60 por hora y por IP, y cada
+	// registro cuesta un argon2id de 64 MiB que ensuciaría la máquina antes de
+	// medir. Aquí el hash se calcula una sola vez para todas.
+	for _, g := range []struct {
+		variable, patron, rol string
+	}{
+		{"SEED_CARGA_PROFESORES", "profesor-carga-%02d@carga.local", identity.RoleTeacher},
+		{"SEED_CARGA_ESTUDIANTES", "estudiante-carga-%04d@carga.local", identity.RoleStudent},
+	} {
+		n, _ := strconv.Atoi(os.Getenv(g.variable))
+		nuevas := 0
+		for i := 1; i <= n; i++ {
+			tag, err := pool.Exec(ctx, `
+				INSERT INTO identity.users
+				    (id, email, email_verified_at, password_hash, full_name, role, status, created_at, updated_at)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $3, $3)
+				ON CONFLICT (email) DO NOTHING`,
+				ids.New(), fmt.Sprintf(g.patron, i), now, hash,
+				fmt.Sprintf("Carga %s %d", g.rol, i), g.rol, identity.StatusActive)
+			if err != nil {
+				return fmt.Errorf("insertar la cuenta de carga %d: %w", i, err)
+			}
+			nuevas += int(tag.RowsAffected())
+		}
+		if n > 0 {
+			log.Info("cuentas de carga", "rol", g.rol, "pedidas", n, "creadas", nuevas)
+		}
+	}
 
 	fmt.Println()
 	if local {

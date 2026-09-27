@@ -18,7 +18,7 @@ var (
 	// LimiteLoginIP frena el rociado de contraseñas contra MUCHAS cuentas
 	// desde una misma máquina. Es holgado a propósito: una universidad entera
 	// puede salir por una sola IP.
-	LimiteLoginIP = ratelimit.Regla{Nombre: "login_ip", Limite: 60, Ventana: time.Minute}
+	LimiteLoginIP = ratelimit.Regla{Nombre: "login_ip", Limite: 60, Ventana: time.Minute, PorIP: true}
 
 	// LimiteRegistro evita que alguien llene la tabla de usuarios y sature el
 	// envío de correo.
@@ -28,10 +28,10 @@ var (
 	// por una sola: diez por hora bloquearía a un curso completo el día de la
 	// matrícula. El abuso ya está acotado por otro lado: una cuenta sin
 	// verificar no puede hacer nada.
-	LimiteRegistro = ratelimit.Regla{Nombre: "register", Limite: 60, Ventana: time.Hour}
+	LimiteRegistro = ratelimit.Regla{Nombre: "register", Limite: 60, Ventana: time.Hour, PorIP: true}
 
 	// LimiteVerificacion protege el token de verificación, que son 32 bytes
 	// aleatorios: adivinarlo es inviable, pero no hay razón para dejar que lo
 	// intenten a ritmo libre.
-	LimiteVerificacion = ratelimit.Regla{Nombre: "verify_email", Limite: 20, Ventana: time.Minute}
+	LimiteVerificacion = ratelimit.Regla{Nombre: "verify_email", Limite: 20, Ventana: time.Minute, PorIP: true}
 )

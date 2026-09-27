@@ -202,14 +202,15 @@ publicar: ## Construye las imágenes para linux/amd64 y las sube a Artifact Regi
 	done; \
 	docker logout us-central1-docker.pkg.dev >/dev/null
 
+# La clave vive en el volumen mooc-ssh: sin él, cada contenedor generaría una
+# nueva y la registraría en el perfil de OS Login de quien entra.
+SSH_NUBE := docker run --rm $(TTY) -v mooc-gcloud:/root/.config/gcloud -v mooc-ssh:/root/.ssh \
+	$(GCLOUD_IMAGE) gcloud compute ssh --zone us-central1-a --tunnel-through-iap --quiet
+
 .PHONY: ssh
 ssh: ## SSH por IAP: make ssh MAQUINA=mooc-worker [CMD="sudo docker ps"]
 	@test -n "$(MAQUINA)" || { echo 'uso: make ssh MAQUINA=<mooc-web|mooc-worker> [CMD="..."]'; exit 1; }
-	@# La clave vive en el volumen mooc-ssh: sin él, cada contenedor generaría
-	@# una nueva y la registraría en el perfil de OS Login de quien entra.
-	@docker run --rm $(TTY) -v mooc-gcloud:/root/.config/gcloud -v mooc-ssh:/root/.ssh \
-		$(GCLOUD_IMAGE) gcloud compute ssh $(MAQUINA) --zone us-central1-a \
-		--tunnel-through-iap --quiet $(if $(CMD),--command '$(CMD)')
+	@$(SSH_NUBE) $(MAQUINA) $(if $(CMD),--command '$(CMD)')
 
 # --- Verificación contra la nube (A4) ---------------------------------------
 # Nombre público del Web Server: `make tf ENTORNO=entrega2 ARGS="output nombre_publico"`.
@@ -238,7 +239,8 @@ semilla-nube: ## Cuentas sintéticas en Cloud SQL, con la contraseña de Secret 
 	@# Corre en el Web Server, que es quien llega a la IP privada de la base. La
 	@# contraseña la lee la propia máquina con su identidad: no pasa por aquí.
 	@# El .env es de root con 0600: se lee con sudo, no se carga en el shell.
-	@$(MAKE) --no-print-directory ssh MAQUINA=mooc-web CMD='set -e; cd /opt/mooc; \
+	@# Sin pasar por `make ssh`: un make recursivo expandiría dos veces los $$.
+	@$(SSH_NUBE) mooc-web --command 'set -e; cd /opt/mooc; \
 		img=$$(sudo grep ^REGISTRO= .env | cut -d= -f2)/seed:$$(sudo grep ^VERSION= .env | cut -d= -f2); \
 		sudo docker run --rm --env-file .env -e SEED_FORCE=1 \
 		-e SEED_PASSWORD="$$(sudo gcloud secrets versions access latest --secret=seed-password)" $$img'

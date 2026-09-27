@@ -77,9 +77,10 @@ resource "google_compute_instance" "m" {
   }
 
   metadata = merge(each.value.archivos, {
-    mooc-rol       = each.key
-    mooc-env       = each.value.env
-    startup-script = var.arranque
+    mooc-rol        = each.key
+    mooc-ip-privada = each.value.ip_interna
+    mooc-env        = each.value.env
+    startup-script  = var.arranque
     # SSH con la identidad de Google de quien entra, por el túnel de IAP.
     enable-oslogin = "TRUE"
   })

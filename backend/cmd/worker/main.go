@@ -18,6 +18,7 @@ import (
 
 	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"mooc/backend/internal/adapters/clamav"
 	"mooc/backend/internal/adapters/ffmpeg"
@@ -101,6 +102,15 @@ func run() error {
 	// increase() no verá el salto y la alerta de DLQ nunca disparará.
 	metrics.Inicializar(jobs.TypeEmailSend, jobs.TypeBadgeIssue, jobs.TypeMediaProbe,
 		jobs.TypeMediaScan, jobs.TypeMediaTranscode)
+
+	// Profundidad, antigüedad y tasa de la cola, que el informe de capacidad
+	// exige. Solo las colas que consume este proceso: worker y worker-media
+	// comparten Redis, y si los dos exportaran todas, cada serie saldría doble.
+	colector := queue.NewColectorCola(
+		queue.OpcionesRedis(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisQueueDB, cfg.RedisTLS),
+		queue.ColasDe(cfg.WorkerQueues))
+	prometheus.MustRegister(colector)
+	defer colector.Close()
 
 	mux := asynq.NewServeMux()
 	mux.HandleFunc(jobs.TypeEmailSend, runner.Wrap(jobs.TypeEmailSend, emails.Handle))

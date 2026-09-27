@@ -49,6 +49,51 @@ if ! systemctl is-active --quiet google-cloud-ops-agent; then
   bash /tmp/add-ops-agent-repo.sh --also-install
 fi
 
+# Métricas de la aplicación y de Redis al mismo sitio que CPU, memoria y disco.
+# En la nube no hay Prometheus: el agente rasca /metrics de cada proceso (solo
+# publicado en 127.0.0.1) y lo envía a Cloud Monitoring, donde se consulta con
+# PromQL. Solo las series propias: se paga por muestra, y las de runtime de Go
+# no contestan ninguna pregunta del informe.
+objetivos() {
+  case "$ROL" in
+    web)    echo "['127.0.0.1:8080']" ;;
+    worker) echo "['127.0.0.1:8081', '127.0.0.1:8082']" ;;
+  esac
+}
+cat > /etc/google-cloud-ops-agent/config.yaml.nuevo <<CONFIG
+metrics:
+  receivers:
+    mooc:
+      type: prometheus
+      config:
+        scrape_configs:
+          - job_name: mooc-${ROL}
+            scrape_interval: 30s
+            static_configs:
+              - targets: $(objetivos)
+            metric_relabel_configs:
+              - source_labels: [__name__]
+                regex: '(http_request|jobs?_|queue_|rate_limited|progress_rejected).*'
+                action: keep
+$( [ "$ROL" = worker ] && cat <<REDIS
+    redis:
+      type: redis
+      address: $(md mooc-ip-privada):6379
+      collection_interval: 30s
+REDIS
+)
+  service:
+    pipelines:
+      mooc:
+        receivers: [mooc$( [ "$ROL" = worker ] && echo ", redis")]
+CONFIG
+if ! cmp -s /etc/google-cloud-ops-agent/config.yaml.nuevo /etc/google-cloud-ops-agent/config.yaml; then
+  mv /etc/google-cloud-ops-agent/config.yaml.nuevo /etc/google-cloud-ops-agent/config.yaml
+  systemctl restart google-cloud-ops-agent
+else
+  rm /etc/google-cloud-ops-agent/config.yaml.nuevo
+fi
+
 # --- Configuración ----------------------------------------------------------
 mkdir -p "$DIR"
 md mooc-compose > "$DIR/compose.yml"

@@ -45,6 +45,9 @@ services:
     env_file: [.env]
     environment:
       WORKER_QUEUES: critical=6,default=3
+    # /metrics para el agente de operaciones, solo en el 127.0.0.1.
+    ports:
+      - "127.0.0.1:8081:8081"
     depends_on:
       redis:
         condition: service_healthy
@@ -83,6 +86,8 @@ services:
     environment:
       WORKER_QUEUES: bulk=1
       WORKER_CONCURRENCY: 1
+    ports:
+      - "127.0.0.1:8082:8081"
     depends_on:
       redis:
         condition: service_healthy

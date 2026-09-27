@@ -29,3 +29,7 @@ coverage.out
 # Terraform: proveedores descargados y planes locales. El lock sí se versiona.
 .terraform/
 *.tfplan
+
+# Archivos de las pruebas de carga: se regeneran con make medios-carga.
+capacity-planning/medios/*.mp4
+capacity-planning/medios/manifiesto.jsonl

@@ -30,6 +30,9 @@ type Regla struct {
 	Limite int
 	// Ventana es la duración de la ventana.
 	Ventana time.Duration
+	// PorIP marca las reglas cuyo sujeto es la IP de origen. Son las únicas
+	// que multiplica el factor de ConFactorIP.
+	PorIP bool
 }
 
 // Veredicto es el resultado de consultar el límite.
@@ -42,10 +45,33 @@ type Veredicto struct {
 }
 
 type Limiter struct {
-	rdb *redis.Client
+	rdb      *redis.Client
+	factorIP int
 }
 
-func New(rdb *redis.Client) *Limiter { return &Limiter{rdb: rdb} }
+func New(rdb *redis.Client) *Limiter { return &Limiter{rdb: rdb, factorIP: 1} }
+
+// ConFactorIP multiplica el límite de las reglas por IP.
+//
+// Existe para las pruebas de carga: el generador es una sola máquina y una
+// sola IP, y con los límites de producción la prueba mediría al limitador, no
+// a la plataforma. Los límites por cuenta y por sesión no se tocan, porque
+// cada usuario virtual tiene los suyos y son los que protegen de verdad. El
+// valor efectivo se registra como condición fija de cada corrida.
+func (l *Limiter) ConFactorIP(n int) *Limiter {
+	if n > 1 {
+		l.factorIP = n
+	}
+	return l
+}
+
+// LimiteDe es el límite efectivo de una regla, ya aplicado el factor.
+func (l *Limiter) LimiteDe(r Regla) int {
+	if r.PorIP {
+		return r.Limite * l.factorIP
+	}
+	return r.Limite
+}
 
 // incrementarYExpirar hace las dos operaciones en un solo viaje y de forma
 // atómica. Sin el script, un proceso que muriera entre el INCR y el EXPIRE
@@ -80,12 +106,13 @@ func (l *Limiter) Permitir(ctx context.Context, r Regla, sujeto string) (Veredic
 		reintentar = r.Ventana
 	}
 
-	restantes := r.Limite - int(actual)
+	limite := l.LimiteDe(r)
+	restantes := limite - int(actual)
 	if restantes < 0 {
 		restantes = 0
 	}
 	return Veredicto{
-		Permitido:    int(actual) <= r.Limite,
+		Permitido:    int(actual) <= limite,
 		Restantes:    restantes,
 		ReintentarEn: reintentar,
 	}, nil
