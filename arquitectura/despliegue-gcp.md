@@ -453,7 +453,7 @@ escenario 1 (ADR-0016, D2).
 | Entorno de Terraform | `entrega2` | Único (ADR-0016, D6) |
 | Tipo de máquina | `e2-custom-2-2048`: 2 vCPU completas, 2048 MiB | **Confirmado** en `us-central1-a` |
 | Zona | `us-central1-a` | Máquinas y Cloud SQL en la misma |
-| Tier de Cloud SQL | `db-custom-1-3840`: 1 vCPU dedicada, 3,75 GiB, 10 GiB SSD fijos | **Decidido** en A1. Los de núcleo compartido se ralentizan sin aviso y ensuciarían la medición |
+| Tier de Cloud SQL | `db-g1-small`: núcleo compartido, 1,7 GiB, 10 GiB SSD fijos | **Decidido** el 27-09. El enunciado lo deja al presupuesto, y con 50 USD cuesta la mitad que 1 vCPU dedicada. Limitación a registrar: núcleo compartido, sin SLA, puede ralentizarse sin aviso |
 | Red | VPC `mooc`, subred `10.10.0.0/24`, peering de servicios `10.20.0.0/20` | Web `10.10.0.10`, Worker `10.10.0.20`, fijas |
 | IP externa del Web Server | `35.184.146.250`, estática | **Reservada** en A1 |
 | Nombre público | `35-184-146-250.sslip.io` si no hay dominio propio | **Por decidir** en A3 |

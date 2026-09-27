@@ -12,8 +12,10 @@ cidr_servicios    = "10.20.0.0/20"
 ip_interna_web    = "10.10.0.10"
 ip_interna_worker = "10.10.0.20"
 
-# Cloud SQL: 1 vCPU dedicada y 3,75 GiB. Los tamaños de núcleo compartido
-# (db-f1-micro, db-g1-small) se ralentizan sin aviso y ensuciarían la medición
-# de capacidad; la base no debe ser la variable ruidosa del experimento.
-cloudsql_tier     = "db-custom-1-3840"
+# Cloud SQL: núcleo compartido y 1,7 GiB. El enunciado deja el tamaño de la
+# base al presupuesto (pág. 4), y el presupuesto real es de 50 USD: cuesta la
+# mitad que 1 vCPU dedicada y deja margen para repetir corridas. El precio es
+# que un núcleo compartido puede ralentizarse sin aviso y no tiene SLA; el
+# informe lo registra como limitación del experimento.
+cloudsql_tier     = "db-g1-small"
 cloudsql_disco_gb = 10
