@@ -129,6 +129,12 @@ El punto 2 es el que más fácil se pasa por alto: se descubre cuando ya se est�
 corriendo la prueba y no hay forma de contestar «cómo evolucionó la profundidad
 de la cola».
 
+**Y lo que no se hace:** Workload Identity Federation, despliegue desde CI,
+tablero de Cloud Monitoring, entorno `prod` y alertas en la nube. Ninguno lo
+evalúa un criterio de esta entrega. El razonamiento completo, y el orden en que
+se recuperarían si sobra tiempo, está en la sección «Lo que se deja fuera a
+propósito» de [`despliegue-gcp.md`](despliegue-gcp.md).
+
 ---
 
 ## Entregables

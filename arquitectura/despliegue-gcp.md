@@ -8,13 +8,14 @@ Esto es el plan de trabajo del despliegue, no un diseño.
 - **Cómo se mide:** [`../capacity-planning/pruebas_de_carga_entrega2.md`](../capacity-planning/pruebas_de_carga_entrega2.md)
 - **Arquitectura objetivo a largo plazo:** [`disenos/ruta-a-gcp.md`](disenos/ruta-a-gcp.md)
 
-Aquí está qué se hace, en qué orden y cómo se comprueba que funcionó. Cada fase
-acaba en una comprobación: si no pasa, no se avanza.
+**Este plan está recortado a lo necesario para la entrega.** Semana y media,
+cuatro personas. Lo que no sostiene un criterio de evaluación no está aquí: está
+en «Lo que se deja fuera a propósito», al final, para que se sepa que se decidió
+y no que se olvidó.
 
 > **Revisado el 27 de septiembre de 2026** contra el enunciado de la Entrega 2.
-> La versión anterior de este documento apuntaba a Cloud Run, Memorystore y
-> Cloud CDN, que el enunciado **prohíbe**. Lo que sobrevive entero es el
-> adaptador de Cloud Storage, la autenticación sin claves y Terraform.
+> La versión anterior apuntaba a Cloud Run, Memorystore y Cloud CDN, que el
+> enunciado **prohíbe**.
 
 ---
 
@@ -51,6 +52,37 @@ configuración**.
 
 ---
 
+## Dos vías en paralelo
+
+Las fases no son una fila india para cuatro personas. Hay dos vías que avanzan a
+la vez desde el primer día y confluyen en las pruebas de carga.
+
+```
+VÍA A · infraestructura        A0 ─► A1 ─► A2 ─► A3 ─► A4 ─┐
+                                                            ├─► C1 ─► C2
+VÍA B · código                 B1 ──────────────────► B2 ──┘
+```
+
+| | Vía A · infraestructura | Vía B · código |
+| --- | --- | --- |
+| **A0** | Cimientos en Terraform | **B1** Adaptador de Cloud Storage |
+| **A1** | Red, datos y secretos | **B2** Instrumentación para medir |
+| **A2** | Imágenes en Artifact Registry | |
+| **A3** | Las dos máquinas | |
+| **A4** | Verificación funcional | |
+| | **C1** Los dos escenarios de carga | |
+| | **C2** Entregables, costos y apagado | |
+
+**B1 es lo más largo de la entrega y no depende de las máquinas**: solo necesita
+un bucket, que sale en A1. Empieza el primer día o llega tarde.
+
+Lo verdaderamente secuencial es A1 → A3 → A4 → C1, y **C1 come reloj, no
+esfuerzo**: cada nivel son entre ocho y quince minutos más las pausas, y el
+nivel cercano al límite se repite. Reservar los dos últimos días para correrla
+es optimista; reservarlos para *repetirla* es realista.
+
+---
+
 ## Herramientas
 
 En esta máquina **no se instala nada**. `gcloud` y `terraform` corren en
@@ -62,9 +94,8 @@ make gcloud ARGS="projects list"              # cualquier orden de gcloud
 make tf ENTORNO=entrega2 ARGS="plan"          # terraform del entorno
 ```
 
-La autenticación **ya está hecha** en el volumen: cuenta de usuario y
-credenciales por defecto de la aplicación de tipo `authorized_user`. Ninguna
-clave de cuenta de servicio.
+La autenticación **ya está hecha**: cuenta de usuario y credenciales por defecto
+de la aplicación de tipo `authorized_user`. Ninguna clave de cuenta de servicio.
 
 ---
 
@@ -83,16 +114,10 @@ clave de cuenta de servicio.
 
 | # | Hueco | Estado ahora |
 | --- | --- | --- |
-| 1 | La cola no hablaba TLS | Resuelto. **Y aquí no hace falta**: Redis no sale de la subred privada, `REDIS_TLS=false`. El trabajo queda para cuando vuelva Memorystore |
-| 2 | El correo salía sin autenticar | Resuelto en código. **Queda elegir proveedor** y cargar la contraseña en Secret Manager |
+| 1 | La cola no hablaba TLS | Resuelto. **Y aquí no hace falta**: Redis no sale de la subred privada, `REDIS_TLS=false` |
+| 2 | El correo salía sin autenticar | Resuelto en código. **Queda elegir proveedor** (A4) |
 | 3 | El límite por IP se evadía tras el balanceador | Resuelto, y **deja de ser una incógnita**: no hay balanceador, y Caddy *sobrescribe* `X-Forwarded-For`. `TRUSTED_PROXY_HOPS=0` es correcto |
 | 4 | `/docs` se quedaba sin ruta | **Resuelto por la arquitectura**: Caddy corre en el Web Server igual que en local |
-
-### Falta
-
-Todo lo que exige GCP delante (fases 0 a 5) más lo que exige medir (6 y 7). El
-detalle del código está en [`alcance-entrega-2.md`](alcance-entrega-2.md),
-sección «Trabajo de código».
 
 ### No se toca
 
@@ -106,13 +131,13 @@ local. Si algo solo funciona en GCP, se rompió el ADR-0010.
 Sigue vigente, y con el mismo peso: la carga es directa al almacenamiento
 también en esta entrega.
 
-ADR-0015 (D1) dice «añadir un adaptador GCS nativo detrás del mismo puerto». El
-puerto incluye `CrearMultipart`, `PresignPart` y `CompletarMultipart`, y **Cloud
-Storage no tiene multipart con URLs prefirmadas por parte**. Su API nativa
-ofrece cargas reanudables de una sola sesión secuencial, que es otra cosa: no
-permite subir partes en paralelo ni reanudar pidiendo «qué partes faltan». La
-API S3-compatible sí lo tiene, pero exige **claves HMAC**, que son exactamente
-la credencial estática de larga vida que D3 prohíbe.
+El puerto `objectstore` incluye `CrearMultipart`, `PresignPart` y
+`CompletarMultipart`, y **Cloud Storage no tiene multipart con URLs prefirmadas
+por parte**. Su API nativa ofrece cargas reanudables de una sola sesión
+secuencial, que es otra cosa: no permite subir partes en paralelo ni reanudar
+pidiendo «qué partes faltan». La API S3-compatible sí lo tiene, pero exige
+**claves HMAC**, que son exactamente la credencial estática de larga vida que
+ADR-0015 (D3) prohíbe.
 
 **Salida: `compose`.** Cada parte se sube como un objeto propio con su URL
 firmada —`tmp/{asset_id}/part-0001`, …— y al completar se unen con la operación
@@ -132,11 +157,11 @@ reanudación se mantiene, que es la condición de aceptación que importa (RF-05
 
 ---
 
-## Fases
+# Vía A · Infraestructura
 
-### Fase 0 · Cimientos en Terraform
+### A0 · Cimientos en Terraform
 
-**Objetivo:** que exista dónde poner las cosas y cómo entrar sin claves.
+**Objetivo:** que Terraform pueda crear cosas.
 
 1. Estructura de `infra/`, *backend* de estado apuntando al bucket y
    `versions.tf` con los proveedores fijados.
@@ -147,24 +172,17 @@ reanudación se mantiene, que es la condición de aceptación que importa (RF-05
    `artifactregistry`, `iamcredentials`, `cloudresourcemanager`, `monitoring`,
    `logging`, `iap`.
 
-   > Cambió respecto al plan anterior: **fuera** `run`, `redis` y `vpcaccess`;
-   > **dentro** `servicenetworking` —sin él no hay IP privada en Cloud SQL— e
-   > `iap`, para administrar el Worker Server sin IP externa.
+3. **Presupuesto con alerta** al 50 %, 80 % y 100 % (`google_billing_budget`).
+   Necesita permiso sobre la cuenta de facturación, no sobre el proyecto. Si la
+   cuenta no lo permite, se hace desde la consola y **se documenta como
+   limitación**, que es lo que el enunciado pide registrar.
 
-3. **Workload Identity Federation** para GitHub Actions: *pool*, proveedor OIDC
-   **restringido al repositorio** `danielreales00/proyecto-1-mooc`, y una cuenta
-   de servicio de despliegue con los roles mínimos.
+**Comprobación:** `apply` y luego `plan` sin cambios pendientes.
 
-**Comprobación:** `apply` y luego `plan` sin cambios pendientes. Después, un
-*workflow* de prueba que obtiene un token y ejecuta `gcloud auth list` sin que
-exista ninguna clave ni en el repositorio ni en los secretos de GitHub.
+### A1 · Red, datos y secretos
 
-> La restricción por repositorio del proveedor OIDC no es opcional. Sin ella,
-> cualquier repositorio de GitHub puede pedir credenciales de tu proyecto.
-
-### Fase 1 · Red, datos y secretos
-
-**Objetivo:** la infraestructura sin cómputo, reproducible.
+**Objetivo:** la infraestructura sin cómputo, reproducible. Es la fase que
+sostiene tres criterios de la rúbrica a la vez.
 
 ```
 infra/
@@ -178,9 +196,9 @@ infra/
 | VPC y subred | Una subred `/24` en `us-central1`. Rango privado propio, documentado |
 | **Acceso privado a servicios** | Rango reservado + peering. **Sin esto Cloud SQL no tiene IP privada**, y el enunciado exige conexión privada |
 | Cloud NAT | El Worker Server no tiene IP externa y necesita salir para descargar imágenes y firmas de ClamAV. Es la «conectividad saliente» que el enunciado pide documentar |
-| Reglas de firewall | `443` y `80` desde Internet **solo al Web Server**; dentro de la subred, solo los puertos que hacen falta: `6379` (Redis) y `5432` (Cloud SQL) desde las máquinas. Nada más entra |
+| Reglas de firewall | `443` y `80` desde Internet **solo al Web Server**; dentro de la subred, solo `6379` (Redis) y `5432` (Cloud SQL) entre las máquinas. Nada más entra |
 | IP externa estática | Para el Web Server. Una efímera cambia al reiniciar y rompe el certificado |
-| Cloud SQL PostgreSQL 17 | **Zonal, sin HA, sin réplicas, sin IP pública.** Copias diarias activadas. El tier se elige aquí y **se anota en el informe** |
+| Cloud SQL PostgreSQL 17 | **Zonal, sin HA, sin réplicas, sin IP pública.** Copias diarias activadas: son la vía para borrar la instancia al final sin perder la evidencia. El tier se elige aquí y **se anota en el informe** |
 | Buckets | `originals`, `derived`, `badges`, `quarantine`. Todos privados salvo `badges` —lectura pública, sin listado, porque verificar una insignia es público (CA-07)—. Ciclo de vida: `tmp/` a 7 días |
 | Secret Manager | Solo los **contenedores**; los valores se cargan aparte. Un secreto en el estado de Terraform es un secreto en texto plano dentro de un bucket |
 | Artifact Registry | Repositorio Docker en la misma región |
@@ -189,41 +207,26 @@ infra/
 **Comprobación:** `apply`, luego `plan` sin cambios pendientes. Y
 `gcloud sql instances describe` sin dirección pública.
 
-### Fase 2 · Imágenes en Artifact Registry
+### A2 · Imágenes en Artifact Registry
 
-**Objetivo:** que el CI publique las imágenes que las máquinas van a descargar.
+**Objetivo:** que exista qué descargar. Se publica **desde una máquina del
+equipo**, no desde el CI (ver «Lo que se deja fuera»).
 
 - `api`, `worker`, `worker-media`, `migrate`, `seed` y `buckets` desde el mismo
   `backend/Dockerfile`.
 - **`--platform linux/amd64` explícito.** Si alguien construye desde un Mac con
   Apple Silicon, la imagen sale `arm64` y falla al arrancar con un error que no
   dice eso.
-- Etiquetar con el SHA del commit, no con `latest`. Un despliegue tiene que
-  poder señalar qué código corre, y el informe tiene que registrar la versión
-  exacta de cada corrida de carga.
+- Etiquetar con el SHA del commit, no con `latest`. El informe tiene que
+  registrar la versión exacta de cada corrida de carga.
+
+**No se construye en las máquinas.** Compilar Go, FFmpeg y ClamAV en una VM de
+2 GiB es pedir que el despliegue falle por memoria.
 
 **Comprobación:** `gcloud artifacts docker images list` muestra las imágenes con
-el SHA del último commit de `main`.
+el SHA del commit.
 
-### Fase 3 · Adaptador de Cloud Storage
-
-**Objetivo:** que los objetos vivan en el servicio administrado. Es el trabajo
-de código más grande de la entrega.
-
-Escribir `internal/adapters/gcs` implementando `objectstore.Almacen`:
-
-- Multipart emulado con `compose`, según la sección de arriba.
-- `PresignGet` / `PresignPart`: URL firmadas V4 **sin clave descargada**,
-  firmando con la API de IAM Credentials y la identidad de la máquina.
-- `Mover`: copiar y borrar; GCS no tiene *rename*.
-- Se activa con `OBJECT_STORE=gcs`. Con `s3` todo sigue igual, y el CI local lo
-  sigue comprobando.
-
-**Comprobación:** la suite de pruebas del puerto pasa contra GCS real: subir en
-partes, reanudar tras interrumpir, completar, firmar una lectura y moverla de
-cuarentena a originales.
-
-### Fase 4 · Las dos máquinas
+### A3 · Las dos máquinas
 
 **Objetivo:** que la plataforma responda en la URL pública.
 
@@ -243,16 +246,20 @@ cuarentena a originales.
 El nombre público: dominio propio si lo hay, o `<ip-con-guiones>.sslip.io` sobre
 la IP estática (ADR-0016, D4). Lo que no se hace es certificado autofirmado.
 
-**Comprobación:** `https://<host>/healthz` con certificado válido de una
-autoridad pública, y `GET /readyz` con los tres en `ok` contra Cloud SQL, Redis
-y GCS. Y `gcloud compute instances list` mostrando **una sola IP externa**.
+**Medir aquí el residente de `clamd`.** Es lo primero que puede no caber en
+2 GiB. Si no cabe, se documenta el fallo, el ajuste mínimo y su efecto en costo
+y capacidad, que es lo que el enunciado manda hacer en ese caso.
 
-### Fase 5 · Migración y verificación funcional
+**Comprobación:** `https://<host>/healthz` con certificado válido de una
+autoridad pública, `GET /readyz` con los tres en `ok`, y
+`gcloud compute instances list` mostrando **una sola IP externa**.
+
+### A4 · Verificación funcional
 
 **Objetivo:** demostrar que la portabilidad del ADR-0010 era cierta.
 
-1. Ejecutar `migrate` contra Cloud SQL desde el Web Server.
-2. Migrar los objetos existentes y **verificar su integridad** y la
+1. Ejecutar `migrate` contra Cloud SQL.
+2. Sembrar los datos y **verificar la integridad de los objetos** y su
    correspondencia con las referencias de la base.
 3. **Pasar la colección de Postman entera** apuntando `base_url` al dominio
    desplegado.
@@ -261,21 +268,52 @@ y GCS. Y `gcloud compute instances list` mostrando **una sola IP externa**.
 evidencia de la Entrega 1 contra otra infraestructura, y vale más que cualquier
 captura.
 
-### Fase 6 · Instrumentación para poder medir
+---
 
-**Objetivo:** que la fase 7 tenga qué mirar. Se hace **antes** de la carga.
+# Vía B · Código
+
+### B1 · Adaptador de Cloud Storage — *empieza el primer día*
+
+**Objetivo:** que los objetos vivan en el servicio administrado. Es el trabajo
+de código más grande de la entrega y un objetivo explícito del enunciado.
+
+Escribir `internal/adapters/gcs` implementando `objectstore.Almacen`:
+
+- Multipart emulado con `compose`, según la sección de arriba.
+- `PresignGet` / `PresignPart`: URL firmadas V4 **sin clave descargada**,
+  firmando con la API de IAM Credentials y la identidad de la máquina.
+- `Mover`: copiar y borrar; GCS no tiene *rename*.
+- Se activa con `OBJECT_STORE=gcs`. Con `s3` todo sigue igual, y el CI local lo
+  sigue comprobando.
+
+Solo necesita un bucket para probarse, que sale en A1. No espera a las máquinas.
+
+**Comprobación:** la suite del puerto pasa contra GCS real: subir en partes,
+reanudar tras interrumpir, completar, firmar una lectura y mover de cuarentena a
+originales.
+
+### B2 · Instrumentación para poder medir
+
+**Objetivo:** que C1 tenga qué mirar. Se hace **antes** de generar carga; si se
+deja para después, la corrida se repite.
 
 | Qué | Por qué |
 | --- | --- |
 | **Métricas de cola**: profundidad, antigüedad del trabajo más viejo y tasa de procesamiento | El enunciado las exige y **hoy no se exportan**. Hay contadores de trabajos, no de cola |
-| **Límites de tasa por IP configurables** | El generador es una sola IP; con `login_ip` a 60/min la prueba mediría al limitador. Ver §3.1 del informe de capacidad |
-| **Generador de datos sintéticos** | El `seed` actual crea cuatro cuentas. Los escenarios necesitan 600 estudiantes y 20 cursos |
-| **Tablero** con las métricas de las dos máquinas, Cloud SQL y la cola | Sin esto, la corrida deja números sin contexto |
+| **Límites de tasa por IP configurables** | El generador es una sola IP; con `login_ip` a 60/min la prueba mediría al limitador. Los de cuenta y sesión se dejan como están |
+| **Generador de datos sintéticos** | El `seed` actual crea cuatro cuentas. Los escenarios necesitan 600 estudiantes y 20 cursos, escritos en la base y no por la API (`register` admite 60 por hora y por IP) |
+| **Guiones de k6** de los dos escenarios | Se escriben contra el Compose local y se apuntan a la nube después |
 
-**Comprobación:** provocar un trabajo muerto y verlo en el tablero y en la
-métrica de la cola.
+Todo esto se desarrolla y se prueba en local. No necesita GCP.
 
-### Fase 7 · Los dos escenarios de carga
+**Comprobación:** en local, provocar un trabajo muerto y verlo en la métrica de
+la cola; y correr un nivel bajo de cada escenario contra el Compose.
+
+---
+
+# Confluencia
+
+### C1 · Los dos escenarios de carga
 
 **Objetivo:** el 20 % de la nota.
 
@@ -293,7 +331,7 @@ No se improvisa en la corrida.
 **Comprobación:** las tablas de resultados del informe llenas, con el punto de
 degradación identificado y el cuello de botella sustentado con evidencia.
 
-### Fase 8 · Entregables, costos y apagado
+### C2 · Entregables, costos y apagado
 
 **Objetivo:** cerrar la entrega sin dejar la factura corriendo.
 
@@ -301,18 +339,40 @@ degradación identificado y el cuello de botella sustentado con evidencia.
    `README.md`, con las cinco secciones que pide el enunciado.
 2. **Informe de capacidad** completo.
 3. **Tag `entrega-2`** y registro del commit evaluado.
-4. **Estimación de costos con fecha y supuestos**, contrastada con el consumo
+4. **Video de sustentación**, máximo 20 minutos, enlazado desde el `README.md`.
+5. **Estimación de costos con fecha y supuestos**, contrastada con el consumo
    observado.
-5. **Procedimiento de reconstrucción**, probado. No es documentación de adorno:
+6. **Procedimiento de reconstrucción**, probado. No es documentación de adorno:
    el equipo docente puede pedir sustentación síncrona y repetir una prueba, y
    si los recursos se borraron, recrearlos es responsabilidad del equipo.
-6. **Borrar la instancia de Cloud SQL** tras registrar las evidencias,
+7. **Borrar la instancia de Cloud SQL** tras registrar las evidencias,
    conservando antes la copia y los *scripts*. Detener una máquina no elimina
    todos sus costos: quedan disco, IP estática, respaldos y objetos.
 
 **Comprobación:** destruir el entorno y volver a levantarlo con el
 procedimiento, cronometrándolo. El tiempo de reconstrucción es un dato del
 informe.
+
+---
+
+## Lo que se deja fuera a propósito
+
+No se olvidó. Se decidió, y aquí está por qué, para que la decisión se pueda
+revisar si sobra tiempo.
+
+| Qué | Por qué se cae | Qué se hace en su lugar |
+| --- | --- | --- |
+| **Workload Identity Federation** | Existe para que el CI despliegue sin credenciales, y el enunciado **no pide despliegue automatizado**. Ningún criterio lo evalúa | Se publica y se despliega desde una máquina del equipo con el ADC de usuario. **ADR-0015 (D3) sigue intacto**: tampoco hay ninguna clave JSON así |
+| **Que el CI publique las imágenes** | Mismo motivo. Montar el *workflow* cuesta más que el `docker push` | `docker push` a Artifact Registry desde la máquina de quien despliega |
+| **Tablero de Cloud Monitoring** | Los números están igual en las métricas; el tablero solo los hace cómodos de mirar | Consultas directas al exportar los resultados de cada corrida |
+| **Entorno `prod`** | Duplica la factura para proteger un entorno que nadie usa (ADR-0016, D6) | Un solo entorno, `entrega2`. La estructura de módulos permite crear `prod` cuando haga falta |
+| **Cloud CDN y cookies firmadas** | Prohibido por el enunciado en esta etapa | HLS directo desde Cloud Storage con URL firmada. `media-sessions` no cambia |
+| **Alertas de Cloud Monitoring** | Ningún criterio las evalúa, y con dos máquinas vigiladas a mano durante las corridas no aportan | Las cuatro reglas de Prometheus siguen en local |
+| **Restauración medida de Cloud SQL** | El enunciado pide el procedimiento de reconstrucción, no un RTO medido | Se cronometra `destroy` + `apply` en C2, que es el procedimiento que sí piden |
+
+**Si sobra tiempo, el orden para recuperarlas** es: WIF y despliegue desde CI
+primero —es lo que más se parece a trabajo real y lo que hará falta en la
+entrega siguiente—, luego el tablero, y después las alertas.
 
 ---
 
@@ -353,17 +413,18 @@ escenario 1 (ADR-0016, D2).
 
 | Riesgo | Cuándo aparece | Qué hacer |
 | --- | --- | --- |
-| **ClamAV no cabe en 2 GiB** | Al levantar el Worker Server | Medir el residente de `clamd` en la fase 4. Si no cabe, documentar el fallo, el ajuste mínimo y su efecto, como manda el enunciado |
-| **El límite de tasa por IP invalida la prueba** | En la primera corrida, y parece un fallo del sistema | Hacerlo configurable en la fase 6, **antes** de generar carga |
-| **Métricas de cola inexistentes** | Cuando hay que contestar cómo evolucionó la cola, con la corrida ya hecha | Fase 6, antes de la 7 |
-| **Memoria y disco sin agente** | Al escribir el informe | Agente desde el arranque de las máquinas |
-| **Disco de 30 GiB en la transcodificación** | Con el archivo largo | Vigilar desde M0; limpiar temporales al terminar cada trabajo |
+| **B1 empieza tarde** | A falta de tres días, y no hay forma de acelerarlo | Arrancarlo el primer día, en paralelo con A0 |
+| **ClamAV no cabe en 2 GiB** | Al levantar el Worker Server | Medir el residente de `clamd` en A3. Si no cabe, documentar el fallo, el ajuste mínimo y su efecto |
+| **El límite de tasa por IP invalida la prueba** | En la primera corrida, y parece un fallo del sistema | B2, **antes** de generar carga |
+| **Métricas de cola inexistentes** | Cuando hay que contestar cómo evolucionó la cola, con la corrida ya hecha | B2, antes de C1 |
+| **Memoria y disco sin agente** | Al escribir el informe | Agente desde el arranque de las máquinas (A3) |
+| **Disco de 30 GiB en la transcodificación** | Con el archivo largo | Vigilar desde el primer nivel; limpiar temporales al terminar cada trabajo |
 | **`e2-small` tiene vCPU compartidas** | Cuando los números no se repiten | Tipo personalizado con 2 vCPU dedicadas |
-| **IP efímera** | Al reiniciar la máquina, y rompe el certificado | IP estática desde la fase 1 |
-| **Firmas sin clave** | En la fase 3 | `serviceAccountTokenCreator` sobre sí misma; es el permiso que todo el mundo olvida |
+| **IP efímera** | Al reiniciar la máquina, y rompe el certificado | IP estática desde A1 |
+| **Firmas sin clave** | En B1 | `serviceAccountTokenCreator` sobre sí misma; es el permiso que todo el mundo olvida |
 | **`rateLimitExceeded` al componer** | Con archivos grandes | *Backoff* en el adaptador |
-| **Imagen `arm64`** | Al arrancar, con un error confuso | `--platform linux/amd64` explícito en el CI |
-| **La factura sigue corriendo tras la entrega** | En el recibo del mes | Fase 8: borrar Cloud SQL, revisar disco, IP, respaldos y objetos |
+| **Imagen `arm64`** | Al arrancar, con un error confuso | `--platform linux/amd64` explícito al construir |
+| **La factura sigue corriendo tras la entrega** | En el recibo del mes | C2: borrar Cloud SQL, revisar disco, IP, respaldos y objetos |
 
 ---
 
@@ -376,12 +437,12 @@ escenario 1 (ADR-0016, D2).
 | Región | `us-central1` | **Confirmada**, fijada en `gcloud config` |
 | Bucket del estado de Terraform | `gs://mooc-tfstate-mooc-509602` | **Creado**, con versionado y acceso uniforme |
 | Entorno de Terraform | `entrega2` | Único (ADR-0016, D6) |
-| Tipo de máquina | 2 vCPU dedicadas, 2048 MiB | **Por confirmar** en la fase 1 |
-| Tier de Cloud SQL | | **Por decidir** en la fase 1, y se anota en el informe |
-| Nombre público | | **Por decidir**: dominio propio o `sslip.io` |
+| Tipo de máquina | 2 vCPU dedicadas, 2048 MiB | **Por confirmar** en A1 |
+| Tier de Cloud SQL | | **Por decidir** en A1, y se anota en el informe |
+| Nombre público | | **Por decidir**: dominio propio o `sslip.io`. Hace falta en A3 |
 | Repositorio de Artifact Registry | `mooc` | Lo crea Terraform |
-| Correo saliente (proveedor) | | **Sin elegir**; hace falta en la fase 5 |
-| Presupuesto mensual tope | | **Falta la alerta** |
+| Correo saliente (proveedor) | | **Sin elegir**; hace falta en A4 |
+| Presupuesto con alerta | | Se crea en A0 |
 
 **El proyecto está vacío** salvo el bucket del estado. No hay nada que importar.
 
@@ -394,14 +455,27 @@ escenario 1 (ADR-0016, D2).
 > escribir nada. **El enunciado de la Entrega 2 manda sobre el ADR-0015**, que
 > describe una arquitectura de Cloud Run que aquí está prohibida.
 >
-> Dos máquinas virtuales, base administrada zonal, objetos en Cloud Storage,
-> Redis en contenedor. Nada de CDN, autoescalado, balanceador ni alta
-> disponibilidad.
+> Dos máquinas virtuales de 2 vCPU y 2 GiB, Cloud SQL zonal con IP privada,
+> objetos en Cloud Storage, Redis en contenedor en el Worker Server. Nada de
+> CDN, autoescalado, balanceador ni alta disponibilidad.
 >
-> **Todo con infraestructura como código.** `gcloud` solo para consultar y
-> comprobar. La única excepción ya está hecha: el bucket del estado.
+> **El plan está recortado a lo necesario para la entrega.** No montes Workload
+> Identity Federation ni despliegue desde CI: están en «Lo que se deja fuera a
+> propósito» y no los evalúa ningún criterio. Si crees que algo de esa lista
+> hace falta, dímelo antes de escribirlo.
 >
-> Estoy en la fase 0. Empieza comprobando con `make gcloud` qué hay en el
-> proyecto antes de escribir HCL. Al final de cada fase corre su comprobación y
-> enséñame el resultado antes de seguir. Si una comprobación no pasa, no
-> avances.
+> Esta conversación cubre **A0 y A1**. Al terminar A1 paramos.
+>
+> Todo con infraestructura como código. `gcloud` solo para consultar y
+> comprobar. La única excepción ya está hecha: el bucket del estado. Se opera
+> con `make gcloud ARGS=...` y `make tf ENTORNO=entrega2 ARGS=...`; no hay
+> gcloud ni terraform instalados en la máquina y no deben instalarse.
+>
+> Dos cosas que no se pueden olvidar: `google_project_service` con
+> `disable_on_destroy = false`, o un `destroy` deja el proyecto inservible; y
+> sin `servicenetworking` con su rango reservado, Cloud SQL no tiene IP privada,
+> que es lo que el enunciado exige.
+>
+> Empieza comprobando con `make gcloud` qué hay en el proyecto antes de escribir
+> HCL. Al final de cada fase corre su comprobación y enséñame el resultado antes
+> de seguir. Si una comprobación no pasa, no avances.
