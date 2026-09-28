@@ -347,11 +347,8 @@ postman-nube: tunel-mailpit ## Colección entera contra la URL pública (tarda ~
 	@clave=$$($(GCLOUD) secrets versions access latest --secret=seed-password); \
 	docker run --rm --network $(NUBE_RED) -e DEMO_PASSWORD="$$clave" \
 		-v "$(CURDIR)":/repo -w /repo/postman --entrypoint sh mooc-herramientas -c \
-		'newman run mooc.postman_collection.json -e mooc.postman_environment.json \
-			--env-var base_url=https://$(NUBE_HOST) \
+		'newman run mooc-entrega2.postman_collection.json -e mooc-entrega2.postman_environment.json \
 			--env-var mailpit_url=http://mooc-tunel:8025 \
-			--env-var prometheus_url= \
-			--env-var metricas_publicas=no \
 			--env-var demo_password="$$DEMO_PASSWORD" \
 			--delay-request 11000'; \
 	rc=$$?; docker rm -f mooc-tunel >/dev/null 2>&1; exit $$rc

@@ -379,6 +379,10 @@ corregir dos cosas de la colección, no de la plataforma: un script leía
 aserciones buscaban la firma de S3 (`X-Amz-Signature`); ahora aceptan también
 la de GCS (`X-Goog-Signature`).
 
+Repetida el 28-09 tras cerrar `/metrics` y ampliar el pool de la API: **72
+peticiones, 146 aserciones, 0 fallos**. Es una petición menos porque la de
+`/metrics` se salta en la nube.
+
 ---
 
 # Vía B · Código

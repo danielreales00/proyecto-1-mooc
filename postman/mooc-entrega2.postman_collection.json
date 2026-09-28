@@ -1,0 +1,4128 @@
+{
+  "info": {
+    "name": "MOOC · Entrega 2 (nube)",
+    "description": "**Entrega 2: la colección de la Entrega 1 contra el despliegue en GCP.** Es la misma colección con otro nombre, para tenerla junto a la de local en Postman. Se usa con el entorno `mooc-entrega2`. La contraseña de las cuentas sintéticas no está aquí: sale de Secret Manager (`seed-password`) y se pega en *Current value*.\n\nSi cambia `mooc.postman_collection.json`, esta se regenera igual.\n\n---\n\nColección de la demostración de aceptación. Una carpeta por segmento de la §10.2.\n\n**Uso:** `make up && make seed`, importar con el entorno, y ejecutar las carpetas EN ORDEN.\n\nSEG-1, 2, 5, 6, 7 y 8 están completas. SEG-3 cubre la carga y la verificación; el antimalware y la transcodificación no están. SEG-4 se demuestra con `make demo`; SEG-9 se demuestra con `make demo` y `make scale`.\n\n**Aviso sobre SEG-7:** los heartbeats exigen 10 s de separación, a propósito. Con el Collection Runner hace falta `--delay-request 11000`, o ejecutar esas peticiones a mano. El equivalente automático es `make demo`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "18c7877c-18d1-4f6f-be18-7b973d81bf18"
+  },
+  "item": [
+    {
+      "name": "SEG-1 · Identidad",
+      "description": "Registro de estudiante, verificación de correo, sesiones revocables y rechazo de operaciones no autorizadas.\n\nCriterio: identidad, autorización y seguridad (CE-02).\nRequisitos: RF-01, RF-02, CA-06.\n\nEl token de verificación se lee de Mailpit: ejecuta «Leer token del correo» después de registrar.",
+      "item": [
+        {
+          "name": "Salud — readyz",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/readyz",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "readyz"
+              ]
+            },
+            "description": "Comprueba PostgreSQL, Redis y el almacén de objetos (ADR-0009)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('postgres ok', () => pm.expect(d.postgres).to.eql('ok'));",
+                  "pm.test('redis ok', () => pm.expect(d.redis).to.eql('ok'));",
+                  "pm.test('objectstore ok', () => pm.expect(d.objectstore).to.eql('ok'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registro inválido — lista exhaustiva de errores",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "La API devuelve TODOS los incumplimientos en un solo 422, no el primero. Es la mecánica que CA-01 exige para la publicación de un curso.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"no-es-un-correo\",\n  \"password\": \"corta\",\n  \"full_name\": \"\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));",
+                  "pm.test('application/problem+json (RFC 9457)', () =>",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json'));",
+                  "const d = pm.response.json();",
+                  "pm.test('trae trace_id para correlacionar', () => pm.expect(d.trace_id).to.be.a('string'));",
+                  "pm.test('acumula los tres errores', () => pm.expect(d.errors).to.have.lengthOf(3));",
+                  "pm.test('cada error trae código y campo', () =>",
+                  "  d.errors.forEach(e => { pm.expect(e.code).to.be.a('string'); pm.expect(e.field).to.be.a('string'); }));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registro de estudiante",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Responde 202: la API no espera al worker que envía el correo (CA-02).\nEl correo electrónico se genera con marca de tiempo para poder repetir la demo.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{nuevo_email}}\",\n  \"password\": \"{{demo_password}}\",\n  \"full_name\": \"Estudiante de Demostración\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Correo único por ejecución, para que la demo se pueda repetir",
+                  "// sin limpiar la base de datos.",
+                  "pm.collectionVariables.set('nuevo_email', `estudiante+${Date.now()}@mooc.local`);",
+                  "pm.collectionVariables.set('mailpit_intento', 0);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted — no bloquea esperando al worker', () => pm.response.to.have.status(202));",
+                  "const d = pm.response.json();",
+                  "pm.test('queda pendiente de verificación', () => pm.expect(d.status).to.eql('pending_verification'));",
+                  "pm.collectionVariables.set('user_id', d.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Leer token del correo (Mailpit)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{mailpit_url}}/api/v1/search?query=to:{{nuevo_email}}",
+              "host": [
+                "{{mailpit_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "search"
+              ],
+              "query": [
+                {
+                  "key": "query",
+                  "value": "to:{{nuevo_email}}"
+                }
+              ]
+            },
+            "description": "Lee el buzón de Mailpit, no la API. Es la evidencia de que el worker consumió el trabajo de la cola y envió el correo.\n\nGuarda el token en la variable `verify_token` para la petición siguiente."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// El worker es asíncrono: la API respondió 202 sin esperarlo. Esta",
+                  "// petición se reintenta a sí misma hasta que el correo llegue.",
+                  "// Ejecutar con --delay-request para espaciar los intentos.",
+                  "const MAX_INTENTOS = 20;",
+                  "",
+                  "const d = pm.response.json();",
+                  "const mensajes = (d && d.messages) || [];",
+                  "const intento = Number(pm.collectionVariables.get('mailpit_intento') || 0);",
+                  "",
+                  "if (mensajes.length === 0) {",
+                  "  if (intento < MAX_INTENTOS) {",
+                  "    pm.collectionVariables.set('mailpit_intento', intento + 1);",
+                  "    postman.setNextRequest('Leer token del correo (Mailpit)');",
+                  "    return;",
+                  "  }",
+                  "  pm.test('el worker entregó el correo', () =>",
+                  "    pm.expect.fail(`no llegó ningún correo tras ${MAX_INTENTOS} intentos`));",
+                  "  return;",
+                  "}",
+                  "",
+                  "pm.collectionVariables.set('mailpit_intento', 0);",
+                  "pm.test('el worker entregó el correo', () => pm.expect(mensajes.length).to.be.above(0));",
+                  "pm.test(`llegó en ${intento + 1} intento(s)`, () => pm.expect(true).to.be.true);",
+                  "",
+                  "const id = mensajes[0].ID;",
+                  "pm.sendRequest(`${pm.variables.get('mailpit_url')}/api/v1/message/${id}`, (err, res) => {",
+                  "  pm.test('el cuerpo del correo se puede leer', () => pm.expect(err).to.be.null);",
+                  "  // El token va en una línea propia; el \\r del CRLF forma parte de ella.",
+                  "  const m = res.json().Text.match(/^([A-Za-z0-9_-]{40,})\\r?$/m);",
+                  "  pm.test('el correo trae el token de verificación', () => pm.expect(m).to.not.be.null);",
+                  "  pm.collectionVariables.set('verify_token', m[1]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verificar el correo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/verify-email",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "verify-email"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{verify_token}}\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('verificado', () => pm.expect(pm.response.json().verified).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reutilizar el token — debe fallar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/verify-email",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "verify-email"
+              ]
+            },
+            "description": "Un token de un solo uso no se puede consumir dos veces.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{verify_token}}\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422 al reutilizarlo', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login con contraseña incorrecta",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Mismo 401 para usuario inexistente, contraseña incorrecta y cuenta sin verificar: no se revela qué correos existen.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{nuevo_email}}\",\n  \"password\": \"incorrecta\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{nuevo_email}}\",\n  \"password\": \"{{demo_password}}\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('devuelve token de sesión', () => pm.expect(d.token).to.be.a('string'));",
+                  "pm.test('el registro público solo crea estudiantes (RF-01)', () =>",
+                  "  pm.expect(d.user.role).to.eql('student'));",
+                  "pm.collectionVariables.set('session_token', d.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /me",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "me"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('correo verificado', () => pm.expect(d.email_verified_at).to.not.be.null);",
+                  "pm.test('nunca expone el hash de la contraseña', () =>",
+                  "  pm.expect(pm.response.text()).to.not.include('password'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /me sin sesión",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "me"
+              ]
+            },
+            "description": "Control de acceso: cada endpoint respeta rol y sesión (CA-06)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Correo duplicado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/register",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{nuevo_email}}\",\n  \"password\": \"{{demo_password}}\",\n  \"full_name\": \"Otro\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 conflict', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cerrar sesión",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/logout",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /me tras cerrar sesión — revocación inmediata",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/me",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "me"
+              ]
+            },
+            "description": "Borrar la clave de Redis surte efecto en la petición siguiente, sin ventana de gracia. Es lo que el segmento 1 exige demostrar (ADR-0006)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 sin esperar a que expire', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SEG-1b · Administración",
+      "description": "Administración de usuarios, auditoría y trabajos (RF-01, SEG-2).\n\nSe ejecuta sobre las cuentas de `make seed`, que trae **una sola** administradora: por eso el paso 7 puede demostrar la guarda del último administrador sin preparar nada.\n\nNo modifica ninguna cuenta de la semilla. El único usuario que altera es el profesor invitado que ella misma crea en el paso 2.",
+      "item": [
+        {
+          "name": "Login como administradora",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@mooc.local\",\n  \"password\": \"{{demo_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const c = pm.response.json();",
+                  "pm.collectionVariables.set('admin_token', c.token);",
+                  "pm.collectionVariables.set('admin_id', c.user.id);",
+                  "pm.test('el rol es administrador', () => pm.expect(c.user.role).to.eql('admin'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1 · Listar usuarios",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users?limit=50",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json().items;",
+                  "pm.test('están las cuentas de la semilla', () => {",
+                  "  pm.expect(items.length).to.be.at.least(8);",
+                  "});",
+                  "pm.test('NUNCA sale el hash de la contraseña', () => {",
+                  "  const texto = pm.response.text();",
+                  "  pm.expect(texto).to.not.include('argon2');",
+                  "  pm.expect(texto).to.not.include('password');",
+                  "});",
+                  "console.log('usuarios:', items.length,",
+                  "  '· roles:', [...new Set(items.map(u => u.role))].join(', '));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2 · Crear un profesor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"profesor-invitado-{{$timestamp}}@mooc.local\",\n  \"full_name\": \"Profesor Invitado\",\n  \"role\": \"teacher\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Cada creación necesita su propia Idempotency-Key (ADR-0014).",
+                  "pm.collectionVariables.set('idem_key', 'seg1b-' + Date.now() + '-' +",
+                  "  Math.random().toString(36).slice(2, 8));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const u = pm.response.json();",
+                  "pm.collectionVariables.set('invitado_id', u.id);",
+                  "pm.test('nace como profesor y activo', () => {",
+                  "  pm.expect(u.role).to.eql('teacher');",
+                  "  pm.expect(u.status).to.eql('active');",
+                  "});",
+                  "pm.test('el correo se da por verificado: el administrador responde por él', () => {",
+                  "  pm.expect(u.email_verified_at).to.not.be.null;",
+                  "});",
+                  "console.log('La cuenta nace SIN contraseña utilizable.',",
+                  "  'Solo se activa por el enlace de la invitación.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3 · La invitación quedó registrada (outbox)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/jobs?type=email.send&limit=20",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "jobs"
+              ],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "email.send"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const trabajos = pm.response.json().items;",
+                  "const inv = trabajos.find(t => t.job_key.includes('invitation'));",
+                  "pm.test('el trabajo del correo existe en PostgreSQL', () => {",
+                  "  pm.expect(inv, 'no hay ningún job de invitación').to.not.be.undefined;",
+                  "});",
+                  "if (inv) {",
+                  "  pm.collectionVariables.set('trabajo_vivo_id', inv.id);",
+                  "  console.log('job_key:', inv.job_key, '· estado:', inv.status,",
+                  "    '· intento:', inv.attempt);",
+                  "  console.log('Se registró en la MISMA transacción que el usuario,',",
+                  "    'y se publicó en la cola DESPUÉS del commit. Por eso existe aquí',",
+                  "    'aunque Redis se hubiera caído: el reaper lo recuperaría.');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4 · Sesiones de un usuario",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users/{{invitado_id}}/sessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users",
+                "{{invitado_id}}",
+                "sessions"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('recién creado, no tiene ninguna sesión', () => {",
+                  "  pm.expect(pm.response.json().items).to.be.an('array').that.is.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5 · Revocar las sesiones de un usuario",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users/{{invitado_id}}/sessions",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users",
+                "{{invitado_id}}",
+                "sessions"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const c = pm.response.json();",
+                  "pm.test('responde cuántas revocó', () => pm.expect(c.revoked).to.be.a('number'));",
+                  "console.log('Redis manda sobre la validez de la sesión, así que',",
+                  "  'revocar tiene efecto en la petición siguiente, sin ventana de gracia.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6 · Suspender al profesor invitado",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users/{{invitado_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users",
+                "{{invitado_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"suspended\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('queda suspendido', () => {",
+                  "  pm.expect(pm.response.json().status).to.eql('suspended');",
+                  "});",
+                  "console.log('Suspender corta el acceso YA: el servicio borra sus',",
+                  "  'sesiones de Redis tras el commit, no espera a que expiren.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "7 · ÚLTIMO ADMINISTRADOR: degradarse a sí misma",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users/{{admin_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users",
+                "{{admin_id}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"teacher\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Invariante del ADR-0001. La función que lo decide (`DejaSinAdministrador`) es pura y tiene una tabla de ocho casos en `admin/domain_test.go`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409: el sistema no se queda sin administrador', () => {",
+                  "  pm.expect(pm.response.code).to.eql(409);",
+                  "});",
+                  "const p = pm.response.json();",
+                  "pm.test('el problema viene tipado', () => {",
+                  "  pm.expect(p.type).to.include('last_admin');",
+                  "});",
+                  "pm.test('trae trace_id, como todo error de la API', () => {",
+                  "  pm.expect(p.trace_id).to.be.a('string').and.not.empty;",
+                  "});",
+                  "console.log('Es la única administradora activa, así que degradarse',",
+                  "  'dejaría el sistema sin nadie que pueda administrarlo.');",
+                  "console.log('La comprobación va DENTRO de la transacción, con FOR UPDATE:',",
+                  "  'hacerla antes dejaría una ventana en la que dos peticiones',",
+                  "  'simultáneas degradan a los dos últimos administradores.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "8 · Auditoría: quién hizo qué",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/audit?action=admin.user_created&limit=5",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "audit"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "admin.user_created"
+                },
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const ev = pm.response.json().items;",
+                  "pm.test('el alta del paso 2 quedó auditada', () => {",
+                  "  pm.expect(ev.length).to.be.at.least(1);",
+                  "});",
+                  "const mio = ev.find(e => e.actor_id === pm.collectionVariables.get('admin_id'));",
+                  "pm.test('consta QUIÉN lo hizo, no solo qué pasó', () => {",
+                  "  pm.expect(mio, 'ningún evento con este actor').to.not.be.undefined;",
+                  "});",
+                  "if (mio) {",
+                  "  console.log('acción:', mio.action, '· rol:', mio.actor_role,",
+                  "    '· ip:', mio.ip, '· trace:', mio.trace_id);",
+                  "  console.log('Y esta tabla es de SOLO INSERCIÓN: un trigger de',",
+                  "    'PostgreSQL rechaza cualquier UPDATE o DELETE.');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "9 · Trabajos en la cola de muertos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/jobs?status=dead&limit=10",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "jobs"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "dead"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const muertos = pm.response.json().items;",
+                  "if (muertos.length === 0) {",
+                  "  // Sin trabajos muertos —lo normal en una demo recién sembrada— se",
+                  "  // reencola uno vivo, que debe rechazarse. El bloque 8b del guion fuerza",
+                  "  // uno muerto antes de llegar aquí.",
+                  "  pm.collectionVariables.set('trabajo_reencolar', pm.collectionVariables.get('trabajo_vivo_id'));",
+                  "  console.log('No hay trabajos muertos: el paso siguiente comprobará el rechazo.');",
+                  "} else {",
+                  "  pm.collectionVariables.set('trabajo_muerto_id', muertos[0].id);",
+                  "  pm.collectionVariables.set('trabajo_reencolar', muertos[0].id);",
+                  "  console.log('muertos:', muertos.length, '· primero:', muertos[0].job_key,",
+                  "    '· último error:', muertos[0].last_error);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 · Reencolar: 202 si está en la DLQ, 409 si no",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/jobs/{{trabajo_reencolar}}/requeue",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "jobs",
+                "{{trabajo_reencolar}}",
+                "requeue"
+              ]
+            },
+            "description": "Sirve para los dos casos. En el bloque 8b del guion, después de que un trabajo llegue a la DLQ, devuelve 202. En una ejecución normal no hay trabajos muertos y devuelve 409."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'seg1b-' + Date.now() + '-' +",
+                  "  Math.random().toString(36).slice(2, 8));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const muerto = pm.collectionVariables.get('trabajo_muerto_id');",
+                  "const usado = pm.collectionVariables.get('trabajo_reencolar');",
+                  "const eraMuerto = muerto && String(muerto) === String(usado);",
+                  "",
+                  "if (eraMuerto) {",
+                  "  pm.test('202: el trabajo muerto vuelve a la cola', () => {",
+                  "    pm.expect(pm.response.code).to.eql(202);",
+                  "  });",
+                  "  const t = pm.response.json();",
+                  "  pm.test('vuelve con la MISMA job_key', () => {",
+                  "    pm.expect(t.job_key).to.be.a('string').and.not.empty;",
+                  "    pm.expect(t.status).to.eql('queued');",
+                  "  });",
+                  "  console.log('job_key:', t.job_key, '· estado:', t.status, '· intento:', t.attempt);",
+                  "  console.log('Se reencola con la misma clave, así que volver a ejecutarlo',",
+                  "    'no produce una segunda salida: el reclamo atómico lo impide.');",
+                  "} else {",
+                  "  pm.test('409: solo se reencola lo que está muerto o falló', () => {",
+                  "    pm.expect(pm.response.code).to.eql(409);",
+                  "  });",
+                  "  pm.test('el problema viene tipado', () => {",
+                  "    pm.expect(pm.response.json().type).to.include('not_requeueable');",
+                  "  });",
+                  "  console.log('El trabajo usado ya se completó, así que se rechaza.',",
+                  "    'Reencolarlo lo ejecutaría por segunda vez sin motivo.');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11 · RECHAZO: reencolar un trabajo ya completado",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/jobs/{{trabajo_vivo_id}}/requeue",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "jobs",
+                "{{trabajo_vivo_id}}",
+                "requeue"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Cada creación necesita su propia Idempotency-Key (ADR-0014).",
+                  "pm.collectionVariables.set('idem_key', 'seg1b-' + Date.now() + '-' +",
+                  "  Math.random().toString(36).slice(2, 8));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409: solo se reencola lo que está muerto o falló', () => {",
+                  "  pm.expect(pm.response.code).to.eql(409);",
+                  "});",
+                  "pm.test('el problema viene tipado', () => {",
+                  "  pm.expect(pm.response.json().type).to.include('not_requeueable');",
+                  "});",
+                  "console.log('Reencolar un trabajo que ya se completó lo ejecutaría',",
+                  "  'por segunda vez sin motivo. La guarda lo impide.');",
+                  "console.log('El reencolado de verdad se demuestra en el bloque 8b,',",
+                  "  'sobre el trabajo que sí acaba en la DLQ.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12 · Un profesor NO puede administrar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"profesor@mooc.local\",\n  \"password\": \"{{demo_password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200: el profesor entra sin problema', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('prof_token', pm.response.json().token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13 · …y al intentarlo recibe 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "admin",
+                "users"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403: autenticado, pero sin permiso', () => {",
+                  "  pm.expect(pm.response.code).to.eql(403);",
+                  "});",
+                  "console.log('401 sería «no sé quién eres»; 403 es «sé quién eres y',",
+                  "  'no te toca». La distinción importa.');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SEG-2 · Autoría y publicación",
+      "description": "Borrador, jerarquía, previsualización, lista exhaustiva de errores y versión inmutable.\n\nCriterio: autoría y publicación (CE-03). Requisitos: RF-03, RF-04, CA-01.",
+      "item": [
+        {
+          "name": "Login como profesor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Guarda el token en `prof_token` para las peticiones siguientes.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"profesor@mooc.local\",\n  \"password\": \"{{demo_password}}\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('prof_token', pm.response.json().token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear curso",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/courses",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses"
+              ]
+            },
+            "description": "Crea el curso y su versión 1 en borrador.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Fundamentos de Cloud\",\n  \"summary\": \"Curso de la demostración.\",\n  \"category\": \"cloud\",\n  \"language\": \"es\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('nonce', Date.now());",
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json();",
+                  "pm.collectionVariables.set('course_id', d.course.id);",
+                  "pm.collectionVariables.set('version_id', d.version.id);",
+                  "pm.test('nace en borrador', () => pm.expect(d.version.status).to.eql('draft'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Publicar un curso vacío — lista exhaustiva de errores",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/courses/{{course_id}}/versions/1/publish",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "{{course_id}}",
+                "versions",
+                "1",
+                "publish"
+              ]
+            },
+            "description": "No falla al primer error: devuelve TODOS los incumplimientos (CA-01)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));",
+                  "const d = pm.response.json();",
+                  "pm.test('problem+json', () => pm.expect(pm.response.headers.get('Content-Type')).to.include('application/problem+json'));",
+                  "pm.test('lista los incumplimientos', () => pm.expect(d.errors).to.have.length.above(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Añadir módulo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/versions/{{version_id}}/modules",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "versions",
+                "{{version_id}}",
+                "modules"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Módulo 1: Contenedores\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('module_id', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Añadir unidad",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/modules/{{module_id}}/units",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "modules",
+                "{{module_id}}",
+                "units"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Unidad 1: Docker\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('unit_id', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Añadir recurso de texto",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/units/{{unit_id}}/resources",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "units",
+                "{{unit_id}}",
+                "resources"
+              ]
+            },
+            "description": "El Markdown se guarda NORMALIZADO: viñetas canónicas y una sola línea en blanco (ADR-0014).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Introducción\",\n  \"type\": \"rich_text\",\n  \"content_md\": \"# Contenedores\\n\\n*  Aislamiento\\n\\n\\n*  Portabilidad   \\n\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json();",
+                  "pm.collectionVariables.set('text_stable_id', d.stable_id);",
+                  "pm.test('markdown normalizado', () => pm.expect(d.content_md).to.not.include('*  Aislamiento'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Añadir recurso de quiz",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/units/{{unit_id}}/resources",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "units",
+                "{{unit_id}}",
+                "resources"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Evaluación final\",\n  \"type\": \"quiz\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json();",
+                  "pm.collectionVariables.set('quiz_resource_id', d.id);",
+                  "pm.collectionVariables.set('quiz_stable_id', d.stable_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Configurar el quiz",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/resources/{{quiz_resource_id}}/quiz",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "resources",
+                "{{quiz_resource_id}}",
+                "quiz"
+              ]
+            },
+            "description": "Esta es la ÚNICA ruta por la que `is_correct` sale del servidor, y solo para el profesor dueño.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"max_attempts\": 2,\n  \"pass_score\": 70,\n  \"feedback_policy\": \"correctness\",\n  \"questions\": [\n    {\n      \"statement_md\": \"¿Qué aísla un contenedor?\",\n      \"kind\": \"single\",\n      \"points\": 1,\n      \"options\": [\n        {\n          \"text_md\": \"Procesos y sistema de archivos\",\n          \"is_correct\": true\n        },\n        {\n          \"text_md\": \"El hardware físico\",\n          \"is_correct\": false\n        }\n      ]\n    }\n  ]\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('el profesor SÍ ve las claves', () =>",
+                  "  pm.expect(pm.response.text()).to.include('is_correct'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Previsualizar (HTML saneado)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/courses/{{course_id}}/versions/1/preview",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "{{course_id}}",
+                "versions",
+                "1",
+                "preview"
+              ]
+            },
+            "description": "El Markdown se renderiza y se sanea con lista blanca."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('sin script', () => pm.expect(pm.response.text()).to.not.include('<script'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Publicar la versión",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/courses/{{course_id}}/versions/1/publish",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "courses",
+                "{{course_id}}",
+                "versions",
+                "1",
+                "publish"
+              ]
+            },
+            "description": ""
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('publicada', () => pm.expect(pm.response.json().status).to.eql('published'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INMUTABILIDAD: mutar la versión publicada",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/versions/{{version_id}}/modules",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "versions",
+                "{{version_id}}",
+                "modules"
+              ]
+            },
+            "description": "Un trigger de PostgreSQL rechaza la mutación. La regla vive donde están los datos (ADR-0007).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"No debería entrar\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409', () => pm.response.to.have.status(409));",
+                  "pm.test('version_immutable', () => pm.expect(pm.response.json().type).to.include('version_immutable'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SEG-3 · Carga multimedia",
+      "description": "Carga multipart directa al almacén, con reanudación y verificación en servidor.\n\nCriterio: multimedia y distribución (CE-04). Requisitos: RF-05, CA-02.\n\n**Antes de empezar:** en la petición «Subir la parte 1» hay que elegir el archivo `postman/archivo-de-prueba.mp4` del repositorio. Postman no puede calcular el hash de un archivo cualquiera, así que la colección trae uno de contenido fijo y su SHA-256 ya declarado.\n\nEl archivo pesa 256 KiB, así que es **una sola parte**. Con uno mayor de 8 MiB habría varias, y ahí es donde luce la reanudación; para eso está `make subir ARCHIVO=…` o el segmento del guion del video.",
+      "item": [
+        {
+          "name": "Login como profesor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Solo profesores y administradores pueden subir archivos.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"profesor@mooc.local\",\n  \"password\": \"{{demo_password}}\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('prof_token', pm.response.json().token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1 · Declarar la carga",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/init",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "init"
+              ]
+            },
+            "description": "La API **no recibe los bytes**: crea el asset, abre la carga multipart y devuelve una URL prefirmada por parte. El cliente sube directamente al almacén (enunciado §4).\n\nEl `sha256` que se declara aquí es una promesa; el servidor lo recalculará leyendo del bucket.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filename\": \"archivo-de-prueba.mp4\",\n  \"content_type\": \"video/mp4\",\n  \"size_bytes\": 101541,\n  \"sha256\": \"0d4245fc56d42398c2856fb960075fbf6f95afa58b10d44787e037d0ff8c2321\",\n  \"kind\": \"video\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json();",
+                  "pm.collectionVariables.set('asset_id', d.asset_id);",
+                  "pm.collectionVariables.set('parte_1_url', d.parts[0].url);",
+                  "pm.test('una sola parte para este archivo', () => pm.expect(d.total_parts).to.eql(1));",
+                  "pm.test('la URL viene prefirmada', () =>",
+                  "  pm.expect(d.parts[0].url).to.match(/X-(Amz|Goog)-Signature/));",
+                  "console.log('parte 1 →', d.parts[0].url.split('?')[0]);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2 · Subir la parte 1  ← ELIGE EL ARCHIVO AQUÍ",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{parte_1_url}}",
+              "host": [
+                "{{parte_1_url}}"
+              ]
+            },
+            "description": "**Esta petición no va a la API**: va directa a MinIO con la URL prefirmada.\n\n**Selecciona el archivo** `postman/archivo-de-prueba.mp4` en la pestaña Body → binary. Postman recuerda la ruta para las siguientes veces.\n\nEl `ETag` que devuelve identifica la parte y hace falta para completar.",
+            "body": {
+              "mode": "file",
+              "file": {
+                "src": "archivo-de-prueba.mp4"
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const etag = (pm.response.headers.get('ETag') || '').replace(/\"/g, '');",
+                  "pm.test('el almacén devolvió un ETag', () => pm.expect(etag).to.not.be.empty);",
+                  "pm.collectionVariables.set('parte_1_etag', etag);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3 · Estado de la carga (reanudación)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/{{asset_id}}/upload",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{asset_id}}",
+                "upload"
+              ]
+            },
+            "description": "**Esto es lo que permite reanudar.** El servidor pregunta al almacén qué partes tiene ya, así que tras una interrupción el cliente sube solo lo que falta, dentro de la ventana de 24 horas."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('la parte 1 ya está en el almacén', () =>",
+                  "  pm.expect(d.received_parts.map(p => p.part_number)).to.include(1));",
+                  "pm.test('no falta ninguna', () => pm.expect(d.missing_parts).to.be.empty);",
+                  "console.log('recibidas:', d.received_parts.length, '· faltan:', d.missing_parts);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4 · Completar la carga",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/{{asset_id}}/complete",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{asset_id}}",
+                "complete"
+              ]
+            },
+            "description": "Cierra la multipart y encola la verificación. Responde **202**: la API no espera al worker (CA-02).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parts\": [\n    { \"part_number\": 1, \"etag\": \"{{parte_1_etag}}\" }\n  ]\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted', () => pm.response.to.have.status(202));",
+                  "pm.test('queda como uploaded', () => pm.expect(pm.response.json().status).to.eql('uploaded'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5 · Verificación del worker",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/{{asset_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{asset_id}}"
+              ]
+            },
+            "description": "El worker **recalcula el SHA-256 leyendo del bucket** y **detecta el tipo real por los bytes**, no por la extensión ni por lo que declaró el cliente.\n\nSi aún dice `uploaded`, vuelve a enviarla: tarda un par de segundos."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// La verificación es asíncrona: 'complete' respondió 202 y el trabajo lo",
+                  "// hace un worker aparte. Sondeamos hasta que termine en vez de suponer",
+                  "// que ya terminó.",
+                  "if (!pm.collectionVariables.get('intentos_verificacion')) {",
+                  "  pm.collectionVariables.set('intentos_verificacion', 0);",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cuerpo = pm.response.json();",
+                  "const intentos = Number(pm.collectionVariables.get('intentos_verificacion')) + 1;",
+                  "pm.collectionVariables.set('intentos_verificacion', intentos);",
+                  "",
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "",
+                  "// El asset ya no se detiene en 'clean': verificarlo encola la",
+                  "// transcodificación, que lo lleva a 'processing' y luego a 'ready'.",
+                  "// Se espera al estado final para que la aserción no dependa de",
+                  "// cuándo mire.",
+                  "const listo = ['ready', 'rejected', 'failed'].includes(cuerpo.status);",
+                  "if (!listo && intentos < 12) {",
+                  "  console.log('El worker todavía no termina (estado: ' + cuerpo.status +",
+                  "              '). Reintento ' + intentos + ' de 12.');",
+                  "  pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "  pm.collectionVariables.unset('intentos_verificacion');",
+                  "  pm.test('el archivo pasó la verificación y se transcodificó', () => {",
+                  "    pm.expect(cuerpo.status, 'si sigue en uploaded, el worker no corrió: '",
+                  "      + 'revisa `docker compose logs worker worker-media`').to.eql('ready');",
+                  "  });",
+                  "  pm.test('la escalera HLS no hace upscaling (SEG-4)', () => {",
+                  "    const variantes = (cuerpo.derivatives || [])",
+                  "      .filter(d => d.kind === 'hls_variant').map(d => d.variant);",
+                  "    pm.expect(variantes, 'el original es 360p: 720p o 1080p serían inventados')",
+                  "      .to.eql(['360p']);",
+                  "    pm.expect((cuerpo.derivatives || []).map(d => d.kind))",
+                  "      .to.include('hls_master');",
+                  "  });",
+                  "  pm.test('el servidor detectó el tipo REAL por los bytes', () => {",
+                  "    pm.expect(cuerpo.detected_mime).to.eql('video/mp4');",
+                  "  });",
+                  "  pm.test('el servidor recalculó el checksum', () => {",
+                  "    pm.expect(cuerpo.sha256).to.eql(pm.collectionVariables.get('sha256_prueba'));",
+                  "  });",
+                  "  console.log('estado:', cuerpo.status, '· tipo real:', cuerpo.detected_mime);",
+                  "  console.log('El cliente declaró el tipo, pero el servidor no le creyó:',",
+                  "              'lo dedujo de los bytes y recalculó el hash.');",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6 · Descargar (302 a URL firmada)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/{{asset_id}}/content",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{asset_id}}",
+                "content"
+              ]
+            },
+            "description": "Responde **302** hacia una URL firmada de 15 minutos, emitida después de comprobar el derecho de acceso (CA-06). Los bytes nunca pasan por la API.\n\nDesactiva «Automatically follow redirects» en los ajustes de Postman para ver el 302; con la opción activada verás el archivo."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// No seguimos la redirección a propósito: la URL prefirmada lleva la",
+                  "// credencial en la query, y volver a mandar el header Authorization hace",
+                  "// que S3 la rechace con 400 (un solo mecanismo de autenticación a la vez).",
+                  "pm.test('302: el contenido no se sirve por la API', () => {",
+                  "  pm.expect(pm.response.code).to.eql(302);",
+                  "});",
+                  "const destino = pm.response.headers.get('Location') || '';",
+                  "pm.test('redirige al almacén de objetos con una URL firmada', () => {",
+                  "  pm.expect(destino).to.match(/X-(Amz|Goog)-Signature/);",
+                  "  pm.expect(destino).to.match(/X-(Amz|Goog)-Expires/);",
+                  "});",
+                  "console.log('La API nunca sirve los bytes; delega en una URL que caduca.');",
+                  "console.log('Destino:', destino.split('?')[0]);"
+                ]
+              }
+            }
+          ],
+          "protocolProfileBehavior": {
+            "followRedirects": false
+          }
+        },
+        {
+          "name": "6b · Manifiesto HLS (master)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/{{asset_id}}/hls/master.m3u8",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{asset_id}}",
+                "hls",
+                "master.m3u8"
+              ]
+            },
+            "description": "El manifiesto maestro lo sirve la API, no el almacén: el bucket de derivados es privado (ADR-0005).\n\nCada variante se referencia con una **credencial de reproducción** de 30 minutos. Un reproductor no envía cabeceras de autorización a los sub-recursos de un manifiesto, así que la autorización tiene que viajar en la URL."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const cuerpo = pm.response.text();",
+                  "",
+                  "pm.test('es un manifiesto HLS', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('mpegurl');",
+                  "  pm.expect(cuerpo).to.include('#EXTM3U');",
+                  "});",
+                  "",
+                  "pm.test('anuncia solo la variante que existe', () => {",
+                  "  pm.expect(cuerpo).to.include('RESOLUTION=640x360');",
+                  "  pm.expect(cuerpo, 'el original es 360p: anunciar 720p sería mentir')",
+                  "    .to.not.include('1280x720');",
+                  "});",
+                  "",
+                  "// La variante se referencia con una credencial de reproducción: es lo",
+                  "// único que un reproductor puede llevar consigo entre los documentos del",
+                  "// manifiesto, porque no manda cabeceras a los sub-recursos.",
+                  "const linea = cuerpo.split('\\n').find(l => l.trim() && !l.startsWith('#'));",
+                  "pm.test('la variante lleva credencial de reproducción', () => {",
+                  "  pm.expect(linea).to.match(/^360p\\.m3u8\\?t=.+/);",
+                  "});",
+                  "pm.collectionVariables.set('hls_playlist', linea.trim());",
+                  "console.log('variante:', linea);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6c · Playlist de variante, SIN sesión",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/{{asset_id}}/hls/{{hls_playlist}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{asset_id}}",
+                "hls",
+                "{{hls_playlist}}"
+              ]
+            },
+            "description": "Se pide **sin `Authorization`**, como lo haría un reproductor. Autoriza la credencial que venía en el manifiesto maestro.\n\nCada segmento sale reescrito como URL firmada hacia MinIO: el bucket sigue cerrado y los bytes siguen sin pasar por la API."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 sin cabecera de sesión', () => pm.response.to.have.status(200));",
+                  "",
+                  "const cuerpo = pm.response.text();",
+                  "const segmentos = cuerpo.split('\\n').filter(l => l.trim() && !l.startsWith('#'));",
+                  "",
+                  "pm.test('tiene segmentos', () => pm.expect(segmentos.length).to.be.above(0));",
+                  "",
+                  "pm.test('cada segmento va firmado hacia el almacén', () => {",
+                  "  segmentos.forEach(s => {",
+                  "    pm.expect(s, 'un segmento relativo se resolvería sin firma y daría 403')",
+                  "      .to.match(/X-(Amz|Goog)-Signature/);",
+                  "  });",
+                  "});",
+                  "",
+                  "console.log('segmentos firmados:', segmentos.length);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6d · EICAR: declarar la carga",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/init",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "init"
+              ]
+            },
+            "description": "Sube el archivo de prueba **EICAR**: una cadena inofensiva que todo antivirus reconoce. No es malware, es el patrón acordado para comprobar que el escáner está vivo.\n\nSe declara como `file`, no como vídeo: lo que se demuestra aquí es el escaneo, no el tipo.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filename\": \"eicar.txt\",\n  \"content_type\": \"text/plain\",\n  \"size_bytes\": {{eicar_bytes}},\n  \"sha256\": \"{{eicar_sha256}}\",\n  \"kind\": \"file\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// EICAR: el archivo de prueba estándar, inofensivo y detectado por",
+                  "// cualquier antivirus. Se arma desde trozos a propósito: si la cadena",
+                  "// completa estuviera escrita en este archivo, el antivirus de quien clone",
+                  "// el repositorio pondría la colección en cuarentena.",
+                  "const eicar = ['X5O!P%@AP[4', '\\\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-',",
+                  "               'TEST-FILE!$H+H*'].join('');",
+                  "pm.collectionVariables.set('eicar', eicar);",
+                  "pm.collectionVariables.set('eicar_sha256', CryptoJS.SHA256(eicar).toString());",
+                  "pm.collectionVariables.set('eicar_bytes', eicar.length);",
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const c = pm.response.json();",
+                  "pm.collectionVariables.set('eicar_asset', c.asset_id);",
+                  "pm.collectionVariables.set('eicar_url', c.parts[0].url);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6e · EICAR: subir al almacén",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{eicar_url}}",
+              "host": [
+                "{{eicar_url}}"
+              ]
+            },
+            "description": "Va directo a MinIO con la URL prefirmada, sin pasar por la API.",
+            "body": {
+              "mode": "raw",
+              "raw": "{{eicar}}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('eicar_etag', (pm.response.headers.get('ETag') || '').replace(/\"/g, ''));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6f · EICAR: completar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/{{eicar_asset}}/complete",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{eicar_asset}}",
+                "complete"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parts\": [{ \"part_number\": 1, \"etag\": \"{{eicar_etag}}\" }]\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));",
+                  "pm.collectionVariables.set('intentos_eicar', 0);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Accepted', () => pm.response.to.have.status(202));",
+                  "console.log('Ahora lo verifica un worker y lo escanea el antivirus.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6g · EICAR: el antivirus lo detecta",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/{{eicar_asset}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "{{eicar_asset}}"
+              ]
+            },
+            "description": "El asset acaba en `infected`, el original se mueve a `mooc-quarantine` y queda un evento de auditoría.\n\nLo que importa del orden: el escaneo va **antes** de la transcodificación, así que un archivo infectado no llega nunca a FFmpeg. Fíjate en que no hay derivados."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const cuerpo = pm.response.json();",
+                  "const intentos = Number(pm.collectionVariables.get('intentos_eicar')) + 1;",
+                  "pm.collectionVariables.set('intentos_eicar', intentos);",
+                  "",
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "",
+                  "// El veredicto lo dan dos trabajos en cadena: se sondea.",
+                  "const resuelto = ['infected', 'clean', 'ready', 'rejected', 'failed'].includes(cuerpo.status);",
+                  "if (!resuelto && intentos < 15) {",
+                  "  console.log('Todavía en ' + cuerpo.status + '. Reintento ' + intentos + ' de 15.');",
+                  "  pm.execution.setNextRequest(pm.info.requestName);",
+                  "} else {",
+                  "  pm.collectionVariables.unset('intentos_eicar');",
+                  "  pm.test('el antivirus lo marcó como infectado', () => {",
+                  "    pm.expect(cuerpo.status, 'si quedó clean, el antivirus no lo vio: '",
+                  "      + 'revisa `docker compose logs clamav worker`').to.eql('infected');",
+                  "    pm.expect(cuerpo.scan_result).to.include('Eicar');",
+                  "  });",
+                  "  pm.test('no se procesó lo que no está limpio', () => {",
+                  "    pm.expect(cuerpo.derivatives || [], 'un infectado no debe llegar a FFmpeg')",
+                  "      .to.be.an('array').that.is.empty;",
+                  "  });",
+                  "  console.log('veredicto:', cuerpo.scan_result);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "7 · RECHAZO: checksum que no cuadra",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{prof_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/assets/init",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assets",
+                "init"
+              ]
+            },
+            "description": "Declara un checksum falso. La carga se inicia sin problema —el servidor aún no ha visto los bytes—, pero al subir y completar, el worker recalcula, no cuadra, y el asset queda `rejected` y en cuarentena.\n\nPara verlo entero: sube la parte con la URL que devuelve esta petición, completa, y consulta el asset.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filename\": \"mentira.mp4\",\n  \"content_type\": \"video/mp4\",\n  \"size_bytes\": 101541,\n  \"sha256\": \"0000000000000000000000000000000000000000000000000000000000000000\",\n  \"kind\": \"video\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201: se acepta la declaración', () => pm.response.to.have.status(201));",
+                  "console.log('El rechazo ocurre al verificar, no al declarar.');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SEG-4 · Procesamiento y fallos",
+      "description": "Procesamiento asíncrono, fallos y observabilidad (SEG-4 de la §10.2, CA-03 y CE-07).\n\nNinguna petición necesita sesión: son los endpoints operativos y la API de Prometheus. La carpeta se puede ejecutar en cualquier momento y sin preparar nada.\n\nEl reencolado de un trabajo muerto se hace desde `SEG-1b · Administración`, que es donde vive la API de administración.",
+      "item": [
+        {
+          "name": "1 · Vivo — /healthz",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/healthz",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "healthz"
+              ]
+            },
+            "description": "Sonda de vida. No comprueba dependencias: para eso está /readyz."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200: el proceso responde', () => pm.response.to.have.status(200));",
+                  "console.log('Liveness: solo dice que el proceso está en pie.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2 · Listo — /readyz",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/readyz",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "readyz"
+              ]
+            },
+            "description": "Sonda de disponibilidad: PostgreSQL, Redis y el almacén de objetos."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('las tres dependencias responden', () => {",
+                  "  pm.expect(d.postgres).to.eql('ok');",
+                  "  pm.expect(d.redis).to.eql('ok');",
+                  "  pm.expect(d.objectstore).to.eql('ok');",
+                  "});",
+                  "console.log('Readiness: comprueba PostgreSQL, Redis y el almacén.',",
+                  "  'Es lo que mira el orquestador antes de mandarle tráfico.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3 · Los contadores nacen en cero — /metrics",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/metrics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "metrics"
+              ]
+            },
+            "description": "Las métricas que raspa Prometheus. Lo que se comprueba aquí no es que haya datos, sino que los contadores estén **declarados en cero** desde el arranque: sin eso `increase()` no ve el primer incidente."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// En la nube /metrics no es público: lo lee el agente de operaciones dentro",
+                  "// de la máquina. Con metricas_publicas=no, esta petición se salta.",
+                  "if (pm.variables.get('metricas_publicas') === 'no') { pm.execution.skipRequest(); }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const t = pm.response.text();",
+                  "",
+                  "pm.test('la API expone sus métricas en formato Prometheus', () => {",
+                  "  pm.expect(t).to.include('# TYPE http_requests_total counter');",
+                  "});",
+                  "",
+                  "// El detalle que hace que la alerta funcione: si una serie no existe",
+                  "// hasta su primer incidente, `increase()` no ve el salto de «nada» a 1",
+                  "// y la alerta se queda muda justo el día que hace falta.",
+                  "pm.test('jobs_dead_letter_total existe ANTES de que falle nada', () => {",
+                  "  pm.expect(t, 'el contador no está declarado al arrancar').to.match(",
+                  "    /^jobs_dead_letter_total\\{/m);",
+                  "});",
+                  "const ceros = (t.match(/^jobs_dead_letter_total\\{[^}]*\\} 0$/gm) || []);",
+                  "console.log('series de la DLQ declaradas:', ceros.length ? ceros.join(' · ') : 'ninguna en cero');",
+                  "console.log('Se declaran al arrancar el worker. Sin eso increase() no',",
+                  "  'detecta el salto de una serie que no existía a su primer valor.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4 · Las cuatro reglas de alerta",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              }
+            ],
+            "url": {
+              "raw": "{{prometheus_url}}/api/v1/rules",
+              "host": [
+                "{{prometheus_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "rules"
+              ]
+            },
+            "description": "Las reglas de alerta cargadas en Prometheus, con su estado actual."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Prometheus es del stack local. En la nube no se despliega (despliegue-gcp.md,",
+                  "// «Lo que se deja fuera a propósito»): con prometheus_url vacía, se salta.",
+                  "if (!pm.variables.get('prometheus_url')) { pm.execution.skipRequest(); }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const reglas = [];",
+                  "pm.response.json().data.groups.forEach(g => g.rules.forEach(r => reglas.push(r)));",
+                  "const nombres = reglas.map(r => r.name);",
+                  "pm.test('están las cuatro reglas del enunciado', () => {",
+                  "  ['LatenciaAlta','TasaDeErroresAlta','TrabajoEnDeadLetterQueue',",
+                  "   'ColaAcumulandoTrabajos'].forEach(n => pm.expect(nombres).to.include(n));",
+                  "});",
+                  "reglas.forEach(r => console.log(r.name, '→', r.state || '-'));",
+                  "console.log('Las reglas viven en observability/prometheus/alertas.yml,',",
+                  "  'versionadas con el código.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5 · La serie de la cola de muertos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              }
+            ],
+            "url": {
+              "raw": "{{prometheus_url}}/api/v1/query?query=increase(jobs_dead_letter_total[5m])",
+              "host": [
+                "{{prometheus_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "query"
+              ],
+              "query": [
+                {
+                  "key": "query",
+                  "value": "increase(jobs_dead_letter_total[5m])"
+                }
+              ]
+            },
+            "description": "La consulta exacta del panel «Dead-letter queue» del tablero de Grafana."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Prometheus es del stack local. En la nube no se despliega (despliegue-gcp.md,",
+                  "// «Lo que se deja fuera a propósito»): con prometheus_url vacía, se salta.",
+                  "if (!pm.variables.get('prometheus_url')) { pm.execution.skipRequest(); }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test('la consulta del panel devuelve series', () => {",
+                  "  pm.expect(d.status).to.eql('success');",
+                  "  pm.expect(d.data.result.length, 'no hay series: ¿arrancó el worker?').to.be.at.least(1);",
+                  "});",
+                  "const viva = d.data.result.filter(r => Number(r.value[1]) > 0);",
+                  "console.log('series:', d.data.result.length, '· con incidentes:', viva.length);",
+                  "viva.forEach(r => console.log('  ', JSON.stringify(r.metric), '=', r.value[1]));",
+                  "console.log('Es la misma consulta que dibuja el panel de Grafana.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "6 · ¿Hay alguna alerta disparada?",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "*/*"
+              }
+            ],
+            "url": {
+              "raw": "{{prometheus_url}}/api/v1/alerts",
+              "host": [
+                "{{prometheus_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "alerts"
+              ]
+            },
+            "description": "Tolerante a propósito: sin incidentes no hay alertas y eso no es un fallo. Después del bloque 8b del guion, aquí aparece la de la DLQ."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Prometheus es del stack local. En la nube no se despliega (despliegue-gcp.md,",
+                  "// «Lo que se deja fuera a propósito»): con prometheus_url vacía, se salta.",
+                  "if (!pm.variables.get('prometheus_url')) { pm.execution.skipRequest(); }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const a = pm.response.json().data.alerts || [];",
+                  "const dlq = a.filter(x => x.labels.alertname === 'TrabajoEnDeadLetterQueue');",
+                  "if (dlq.length) {",
+                  "  pm.test('TrabajoEnDeadLetterQueue está disparada', () => {",
+                  "    pm.expect(dlq[0].state).to.be.oneOf(['pending','firing']);",
+                  "  });",
+                  "  console.log('estado:', dlq[0].state, '·', JSON.stringify(dlq[0].labels));",
+                  "} else {",
+                  "  console.log('Ninguna alerta activa, que es lo normal si no ha fallado',",
+                  "    'nada. El bloque 8b del guion fuerza un trabajo a la DLQ para verla.');",
+                  "}",
+                  "console.log('alertas activas ahora mismo:', a.length);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SEG-5 · Catálogo, inscripción y consumo",
+      "description": "Catálogo público, inscripción y árbol del curso con progreso.\n\nRequisito: RF-10.",
+      "item": [
+        {
+          "name": "Catálogo público (sin sesión)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/catalog/courses?q=Cloud",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "catalog",
+                "courses?q=Cloud"
+              ]
+            },
+            "description": "Público: solo cursos con una versión publicada."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('devuelve cursos', () => pm.expect(pm.response.json().items).to.have.length.above(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login como estudiante",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Guarda el token en `session_token` para las peticiones siguientes.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"estudiante1@mooc.local\",\n  \"password\": \"{{demo_password}}\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('session_token', pm.response.json().token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Inscribirse",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/enrollments",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments"
+              ]
+            },
+            "description": "Reinscribirse reactiva y conserva el progreso (RF-10).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"course_id\": \"{{course_id}}\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('enrollment_id', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Contenido con progreso",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/enrollments/{{enrollment_id}}/content",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "{{enrollment_id}}",
+                "content"
+              ]
+            },
+            "description": "El contenido textual llega ya renderizado y saneado."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('sin claves de quiz', () => pm.expect(pm.response.text()).to.not.include('is_correct'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SEG-6 · Quiz",
+      "description": "Snapshot sin claves, guardado parcial, calificación en servidor y envío idempotente.\n\nRequisito: CA-04.",
+      "item": [
+        {
+          "name": "Iniciar intento (congela el snapshot)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/enrollments/{{enrollment_id}}/quizzes/{{quiz_stable_id}}/attempts",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "{{enrollment_id}}",
+                "quizzes",
+                "{{quiz_stable_id}}",
+                "attempts"
+              ]
+            },
+            "description": "El snapshot se congela al iniciar: el profesor puede editar el quiz sin alterar este intento."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const d = pm.response.json();",
+                  "pm.collectionVariables.set('attempt_id', d.id);",
+                  "pm.test('CA-04: NINGUNA clave en el snapshot', () =>",
+                  "  pm.expect(pm.response.text()).to.not.include('is_correct'));",
+                  "const opt = d.questions[0].options[0];",
+                  "pm.test('la opción solo trae stable_id y text_md', () =>",
+                  "  pm.expect(Object.keys(opt).sort()).to.eql(['stable_id','text_md']));",
+                  "pm.collectionVariables.set('question_stable_id', d.questions[0].stable_id);",
+                  "const correcta = d.questions[0].options.find(o => o.text_md.includes('Procesos'));",
+                  "pm.collectionVariables.set('option_stable_id', correcta.stable_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Guardado parcial",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/attempts/{{attempt_id}}/answers",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "attempts",
+                "{{attempt_id}}",
+                "answers"
+              ]
+            },
+            "description": "Naturalmente idempotente: guardar de nuevo sustituye la respuesta.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"answers\": [\n    {\n      \"question_stable_id\": \"{{question_stable_id}}\",\n      \"selected_option_stable_ids\": [\n        \"{{option_stable_id}}\"\n      ]\n    }\n  ]\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Enviar (calificación en servidor)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/attempts/{{attempt_id}}/submit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "attempts",
+                "{{attempt_id}}",
+                "submit"
+              ]
+            },
+            "description": "La nota se calcula en el servidor contra las claves de la base, no contra el snapshot."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// La clave se conserva para que 'Reenviar' use la MISMA y demuestre la idempotencia.",
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.collectionVariables.set('score', d.score);",
+                  "pm.test('calificado', () => pm.expect(d.score).to.be.a('number'));",
+                  "pm.test('la política correctness no revela las claves', () =>",
+                  "  pm.expect(pm.response.text()).to.not.include('correct_option_stable_ids'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reenviar: idempotente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/attempts/{{attempt_id}}/submit",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "attempts",
+                "{{attempt_id}}",
+                "submit"
+              ]
+            },
+            "description": "Reenviar devuelve la misma nota sin recalcular (CA-04)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Se reutiliza a propósito la clave del envío anterior."
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('misma nota', () =>",
+                  "  pm.expect(pm.response.json().score).to.eql(Number(pm.collectionVariables.get('score'))));",
+                  "pm.test('la respuesta se repitió, no se recalculó', () =>",
+                  "  pm.expect(pm.response.headers.get('Idempotency-Replayed')).to.eql('true'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SEG-7 · Progreso y aprobación",
+      "description": "Señales legítimas y fraudulentas. El progreso lo calcula el servidor.\n\nRequisito: CA-05.\n\nOJO: los heartbeats exigen 10 s entre sí. Con el Collection Runner, usar `--delay-request 11000` o ejecutar a mano.",
+      "item": [
+        {
+          "name": "SEÑAL FRAUDULENTA: enviar el porcentaje",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/enrollments/{{enrollment_id}}/progress",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "{{enrollment_id}}",
+                "progress"
+              ]
+            },
+            "description": "El cliente reporta evidencias, nunca conclusiones. El intento queda AUDITADO (CA-05).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource_stable_id\": \"{{text_stable_id}}\",\n  \"kind\": \"heartbeat\",\n  \"progress_percent\": 100\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('422', () => pm.response.to.have.status(422));",
+                  "pm.test('progress.client_computed_value', () =>",
+                  "  pm.expect(pm.response.json().type).to.include('progress.client_computed_value'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Evidencia legítima: apertura",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/enrollments/{{enrollment_id}}/progress",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "{{enrollment_id}}",
+                "progress"
+              ]
+            },
+            "description": "",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource_stable_id\": \"{{text_stable_id}}\",\n  \"kind\": \"open\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202', () => pm.response.to.have.status(202));",
+                  "pm.test('aceptada', () => pm.expect(pm.response.json().accepted).to.be.true);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Heartbeat inmediato: rechazado por cadencia",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/enrollments/{{enrollment_id}}/progress",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "{{enrollment_id}}",
+                "progress"
+              ]
+            },
+            "description": "Inundar de heartbeats no simula permanencia: el reloj lo pone el servidor.\n\nEl script previo manda un heartbeat por su cuenta justo antes, para que esta petición llegue con un hueco de milisegundos **sea cual sea el retardo del runner**. Sin eso, `--delay-request 11000` hace que deje de ser inmediata y el servidor la acepta.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource_stable_id\": \"{{text_stable_id}}\",\n  \"kind\": \"heartbeat\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Esta petición demuestra el rechazo por cadencia, así que necesita que",
+                  "// acabe de llegar otra evidencia. Con un retardo grande entre peticiones",
+                  "// eso no se cumple, así que la mandamos aquí y el hueco pasa a ser de",
+                  "// milisegundos. El resultado da igual: si se acepta, reinicia el reloj del",
+                  "// servidor; si se rechaza, el reloj sigue donde estaba. En los dos casos la",
+                  "// petición de abajo cae dentro de la ventana de diez segundos.",
+                  "pm.sendRequest({",
+                  "  url: pm.variables.replaceIn('{{base_url}}/api/v1/enrollments/{{enrollment_id}}/progress'),",
+                  "  method: 'POST',",
+                  "  header: {",
+                  "    'Content-Type': 'application/json',",
+                  "    'Authorization': pm.variables.replaceIn('Bearer {{session_token}}'),",
+                  "    'Idempotency-Key': 'pm-previo-' + Date.now() + '-' + Math.random().toString(36).slice(2)",
+                  "  },",
+                  "  body: { mode: 'raw', raw: JSON.stringify({",
+                  "    resource_stable_id: pm.collectionVariables.get('text_stable_id'),",
+                  "    kind: 'heartbeat'",
+                  "  })}",
+                  "}, (err, res) => {",
+                  "  if (err) { console.warn('el heartbeat previo falló:', err); return; }",
+                  "  const d = res.json();",
+                  "  console.log('heartbeat previo →', d.accepted ? 'aceptado' : 'rechazado (' + d.reject_reason + ')');",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202', () => pm.response.to.have.status(202));",
+                  "const d = pm.response.json();",
+                  "pm.test('rechazada por cadencia', () => {",
+                  "  pm.expect(d.accepted, 'debería rechazarse: llega a milisegundos de la anterior').to.be.false;",
+                  "  pm.expect(d.reject_reason).to.eql('cadence');",
+                  "});",
+                  "console.log('El servidor exige diez segundos entre heartbeats, con SU reloj.');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Heartbeat espaciado (esperar >10 s)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{idem_key}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/enrollments/{{enrollment_id}}/progress",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "{{enrollment_id}}",
+                "progress"
+              ]
+            },
+            "description": "Ejecutar esta petición dos veces con más de 10 s entre medias para acumular permanencia.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resource_stable_id\": \"{{text_stable_id}}\",\n  \"kind\": \"heartbeat\"\n}"
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const d = pm.response.json();",
+                  "pm.test('202', () => pm.response.to.have.status(202));",
+                  "console.log('aceptada:', d.accepted, '· motivo:', d.reject_reason, '· pct:', d.progress_pct);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Progreso calculado por el servidor",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/enrollments/{{enrollment_id}}/progress",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "enrollments",
+                "{{enrollment_id}}",
+                "progress"
+              ]
+            },
+            "description": "El porcentaje sale de los recursos obligatorios y visibles. Los opcionales no cuentan."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "console.log('estado:', d.state, '·', d.required_completed + '/' + d.required_total);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SEG-8 · Insignia",
+      "description": "Emisión e insignia pública (CA-07).\n\n**Necesita que antes corran SEG-5 y SEG-7**: la sesión del estudiante y la inscripción aprobada salen de ahí. Ejecutada suelta devuelve 401 y 404.",
+      "item": [
+        {
+          "name": "Mis insignias",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{session_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/me/badges",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "me",
+                "badges"
+              ]
+            },
+            "description": "La insignia la emite el worker tras la aprobación.\n\n**Requiere haber completado SEG-7 de verdad**, es decir, con más de 10 s entre heartbeats. Si se ejecuta con el Collection Runner sin `--delay-request 11000`, la inscripción no llega a aprobada y aquí no habrá insignia. El equivalente automático es `make demo`."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json().items;",
+                  "const b = items.find(x => x.enrollment_id === pm.collectionVariables.get('enrollment_id'));",
+                  "if (!b) {",
+                  "  console.warn('Sin insignia para esta inscripción: SEG-7 no llegó a aprobada.');",
+                  "  console.warn('Ejecuta con --delay-request 11000, o usa `make demo`.');",
+                  "}",
+                  "pm.test('hay insignia para esta inscripción', () => pm.expect(b, ",
+                  "  'la inscripción no llegó a approved; ver la descripción de esta petición').to.not.be.undefined);",
+                  "if (b) pm.collectionVariables.set('badge_code', b.public_code);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verificación PÚBLICA (sin sesión)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/verify/{{badge_code}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "verify",
+                "{{badge_code}}"
+              ]
+            },
+            "description": "Pública. NO expone el correo del estudiante, y el código no deriva de su identidad (CA-07)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "pm.test('CA-07: no expone el correo', () =>",
+                  "  pm.expect(pm.response.text()).to.not.match(/@|\"email\"/));",
+                  "const d = pm.response.json();",
+                  "pm.test('trae nombre, curso y estado', () => {",
+                  "  pm.expect(d.student_name).to.be.a('string');",
+                  "  pm.expect(d.course_title).to.be.a('string');",
+                  "  pm.expect(d.status).to.eql('valid');",
+                  "});",
+                  "pm.test('la imagen está publicada y es una URL absoluta', () => {",
+                  "  pm.expect(d.image_url, 'el contrato declara image_url').to.be.a('string').and.not.empty;",
+                  "  pm.expect(d.image_url).to.match(/^https?:\\/\\//);",
+                  "});",
+                  "pm.collectionVariables.set('badge_image_url', d.image_url);",
+                  "console.log('imagen:', d.image_url);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "La imagen, descargada SIN credenciales",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "image/svg+xml"
+              }
+            ],
+            "url": {
+              "raw": "{{badge_image_url}}",
+              "host": [
+                "{{badge_image_url}}"
+              ]
+            },
+            "description": "El bucket de insignias tiene lectura anónima (ADR-0005). La URL no se firma a propósito: una insignia que caduca a los quince minutos no sirve para acreditar nada."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 sin cabecera de autorización', () => pm.response.to.have.status(200));",
+                  "pm.test('es una imagen SVG', () => {",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('image/svg+xml');",
+                  "});",
+                  "const svg = pm.response.text();",
+                  "pm.test('lleva el nombre y el código de verificación', () => {",
+                  "  pm.expect(svg).to.include(pm.collectionVariables.get('badge_code'));",
+                  "});",
+                  "pm.test('CA-07: tampoco la imagen expone el correo', () => {",
+                  "  pm.expect(svg).to.not.include('@');",
+                  "});",
+                  "console.log('La imagen es pública y no lleva el correo del estudiante.');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SEG-9 · Operación",
+      "description": "p95, escalamiento, observabilidad, fallos, backup, restauración y RTO/RPO.\n\nCriterio: arquitectura y calidad operativa (CE-01, CE-07).\n\nParcial: el escalamiento ya está verificado con `make scale`. Faltan la prueba de carga con k6, la observabilidad y la restauración medida.",
+      "item": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://35-184-146-250.sslip.io",
+      "type": "string"
+    },
+    {
+      "key": "mailpit_url",
+      "value": "http://localhost:8027",
+      "type": "string"
+    },
+    {
+      "key": "demo_password",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "nuevo_email",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "verify_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "session_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "mailpit_intento",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "prof_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "course_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "version_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "module_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "unit_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "text_stable_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "quiz_resource_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "quiz_stable_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "enrollment_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "attempt_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "question_stable_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "option_stable_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "score",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "badge_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "nonce",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "idem_key",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "asset_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "parte_1_url",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "parte_1_etag",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "sha256_prueba",
+      "value": "0d4245fc56d42398c2856fb960075fbf6f95afa58b10d44787e037d0ff8c2321",
+      "type": "string"
+    },
+    {
+      "key": "admin_token",
+      "value": ""
+    },
+    {
+      "key": "admin_id",
+      "value": ""
+    },
+    {
+      "key": "invitado_id",
+      "value": ""
+    },
+    {
+      "key": "trabajo_vivo_id",
+      "value": ""
+    },
+    {
+      "key": "trabajo_muerto_id",
+      "value": ""
+    },
+    {
+      "key": "trabajo_reencolar",
+      "value": ""
+    },
+    {
+      "key": "prometheus_url",
+      "value": ""
+    },
+    {
+      "key": "badge_image_url",
+      "value": ""
+    },
+    {
+      "key": "hls_playlist",
+      "value": ""
+    },
+    {
+      "key": "eicar",
+      "value": ""
+    },
+    {
+      "key": "eicar_sha256",
+      "value": ""
+    },
+    {
+      "key": "eicar_bytes",
+      "value": ""
+    },
+    {
+      "key": "eicar_asset",
+      "value": ""
+    },
+    {
+      "key": "eicar_url",
+      "value": ""
+    },
+    {
+      "key": "eicar_etag",
+      "value": ""
+    },
+    {
+      "key": "intentos_eicar",
+      "value": ""
+    }
+  ]
+}
