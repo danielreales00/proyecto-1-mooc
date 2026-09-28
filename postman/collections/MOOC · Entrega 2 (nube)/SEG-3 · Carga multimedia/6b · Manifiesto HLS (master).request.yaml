@@ -1,0 +1,38 @@
+$kind: http-request
+description: |-
+  El manifiesto maestro lo sirve la API, no el almacén: el bucket de derivados es privado (ADR-0005).
+
+  Cada variante se referencia con una **credencial de reproducción** de 30 minutos. Un reproductor no envía cabeceras de autorización a los sub-recursos de un manifiesto, así que la autorización tiene que viajar en la URL.
+url: "{{base_url}}/api/v1/assets/{{asset_id}}/hls/master.m3u8"
+method: GET
+headers:
+  Authorization: Bearer {{prof_token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+
+      const cuerpo = pm.response.text();
+
+      pm.test('es un manifiesto HLS', () => {
+        pm.expect(pm.response.headers.get('Content-Type')).to.include('mpegurl');
+        pm.expect(cuerpo).to.include('#EXTM3U');
+      });
+
+      pm.test('anuncia solo la variante que existe', () => {
+        pm.expect(cuerpo).to.include('RESOLUTION=640x360');
+        pm.expect(cuerpo, 'el original es 360p: anunciar 720p sería mentir')
+          .to.not.include('1280x720');
+      });
+
+      // La variante se referencia con una credencial de reproducción: es lo
+      // único que un reproductor puede llevar consigo entre los documentos del
+      // manifiesto, porque no manda cabeceras a los sub-recursos.
+      const linea = cuerpo.split('\n').find(l => l.trim() && !l.startsWith('#'));
+      pm.test('la variante lleva credencial de reproducción', () => {
+        pm.expect(linea).to.match(/^360p\.m3u8\?t=.+/);
+      });
+      pm.collectionVariables.set('hls_playlist', linea.trim());
+      console.log('variante:', linea);
+    language: text/javascript
+order: 8000

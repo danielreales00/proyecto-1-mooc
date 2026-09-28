@@ -75,9 +75,14 @@ resource "google_sql_database_instance" "pg" {
   depends_on = [var.conexion_servicios]
 }
 
+# Base y usuario se abandonan al destruir: desaparecen con la instancia. Si
+# Terraform intenta borrarlos antes, PostgreSQL se niega (el usuario es dueño
+# del esquema y la base tiene conexiones abiertas) y la reconstrucción falla.
+# Lo descubrió la prueba de reconstrucción del 28-09.
 resource "google_sql_database" "app" {
-  name     = var.base
-  instance = google_sql_database_instance.pg.name
+  name            = var.base
+  instance        = google_sql_database_instance.pg.name
+  deletion_policy = "ABANDON"
 }
 
 # --- Credencial ---------------------------------------------------------------
@@ -95,8 +100,9 @@ ephemeral "random_password" "app" {
 }
 
 resource "google_sql_user" "app" {
-  name     = var.usuario
-  instance = google_sql_database_instance.pg.name
+  name            = var.usuario
+  instance        = google_sql_database_instance.pg.name
+  deletion_policy = "ABANDON"
 
   password_wo         = ephemeral.random_password.app.result
   password_wo_version = var.version_clave

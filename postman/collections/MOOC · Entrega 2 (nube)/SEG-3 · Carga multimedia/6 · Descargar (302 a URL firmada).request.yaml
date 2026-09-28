@@ -18,8 +18,8 @@ scripts:
       });
       const destino = pm.response.headers.get('Location') || '';
       pm.test('redirige al almacén de objetos con una URL firmada', () => {
-        pm.expect(destino).to.include('X-Amz-Signature');
-        pm.expect(destino).to.include('X-Amz-Expires');
+        pm.expect(destino).to.match(/X-(Amz|Goog)-Signature/);
+        pm.expect(destino).to.match(/X-(Amz|Goog)-Expires/);
       });
       console.log('La API nunca sirve los bytes; delega en una URL que caduca.');
       console.log('Destino:', destino.split('?')[0]);

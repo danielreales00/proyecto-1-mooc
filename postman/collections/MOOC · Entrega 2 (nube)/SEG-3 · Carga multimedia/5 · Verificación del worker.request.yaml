@@ -25,16 +25,28 @@ scripts:
 
       pm.test('200', () => pm.response.to.have.status(200));
 
-      const listo = ['clean', 'ready'].includes(cuerpo.status);
+      // El asset ya no se detiene en 'clean': verificarlo encola la
+      // transcodificación, que lo lleva a 'processing' y luego a 'ready'.
+      // Se espera al estado final para que la aserción no dependa de
+      // cuándo mire.
+      const listo = ['ready', 'rejected', 'failed'].includes(cuerpo.status);
       if (!listo && intentos < 12) {
         console.log('El worker todavía no termina (estado: ' + cuerpo.status +
                     '). Reintento ' + intentos + ' de 12.');
         pm.execution.setNextRequest(pm.info.requestName);
       } else {
         pm.collectionVariables.unset('intentos_verificacion');
-        pm.test('el archivo pasó la verificación', () => {
+        pm.test('el archivo pasó la verificación y se transcodificó', () => {
           pm.expect(cuerpo.status, 'si sigue en uploaded, el worker no corrió: '
-            + 'revisa `docker compose logs worker`').to.be.oneOf(['clean', 'ready']);
+            + 'revisa `docker compose logs worker worker-media`').to.eql('ready');
+        });
+        pm.test('la escalera HLS no hace upscaling (SEG-4)', () => {
+          const variantes = (cuerpo.derivatives || [])
+            .filter(d => d.kind === 'hls_variant').map(d => d.variant);
+          pm.expect(variantes, 'el original es 360p: 720p o 1080p serían inventados')
+            .to.eql(['360p']);
+          pm.expect((cuerpo.derivatives || []).map(d => d.kind))
+            .to.include('hls_master');
         });
         pm.test('el servidor detectó el tipo REAL por los bytes', () => {
           pm.expect(cuerpo.detected_mime).to.eql('video/mp4');

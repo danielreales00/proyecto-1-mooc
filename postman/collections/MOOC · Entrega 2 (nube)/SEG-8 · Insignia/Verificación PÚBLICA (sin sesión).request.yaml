@@ -14,5 +14,11 @@ scripts:
         pm.expect(d.course_title).to.be.a('string');
         pm.expect(d.status).to.eql('valid');
       });
+      pm.test('la imagen está publicada y es una URL absoluta', () => {
+        pm.expect(d.image_url, 'el contrato declara image_url').to.be.a('string').and.not.empty;
+        pm.expect(d.image_url).to.match(/^https?:\/\//);
+      });
+      pm.collectionVariables.set('badge_image_url', d.image_url);
+      console.log('imagen:', d.image_url);
     language: text/javascript
 order: 2000

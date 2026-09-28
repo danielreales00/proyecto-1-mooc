@@ -1,0 +1,36 @@
+$kind: http-request
+name: 3 · Los contadores nacen en cero — /metrics
+description: "Las métricas que raspa Prometheus. Lo que se comprueba aquí no es que haya datos, sino que los contadores estén **declarados en cero** desde el arranque: sin eso `increase()` no ve el primer incidente."
+url: "{{base_url}}/metrics"
+method: GET
+headers:
+  Accept: "*/*"
+scripts:
+  - type: beforeRequest
+    code: |-
+      // En la nube /metrics no es público: lo lee el agente de operaciones dentro
+      // de la máquina. Con metricas_publicas=no, esta petición se salta.
+      if (pm.variables.get('metricas_publicas') === 'no') { pm.execution.skipRequest(); }
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const t = pm.response.text();
+
+      pm.test('la API expone sus métricas en formato Prometheus', () => {
+        pm.expect(t).to.include('# TYPE http_requests_total counter');
+      });
+
+      // El detalle que hace que la alerta funcione: si una serie no existe
+      // hasta su primer incidente, `increase()` no ve el salto de «nada» a 1
+      // y la alerta se queda muda justo el día que hace falta.
+      pm.test('jobs_dead_letter_total existe ANTES de que falle nada', () => {
+        pm.expect(t, 'el contador no está declarado al arrancar').to.match(
+          /^jobs_dead_letter_total\{/m);
+      });
+      const ceros = (t.match(/^jobs_dead_letter_total\{[^}]*\} 0$/gm) || []);
+      console.log('series de la DLQ declaradas:', ceros.length ? ceros.join(' · ') : 'ninguna en cero');
+      console.log('Se declaran al arrancar el worker. Sin eso increase() no',
+        'detecta el salto de una serie que no existía a su primer valor.');
+    language: text/javascript
+order: 3000

@@ -1,0 +1,27 @@
+$kind: http-request
+description: |-
+  Se pide **sin `Authorization`**, como lo haría un reproductor. Autoriza la credencial que venía en el manifiesto maestro.
+
+  Cada segmento sale reescrito como URL firmada hacia MinIO: el bucket sigue cerrado y los bytes siguen sin pasar por la API.
+url: "{{base_url}}/api/v1/assets/{{asset_id}}/hls/{{hls_playlist}}"
+method: GET
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200 sin cabecera de sesión', () => pm.response.to.have.status(200));
+
+      const cuerpo = pm.response.text();
+      const segmentos = cuerpo.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+
+      pm.test('tiene segmentos', () => pm.expect(segmentos.length).to.be.above(0));
+
+      pm.test('cada segmento va firmado hacia el almacén', () => {
+        segmentos.forEach(s => {
+          pm.expect(s, 'un segmento relativo se resolvería sin firma y daría 403')
+            .to.match(/X-(Amz|Goog)-Signature/);
+        });
+      });
+
+      console.log('segmentos firmados:', segmentos.length);
+    language: text/javascript
+order: 9000

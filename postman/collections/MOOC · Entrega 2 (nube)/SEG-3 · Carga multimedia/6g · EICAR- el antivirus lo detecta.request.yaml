@@ -1,0 +1,39 @@
+$kind: http-request
+name: "6g · EICAR: el antivirus lo detecta"
+description: |-
+  El asset acaba en `infected`, el original se mueve a `mooc-quarantine` y queda un evento de auditoría.
+
+  Lo que importa del orden: el escaneo va **antes** de la transcodificación, así que un archivo infectado no llega nunca a FFmpeg. Fíjate en que no hay derivados.
+url: "{{base_url}}/api/v1/assets/{{eicar_asset}}"
+method: GET
+headers:
+  Authorization: Bearer {{prof_token}}
+scripts:
+  - type: afterResponse
+    code: |-
+      const cuerpo = pm.response.json();
+      const intentos = Number(pm.collectionVariables.get('intentos_eicar')) + 1;
+      pm.collectionVariables.set('intentos_eicar', intentos);
+
+      pm.test('200', () => pm.response.to.have.status(200));
+
+      // El veredicto lo dan dos trabajos en cadena: se sondea.
+      const resuelto = ['infected', 'clean', 'ready', 'rejected', 'failed'].includes(cuerpo.status);
+      if (!resuelto && intentos < 15) {
+        console.log('Todavía en ' + cuerpo.status + '. Reintento ' + intentos + ' de 15.');
+        pm.execution.setNextRequest(pm.info.requestName);
+      } else {
+        pm.collectionVariables.unset('intentos_eicar');
+        pm.test('el antivirus lo marcó como infectado', () => {
+          pm.expect(cuerpo.status, 'si quedó clean, el antivirus no lo vio: '
+            + 'revisa `docker compose logs clamav worker`').to.eql('infected');
+          pm.expect(cuerpo.scan_result).to.include('Eicar');
+        });
+        pm.test('no se procesó lo que no está limpio', () => {
+          pm.expect(cuerpo.derivatives || [], 'un infectado no debe llegar a FFmpeg')
+            .to.be.an('array').that.is.empty;
+        });
+        console.log('veredicto:', cuerpo.scan_result);
+      }
+    language: text/javascript
+order: 13000

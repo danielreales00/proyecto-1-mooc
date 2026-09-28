@@ -1,0 +1,15 @@
+$kind: http-request
+name: "6e · EICAR: subir al almacén"
+description: Va directo a MinIO con la URL prefirmada, sin pasar por la API.
+url: "{{eicar_url}}"
+method: PUT
+body:
+  type: text
+  content: "{{eicar}}"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      pm.collectionVariables.set('eicar_etag', (pm.response.headers.get('ETag') || '').replace(/"/g, ''));
+    language: text/javascript
+order: 11000

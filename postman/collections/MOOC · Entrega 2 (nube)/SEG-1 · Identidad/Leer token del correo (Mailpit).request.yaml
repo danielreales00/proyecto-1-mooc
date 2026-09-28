@@ -35,7 +35,7 @@ scripts:
       pm.test(`llegó en ${intento + 1} intento(s)`, () => pm.expect(true).to.be.true);
 
       const id = mensajes[0].ID;
-      pm.sendRequest(`${pm.collectionVariables.get('mailpit_url')}/api/v1/message/${id}`, (err, res) => {
+      pm.sendRequest(`${pm.variables.get('mailpit_url')}/api/v1/message/${id}`, (err, res) => {
         pm.test('el cuerpo del correo se puede leer', () => pm.expect(err).to.be.null);
         // El token va en una línea propia; el \r del CRLF forma parte de ella.
         const m = res.json().Text.match(/^([A-Za-z0-9_-]{40,})\r?$/m);

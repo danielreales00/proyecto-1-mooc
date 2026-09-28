@@ -1,0 +1,14 @@
+$kind: http-request
+name: 1 · Vivo — /healthz
+description: "Sonda de vida. No comprueba dependencias: para eso está /readyz."
+url: "{{base_url}}/healthz"
+method: GET
+headers:
+  Accept: "*/*"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200: el proceso responde', () => pm.response.to.have.status(200));
+      console.log('Liveness: solo dice que el proceso está en pie.');
+    language: text/javascript
+order: 1000

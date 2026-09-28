@@ -1,5 +1,7 @@
 # Plataforma MOOC
 
+**Video Entrega 2: [https://youtu.be/b-06APPZTCM](https://youtu.be/b-06APPZTCM)**
+
 Plataforma web de cursos masivos abiertos en línea. Un profesor autorizado crea
 un curso estructurado en módulos, unidades y recursos, y lo publica como una
 versión inmutable. Un estudiante se registra, se inscribe, consume el contenido
@@ -400,7 +402,9 @@ medida de esa configuración fija.
 | [`arquitectura/despliegue-gcp.md`](arquitectura/despliegue-gcp.md) | Plan ejecutable, por fases, con su comprobación |
 | [`capacity-planning/pruebas_de_carga_entrega2.md`](capacity-planning/pruebas_de_carga_entrega2.md) | Definición de los dos escenarios de carga e informe de capacidad |
 | [`docs/entrega2/informe-entrega-2.md`](docs/entrega2/informe-entrega-2.md) | **Documento de arquitectura de la entrega**. El PDF sale de `make informe ENTREGA=2` |
-| Video de sustentación | *(pendiente)* |
+| [Video de sustentación](https://youtu.be/b-06APPZTCM) | Arquitectura desplegada, recorrido funcional en la nube y resultados de capacidad |
+
+**Versión evaluada:** el tag [`entrega-2`](../../tree/entrega-2).
 
 **URL de la aplicación:** `https://35-184-146-250.sslip.io` (documentación
 navegable en `/docs`). El acceso para el equipo docente se comunica por el

@@ -1,0 +1,26 @@
+$kind: http-request
+name: "6f · EICAR: completar"
+url: "{{base_url}}/api/v1/assets/{{eicar_asset}}/complete"
+method: POST
+headers:
+  Idempotency-Key: "{{idem_key}}"
+  Content-Type: application/json
+  Authorization: Bearer {{prof_token}}
+body:
+  type: text
+  content: |-
+    {
+      "parts": [{ "part_number": 1, "etag": "{{eicar_etag}}" }]
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+      pm.collectionVariables.set('intentos_eicar', 0);
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('202 Accepted', () => pm.response.to.have.status(202));
+      console.log('Ahora lo verifica un worker y lo escanea el antivirus.');
+    language: text/javascript
+order: 12000

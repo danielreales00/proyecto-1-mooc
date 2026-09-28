@@ -129,6 +129,38 @@ def comparar(etiquetas):
     guardar(fig, "e1-L3-antes-y-despues.png")
 
 
+def e2(etiquetas):
+    """Escenario 2 por nivel: cuánto tarda un video en estar listo y cuánto trabaja el Worker Server."""
+    import math
+    niveles, listos, cpu, fila = [], [], [], []
+    for et in etiquetas:
+        d, m = cargar(f"{et}.json"), cargar(f"{et}-metricas.json")
+        vals = [k6(d, f"completa_a_ready_s{{perfil:{p}}}", "med") for p in "abc"
+                if k6(d, f"completa_a_ready_s{{perfil:{p}}}", "count")]
+        niveles.append(et.replace("e2-", ""))
+        listos.append(max(vals) / 60 if vals else 0)
+        cpu.append(100 * (met(m, "cpu_uso", {"instance_name": "mooc-worker"}) or 0))
+        fila.append(max((f["max"] for f in m["metricas"].get("cola_profundidad") or []
+                         if f["serie"].get("queue") == "bulk" and f["serie"].get("state") == "pending"), default=0))
+    cargas = {"M0": "1 video/min", "M1": "3 videos/min", "M2": "6 videos/min", "M3": "12 videos/min"}
+    etq = [f"{n}\n{cargas.get(n, '')}" for n in niveles]
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(9, 3.8))
+    barras = a1.bar(etq, listos, color=["tab:green" if v < 1 else "tab:red" for v in listos])
+    for b, v in zip(barras, listos):
+        a1.annotate(f"{v * 60:.0f} s" if v < 1 else f"{v:.0f} min", (b.get_x() + b.get_width() / 2, v),
+                    ha="center", va="bottom", fontsize=8)
+    a1.set_ylabel("minutos hasta que el video está listo\n(mediana, perfil más lento del nivel)")
+    a1.set_title("Espera de un video", fontsize=9)
+    barras = a2.bar(etq, cpu, color="tab:blue")
+    for b, v in zip(barras, cpu):
+        a2.annotate(f"{v:.0f} %", (b.get_x() + b.get_width() / 2, v), ha="center", va="bottom", fontsize=8)
+    a2.set_ylim(0, 100)
+    a2.set_ylabel("CPU media del Worker Server (%)")
+    a2.set_title("Trabajo del Worker Server", fontsize=9)
+    fig.suptitle("Escenario 2: cada nivel de carga")
+    guardar(fig, "e2-por-nivel.png")
+
+
 def minutos(valores, t0):
     return [(float(t) - t0) / 60 for t, _ in valores], [float(v) for _, v in valores]
 
@@ -199,6 +231,8 @@ if __name__ == "__main__":
         e1(etqs)
     elif modo == "comparar":
         comparar(etqs)
+    elif modo == "e2":
+        e2(etqs)
     else:
         for e in etqs:
             {"serie": serie, "cola": cola}[modo](e)

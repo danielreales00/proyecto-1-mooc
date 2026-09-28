@@ -1,5 +1,5 @@
 $kind: http-request
-name: "10 · RECHAZO: reencolar un trabajo que no está en la DLQ"
+name: "11 · RECHAZO: reencolar un trabajo ya completado"
 url: "{{base_url}}/api/v1/admin/jobs/{{trabajo_vivo_id}}/requeue"
 method: POST
 headers:
@@ -26,4 +26,4 @@ scripts:
       console.log('El reencolado de verdad se demuestra en el bloque 8b,',
         'sobre el trabajo que sí acaba en la DLQ.');
     language: text/javascript
-order: 11000
+order: 12000

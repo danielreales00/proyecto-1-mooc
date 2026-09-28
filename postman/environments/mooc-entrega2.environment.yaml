@@ -1,0 +1,12 @@
+name: mooc-entrega2
+values:
+  - key: base_url
+    value: 'https://35-184-146-250.sslip.io'
+  - key: mailpit_url
+    value: 'http://localhost:8027'
+  - key: demo_password
+    value: ''
+  - key: prometheus_url
+    value: ''
+  - key: metricas_publicas
+    value: 'no'

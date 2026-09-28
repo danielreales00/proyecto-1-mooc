@@ -1,0 +1,44 @@
+$kind: http-request
+name: "6d · EICAR: declarar la carga"
+description: |-
+  Sube el archivo de prueba **EICAR**: una cadena inofensiva que todo antivirus reconoce. No es malware, es el patrón acordado para comprobar que el escáner está vivo.
+
+  Se declara como `file`, no como vídeo: lo que se demuestra aquí es el escaneo, no el tipo.
+url: "{{base_url}}/api/v1/assets/init"
+method: POST
+headers:
+  Idempotency-Key: "{{idem_key}}"
+  Content-Type: application/json
+  Authorization: Bearer {{prof_token}}
+body:
+  type: text
+  content: |-
+    {
+      "filename": "eicar.txt",
+      "content_type": "text/plain",
+      "size_bytes": {{eicar_bytes}},
+      "sha256": "{{eicar_sha256}}",
+      "kind": "file"
+    }
+scripts:
+  - type: beforeRequest
+    code: |-
+      // EICAR: el archivo de prueba estándar, inofensivo y detectado por
+      // cualquier antivirus. Se arma desde trozos a propósito: si la cadena
+      // completa estuviera escrita en este archivo, el antivirus de quien clone
+      // el repositorio pondría la colección en cuarentena.
+      const eicar = ['X5O!P%@AP[4', '\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-',
+                     'TEST-FILE!$H+H*'].join('');
+      pm.collectionVariables.set('eicar', eicar);
+      pm.collectionVariables.set('eicar_sha256', CryptoJS.SHA256(eicar).toString());
+      pm.collectionVariables.set('eicar_bytes', eicar.length);
+      pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('201', () => pm.response.to.have.status(201));
+      const c = pm.response.json();
+      pm.collectionVariables.set('eicar_asset', c.asset_id);
+      pm.collectionVariables.set('eicar_url', c.parts[0].url);
+    language: text/javascript
+order: 10000

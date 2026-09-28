@@ -1,0 +1,8 @@
+$kind: collection
+description: |-
+  Procesamiento asíncrono, fallos y observabilidad (SEG-4 de la §10.2, CA-03 y CE-07).
+
+  Ninguna petición necesita sesión: son los endpoints operativos y la API de Prometheus. La carpeta se puede ejecutar en cualquier momento y sin preparar nada.
+
+  El reencolado de un trabajo muerto se hace desde `SEG-1b · Administración`, que es donde vive la API de administración.
+order: 5000

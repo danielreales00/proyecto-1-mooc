@@ -16,7 +16,7 @@ body:
     {
       "filename": "mentira.mp4",
       "content_type": "video/mp4",
-      "size_bytes": 262144,
+      "size_bytes": 101541,
       "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
       "kind": "video"
     }
@@ -29,4 +29,4 @@ scripts:
       pm.test('201: se acepta la declaración', () => pm.response.to.have.status(201));
       console.log('El rechazo ocurre al verificar, no al declarar.');
     language: text/javascript
-order: 8000
+order: 14000

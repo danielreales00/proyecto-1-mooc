@@ -519,6 +519,14 @@ exporta de Cloud Monitoring las métricas de la misma ventana
    # 3. Protección de vuelta: el plan normal la restablece
    make tf ENTORNO=entrega2 ARGS="plan -out=p.tfplan" && make tf ENTORNO=entrega2 ARGS="apply p.tfplan"
    ```
+   **Probado el 28-09: 11 min 52 s** desde el primer `plan` hasta la
+   plataforma operativa con la base sembrada (04:25:12 a 04:37:04 UTC). La
+   instancia vieja tardó 1 min 55 s en borrarse y la nueva 4 min 18 s en
+   crearse. El primer intento falló porque Terraform borraba el usuario y la
+   base antes que la instancia; ahora llevan `deletion_policy = "ABANDON"`.
+   Después del paso 2 hay que volver a ejecutar el arranque de las dos
+   máquinas y `make semilla-nube`.
+
    Si solo se borró la base, el paso 1 la recrea y reescribe `database-url` con
    la IP y la clave nuevas en el mismo `apply`. Las máquinas leen el secreto al
    arrancar, así que después hay que volver a ejecutar su arranque

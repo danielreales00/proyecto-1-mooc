@@ -1,0 +1,28 @@
+$kind: http-request
+description: Las reglas de alerta cargadas en Prometheus, con su estado actual.
+url: "{{prometheus_url}}/api/v1/rules"
+method: GET
+headers:
+  Accept: "*/*"
+scripts:
+  - type: beforeRequest
+    code: |-
+      // Prometheus es del stack local. En la nube no se despliega (despliegue-gcp.md,
+      // «Lo que se deja fuera a propósito»): con prometheus_url vacía, se salta.
+      if (!pm.variables.get('prometheus_url')) { pm.execution.skipRequest(); }
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const reglas = [];
+      pm.response.json().data.groups.forEach(g => g.rules.forEach(r => reglas.push(r)));
+      const nombres = reglas.map(r => r.name);
+      pm.test('están las cuatro reglas del enunciado', () => {
+        ['LatenciaAlta','TasaDeErroresAlta','TrabajoEnDeadLetterQueue',
+         'ColaAcumulandoTrabajos'].forEach(n => pm.expect(nombres).to.include(n));
+      });
+      reglas.forEach(r => console.log(r.name, '→', r.state || '-'));
+      console.log('Las reglas viven en observability/prometheus/alertas.yml,',
+        'versionadas con el código.');
+    language: text/javascript
+order: 4000

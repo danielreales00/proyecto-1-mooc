@@ -17,4 +17,4 @@ scripts:
       pm.test('200: el profesor entra sin problema', () => pm.response.to.have.status(200));
       pm.collectionVariables.set('prof_token', pm.response.json().token);
     language: text/javascript
-order: 12000
+order: 13000

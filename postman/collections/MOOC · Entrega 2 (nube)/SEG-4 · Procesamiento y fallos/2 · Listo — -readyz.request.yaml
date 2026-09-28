@@ -1,0 +1,21 @@
+$kind: http-request
+name: 2 · Listo — /readyz
+description: "Sonda de disponibilidad: PostgreSQL, Redis y el almacén de objetos."
+url: "{{base_url}}/readyz"
+method: GET
+headers:
+  Accept: "*/*"
+scripts:
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const d = pm.response.json();
+      pm.test('las tres dependencias responden', () => {
+        pm.expect(d.postgres).to.eql('ok');
+        pm.expect(d.redis).to.eql('ok');
+        pm.expect(d.objectstore).to.eql('ok');
+      });
+      console.log('Readiness: comprueba PostgreSQL, Redis y el almacén.',
+        'Es lo que mira el orquestador antes de mandarle tráfico.');
+    language: text/javascript
+order: 2000

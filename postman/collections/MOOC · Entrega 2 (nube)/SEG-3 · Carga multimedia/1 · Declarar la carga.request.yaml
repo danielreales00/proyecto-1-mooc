@@ -11,14 +11,19 @@ headers:
   Authorization: Bearer {{prof_token}}
 body:
   type: text
-  content: |-
-    {
-      "filename": "archivo-de-prueba.mp4",
-      "content_type": "video/mp4",
-      "size_bytes": 262144,
-      "sha256": "2f182426a670429e79b600ae44d477ada5ae141d5dae433da2eafa3da728c731",
-      "kind": "video"
-    }
+  content: "{\r
+
+    \  \"filename\": \"archivo-de-prueba.mp4\",\r
+
+    \  \"content_type\": \"video/mp4\",\r
+
+    \  \"size_bytes\": 101541,\r
+
+    \  \"sha256\": \"0d4245fc56d42398c2856fb960075fbf6f95afa58b10d44787e037d0ff8c2321\",\r
+
+    \  \"kind\": \"video\"\r
+
+    }"
 scripts:
   - type: beforeRequest
     code: pm.collectionVariables.set('idem_key', 'pm-' + Date.now() + '-' + Math.random().toString(36).slice(2));
@@ -31,7 +36,7 @@ scripts:
       pm.collectionVariables.set('parte_1_url', d.parts[0].url);
       pm.test('una sola parte para este archivo', () => pm.expect(d.total_parts).to.eql(1));
       pm.test('la URL viene prefirmada', () =>
-        pm.expect(d.parts[0].url).to.include('X-Amz-Signature'));
+        pm.expect(d.parts[0].url).to.match(/X-(Amz|Goog)-Signature/));
       console.log('parte 1 →', d.parts[0].url.split('?')[0]);
     language: text/javascript
 order: 2000

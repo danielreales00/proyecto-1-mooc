@@ -1,0 +1,6 @@
+$kind: collection
+description: |-
+  Emisión e insignia pública (CA-07).
+
+  **Necesita que antes corran SEG-5 y SEG-7**: la sesión del estudiante y la inscripción aprobada salen de ahí. Ejecutada suelta devuelve 401 y 404.
+order: 9000

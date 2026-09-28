@@ -1,889 +1,426 @@
-# Pruebas de carga — Entrega 2
+# Pruebas de carga. Entrega 2
 
-Informe de capacidad de la plataforma MOOC sobre el despliegue básico en la nube
-pública. La ruta de este archivo la fija el enunciado de la entrega.
+Informe de capacidad de la plataforma MOOC desplegada en Google Cloud.
+Corridas del 27 y 28 de septiembre de 2026. Los resultados originales, los
+guiones y las gráficas están en este directorio (sección 9).
 
-**Estado: ejecutado (27 y 28-09-2026).** La definición de abajo se fijó antes de
-tocar el generador; los ajustes que exigió la plataforma real están en §1.1 y
-§5.2.1, y los resultados en §9, con lo medido y no con lo esperado.
+## 1. Condiciones fijas
 
-El objetivo no es alcanzar una escala de producción ni demostrar los objetivos
-finales de concurrencia del producto. Es **determinar la capacidad sostenible de
-la configuración básica, reconocer en qué condiciones empieza a degradarse y
-explicar con mediciones qué componente limita primero el flujo.**
-
----
-
-## 1. Infraestructura bajo prueba
-
-Fija durante todas las corridas. Cualquier cambio obliga a reportar los
-resultados como una configuración distinta.
-
-| Elemento | Valor | Estado |
-| --- | --- | --- |
-| Proveedor y región | Google Cloud, `us-central1` | Fijado |
-| Web Server | `e2-highcpu-2`: 2 vCPU no compartidas, 2048 MiB, 30 GiB `pd-balanced` | Fijado |
-| Worker Server | `e2-highcpu-2`: 2 vCPU no compartidas, 2048 MiB, 30 GiB `pd-balanced` | Fijado |
-| Base administrada | Cloud SQL PostgreSQL 17, `db-g1-small` (núcleo compartido, 1,7 GiB), 10 GiB SSD, zonal | Fijado |
-| Almacenamiento de objetos | Cloud Storage, cuatro buckets en `US-CENTRAL1` | Fijado |
-| Cola | Redis 7.4 en contenedor, Worker Server, AOF | Fijado |
-| Generador de carga | `mooc-generador`, `e2-standard-4` (4 vCPU, 16 GiB), `us-central1-a`, sin IP externa, sale por Cloud NAT | Fijado |
-| Versión de la aplicación | Imágenes `ef646a192a82` | Fijado |
-| Concurrencia de workers | `worker` 20 (`critical=6,default=3`); `worker-media` 1 (`bulk=1`) | Fijado |
-| Pool de conexiones | `DB_MAX_CONNS=10` por proceso en el escenario 1. La API pasó a 25 tras medirlo (§9.1.1), y el escenario 2 se mide así | Fijado por escenario |
-| Límites por IP | `RATE_LIMIT_IP_FACTOR=100` (§3.1); por cuenta y sesión sin tocar | Fijado |
-| Caché de la aplicación | Redis, base 2, sin cambios respecto a la Entrega 1 | Fijado |
-
-### 1.1 Lo que cambió respecto a esta definición
-
-- **El tipo se llama `e2-highcpu-2`.** Es la combinación exacta de 2 vCPU no
-  compartidas y 2048 MiB. Pedido como `e2-custom-2-2048`, GCP lo normaliza a
-  este nombre del catálogo.
-- **La base es `db-g1-small`, de núcleo compartido.** El presupuesto real es de
-  50 USD, y un vCPU dedicado costaba el doble. Se registra como limitación: un
-  núcleo compartido puede ralentizarse sin aviso, y si la base resulta ser el
-  límite, parte de la variación entre repeticiones puede venir de ahí.
-
-### El tipo de máquina no es un detalle
-
-El enunciado pide **2 vCPU y 2 GiB**. En el catálogo de GCP la combinación que
-más se le parece de nombre, `e2-small`, tiene **vCPU compartidas**: dos hilos
-con una fracción garantizada y capacidad de ráfaga. Medir capacidad sobre vCPU
-compartidas produce números que no se repiten, porque dependen de lo que hagan
-los vecinos y del crédito de ráfaga acumulado.
-
-Se usa un **tipo personalizado de 2 vCPU dedicadas y 2048 MiB**
-(`e2-custom-2-2048` o su equivalente vigente), que da la combinación exacta que
-pide el enunciado sin compartir CPU. Se confirma con
-`gcloud compute machine-types list` antes de la fase de aprovisionamiento y se
-registra el nombre efectivo aquí.
-
----
-
-## 2. Herramienta de generación de carga
-
-**k6**, en contenedor, con la versión fijada y registrada en cada corrida.
-
-| Criterio del enunciado | Cómo lo cumple k6 |
+| Elemento | Valor |
 | --- | --- |
-| Modelar los flujos del escenario | Guiones en JavaScript: un recorrido completo por iteración, con estado por usuario virtual |
-| Automatizar validaciones | `check()` sobre el cuerpo de la respuesta, no solo sobre el código HTTP |
-| Exportar resultados reproducibles | Resumen JSON y `--out csv` con todas las muestras |
-| Patrón de inyección controlado | Ejecutores `constant-arrival-rate` y `ramping-arrival-rate` |
-| No exigir herramienta específica | El enunciado deja la elección libre; se justifica y se registra |
+| Región y zona | `us-central1`, `us-central1-a` |
+| Web Server | `e2-highcpu-2` (2 vCPU no compartidas, 2 GiB), 30 GiB `pd-balanced`. Caddy 2.10, API y Swagger |
+| Worker Server | `e2-highcpu-2`, 30 GiB `pd-balanced`. Redis 7.4, `worker`, `worker-media`, ClamAV 1.4 y Mailpit |
+| Base de datos | Cloud SQL PostgreSQL 17, `db-g1-small` (núcleo compartido, 1,7 GiB), 10 GiB SSD, zonal |
+| Objetos | Cloud Storage, cuatro buckets en `US-CENTRAL1` |
+| Versión de la aplicación | Imágenes `ef646a192a82` |
+| Concurrencia de workers | `worker` 20 en `critical=6,default=3`. `worker-media` 1 en `bulk=1` |
+| Pool de conexiones | `DB_MAX_CONNS=10` por proceso. La API pasó a 25 tras la sección 5.4 y así se midió el escenario 2 |
+| Caché | Redis, base 2, sin cambios respecto a la Entrega 1 |
+| Límites de tasa | Los tres límites por IP multiplicados por 100 (`RATE_LIMIT_IP_FACTOR`). Los límites por cuenta y por sesión, sin cambios |
+| Generador | `mooc-generador`, `e2-standard-4` (4 vCPU, 16 GiB), `us-central1-a`, IP externa propia |
 
-Corre en contenedor como el resto del proyecto: ninguna herramienta se instala
-en ninguna máquina de nadie.
+Los límites por IP se multiplicaron porque el generador es una sola IP. Sin
+ese ajuste, `login_ip` (60 por minuto) habría medido el limitador.
 
-### Modelo abierto, no cerrado
+**El generador no limitó ninguna corrida válida.** Su CPU máxima fue del 42 %
+y no hubo errores de red de su lado. La primera corrida salía por Cloud NAT y
+perdió 813 conexiones por agotamiento de puertos. Se descartó y el generador
+pasó a tener IP externa (sección 9).
 
-Los guiones usan **tasa de llegada** (`arrival-rate`), no número de usuarios
-virtuales concurrentes.
+## 2. Herramienta
 
-La diferencia decide si la prueba sirve. Con un modelo cerrado —N usuarios en
-bucle— cuando el servidor se pone lento cada usuario espera más, la tasa de
-peticiones **baja sola** y el sistema nunca llega a acumular trabajo: la gráfica
-enseña latencia creciente y rendimiento plano, y el punto de saturación no
-aparece. Con un modelo abierto la carga ofrecida es independiente de lo que
-tarde el servidor, que es como se comporta el tráfico real y lo que hace visible
-la cola.
+k6 2.3.0, en contenedor. Modela cada recorrido como un guion en JavaScript,
+valida el cuerpo de cada respuesta con `check()` y exporta un resumen JSON por
+corrida.
 
-Consecuencia operativa: **`dropped_iterations` tiene que ser 0**. Si k6 no
-consigue mantener la tasa pedida, la corrida mide al generador y se descarta.
+Los dos escenarios usan tasa de llegada fija (`constant-arrival-rate`). La
+carga ofrecida no baja cuando el servidor se pone lento, y la saturación se ve.
+Una corrida vale solo si `dropped_iterations` es 0 o la pérdida se explica.
 
-### Verificar que el generador no limita
+## 3. Datos sintéticos
 
-Una corrida es válida solo si, además de lo anterior:
-
-- CPU del generador por debajo del 60 % durante toda la medición.
-- Sin errores de red del lado del generador (`dial`, `connection reset`).
-- La prueba de humo a tasa baja da la misma latencia que desde otra máquina.
-
-Los tres se registran junto a los resultados de cada nivel.
-
----
-
-## 3. Dos cosas que hay que ajustar antes de la primera corrida
-
-Se descubren midiendo mal una vez. Aquí están antes.
-
-### 3.1 El límite de tasa por IP convierte la prueba en una prueba del limitador
-
-El generador es **una sola máquina, una sola IP**. La plataforma limita por IP:
-
-| Regla | Límite | Sujeto |
+| Dato | Cantidad | Cómo se crea |
 | --- | --- | --- |
-| `login_ip` | 60 / min | IP |
-| `register` | 60 / hora | IP |
-| `verify_email` | 20 / min | IP |
-| `login_cuenta` | 5 / min | Cuenta |
-| `progress` | 120 / min | Sesión |
+| Estudiantes | 600 | En la base, con `make semilla-nube CARGA=1` |
+| Profesores | 10 | Igual |
+| Cursos publicados | 20 | Por la API, con `k6/preparar.js` |
+| Recursos por curso | 63: 60 lecturas y 3 quizzes de 10 preguntas | Igual |
+| Inscripciones previas | 510, el 85 % de los estudiantes | Igual |
+| Intentos previos | 200, enviados | Igual |
+| Sesiones | 600, abiertas antes de medir | Igual. El inicio de sesión no está en el recorrido medido |
 
-Por encima de un inicio de sesión por segundo, **todo lo demás es `429`**. Sin
-tocar nada, el escenario 1 mediría el limitador de tasa y no la plataforma.
+| Perfil de video | Duración | Resolución | Tamaño | Rendiciones esperadas | Segmentos de 6 s |
+| --- | --- | --- | --- | --- | --- |
+| A | 20 s | 640×360 | 1,4 MiB | 360p | 4 |
+| B | 1 min | 1280×720 | 8,3 MiB | 360p y 720p | 10 |
+| C | 2 min | 1920×1080 | 36 MiB | 360p, 720p y 1080p | 20 |
 
-**Qué se hace:** los límites por IP se suben, solo para la corrida, a un valor
-por encima de la carga ofrecida máxima; los límites **por cuenta y por sesión se
-dejan como están**, porque son los que protegen de verdad y cada usuario virtual
-tiene cuenta propia. El valor efectivo se registra como condición fija de la
-corrida, y si se ajusta a mitad de la campaña se presentan el antes y el después
-por separado, como pide el enunciado.
+Los videos se generan con `medios/generar.sh` y el FFmpeg de `worker-media`.
+Son imagen de prueba en movimiento y un tono de 440 Hz en H.264 y AAC. La
+resolución del original nunca se aumenta.
 
-Esto exige un cambio pequeño de código: hoy las reglas son constantes en
-`identity/limites.go` y `learning/http.go`, no configuración. Está anotado en
-[`alcance-entrega-2.md`](../arquitectura/alcance-entrega-2.md).
+## 4. Escenario 1. Definición
 
-**Los `429` se reportan aparte** de los errores. Un rechazo por regla de negocio
-o por límite de tasa no es un fallo del sistema, y mezclarlos infla la tasa de
-error y esconde los fallos reales.
+Cada iteración es una sesión de estudio de un estudiante con cuenta propia.
+La cuenta se elige con una permutación del número de iteración, así que dos
+iteraciones simultáneas no comparten cuenta.
 
-### 3.2 Las cuentas sintéticas no se crean por la API
-
-`register` admite 60 por hora y por IP. Crear 500 estudiantes por la API son
-más de ocho horas. El generador de datos sintéticos **escribe en la base
-directamente**, con el mismo hash de contraseña que usa la aplicación, y deja
-las cuentas ya verificadas.
-
-Y hay una razón mejor que la velocidad: registrar por la API mete
-`argon2id` de 64 MiB por cuenta en la preparación, lo que ensucia la máquina
-antes de empezar a medir.
-
----
-
-## 4. El hallazgo que condiciona el escenario 1
-
-El hash de contraseñas es **argon2id con m=64 MiB, t=3, p=2** (ADR-0006). Cada
-verificación de contraseña reserva **64 MiB** y ocupa dos hilos durante su
-cómputo.
-
-El Web Server tiene **2 vCPU y 2 GiB**. Diez inicios de sesión simultáneos piden
-640 MiB solo de memoria de trabajo del hash, en una máquina que además sostiene
-el proxy, la API y sus pools. **El inicio de sesión no escala en esta
-configuración, y no es un defecto: es el parámetro haciendo su trabajo.**
-
-Por eso el enunciado pide exactamente esta separación, y se respeta:
-
-- **Las sesiones se preparan antes de la corrida.** El generador arranca con una
-  bolsa de tokens válidos y el recorrido medido no incluye `login`.
-- **La ráfaga de inicios de sesión se ejecuta y se reporta como variante
-  separada**, con su propio nivel de carga, para no atribuir su costo a toda la
-  actividad académica.
-
-La variante de ráfaga es, además, la medición más interesante de la entrega:
-da el número exacto a partir del cual el registro de entrada tumba la máquina, y
-la propuesta de evolución que se deriva de él —bajar `m` y subir `t`, mover el
-hash fuera del Web Server, o ambas— queda respaldada por una medición.
-
----
-
-## 5. Escenario 1 — Actividad académica concurrente
-
-Estudiantes que consultan el catálogo, entran a cursos, se inscriben, consumen
-contenido, registran progreso válido y presentan quizzes.
-
-### 5.1 Conjunto de datos sintéticos
-
-Declarado y reproducible. Lo genera el sembrador y se restaura idéntico antes de
-cada nivel de carga.
-
-| Magnitud | Cantidad |
-| --- | --- |
-| Estudiantes | 600, verificados, con sesión preparada |
-| Profesores | 10 |
-| Cursos publicados | 20 |
-| Módulos por curso | 3 |
-| Unidades por módulo | 4 |
-| Recursos por unidad | 5 (texto, PDF y video) |
-| Quizzes | 1 por módulo, 10 preguntas de opción múltiple |
-| Inscripciones previas | 400, repartidas sobre los 20 cursos |
-| Intentos previos | 200 |
-
-**Cada usuario virtual usa cuenta propia, curso propio e intento propio.** Dos
-usuarios virtuales no compiten por la misma fila salvo cuando la prueba quiere
-que compitan (§5.5): si compiten siempre, se mide contención inventada por el
-guion, no por la plataforma.
-
-### 5.2 El recorrido
-
-Una iteración es una sesión de estudio plausible, no un endpoint repetido:
-
-| # | Acción | Endpoint | Peso |
+| # | Operación | Endpoint | Veces por iteración |
 | --- | --- | --- | --- |
-| 1 | Ver el catálogo | `GET /catalog/courses` (paginado por cursor) | 1 |
-| 2 | Abrir la ficha de un curso | `GET /catalog/courses/{slug}` | 1 |
-| 3 | Inscribirse, **solo la primera vez** | `POST /enrollments` | 0,15 |
-| 4 | Abrir el contenido | `GET /enrollments/{id}/content` | 1 |
-| 5 | Abrir un recurso | `GET /enrollments/{id}/resources/{rid}` | 2 |
-| 6 | Latidos de progreso | `POST /enrollments/{id}/progress` | 3 |
-| 7 | Consultar su progreso | `GET /enrollments/{id}/progress` | 1 |
-| 8 | Presentar un quiz | `POST …/attempts` + `POST …:submit` | 0,3 |
+| 1 | Catálogo | `GET /catalog/courses` | 1 |
+| 2 | Ficha del curso | `GET /catalog/courses/{slug}` | 1 |
+| 3 | Inscripción | `POST /enrollments` | 0,15 |
+| 4 | Contenido | `GET /enrollments/{id}/content` | 1 |
+| 5 | Evidencias de progreso | `POST /enrollments/{id}/progress` | 5 (2 aperturas y 3 latidos) |
+| 6 | Progreso calculado | `GET /enrollments/{id}/progress` | 1 |
+| 7 | Quiz | `POST …/attempts`, `PATCH /attempts/{id}/answers`, `POST /attempts/{id}/submit` | 0,3 |
 
-≈ **10 peticiones HTTP por iteración**, con relación lectura/escritura cercana
-al 70/30 en número de llamadas. Es más escritura que el 90/10 de referencia del
-producto (`disenos/objetivos-de-servicio.md`) porque el latido de progreso es el
-endpoint de mayor volumen real y hay que cargarlo de verdad.
+Son unas 11 peticiones por iteración, 70 % lecturas y 30 % escrituras. Entre
+acciones hay pausas de 1 a 3 s. Los latidos respetan la cadencia mínima de 10 s
+por recurso, así que una iteración dura unos 30 s. Cada respuesta se valida:
+la inscripción tiene `id`, el progreso vuelve `accepted: true`, el intento
+tiene nota.
 
-**Pausas entre acciones:** 1 a 3 segundos, uniforme. Representan lectura. Una
-iteración dura del orden de 20 a 25 segundos.
-
-**La distribución de operaciones permanece constante entre niveles.** Lo único
-que cambia de un nivel a otro es la tasa de llegada.
-
-### 5.2.1 Ajustes del recorrido al medirlo
-
-La plataforma real obligó a cuatro ajustes. Se declaran aquí porque cambian lo
-que se mide.
-
-- **«Abrir un recurso» es la evidencia `open` de progreso.** El detalle de
-  recurso `GET /enrollments/{id}/resources/{rid}` está en el contrato como
-  planificado y responde 404. El contenido ya llega en `GET /content`.
-- **Los latidos respetan la cadencia de 10 s por recurso** (ADR-0012). El guion
-  lleva la cuenta por recurso y espera lo que falte. Por eso una iteración dura
-  unos 30 s y no 20 a 25.
-- **Las inscripciones.** La preparación inscribe al 85 % de las cuentas. El 15 %
-  restante se inscribe en cada iteración, y como la inscripción es un *upsert*,
-  repetirla devuelve la misma. Es el peso 0,15 de la tabla, con escrituras
-  reales.
-- **Los recursos son de texto.** Veinte cursos con 60 lecturas y 3 quizzes de 10
-  preguntas cada uno. El video se mide en el escenario 2.
-
-La mezcla efectiva por iteración: catálogo 1, ficha 1, inscripción 0,15,
-contenido 1, evidencias de progreso 5 (2 aperturas y 3 latidos), consulta de
-progreso 1 y quiz 0,3 (inicio, respuestas y envío). Son unas 11 peticiones.
-
-### 5.3 Niveles de carga
-
-Ejecutor `constant-arrival-rate`, una tasa por nivel. La unidad es la
-**iteración completa por segundo**, no la petición.
-
-| Nivel | Iteraciones/s | ≈ Peticiones/s | ≈ Estudiantes concurrentes | Duración medida |
+| Nivel | Iteraciones/s | Calentamiento | Medición | Pausa previa |
 | --- | --- | --- | --- | --- |
-| **L0** línea base | 1 | 10 | ~25 | 8 min |
-| **L1** | 4 | 40 | ~100 | 8 min |
-| **L2** | 8 | 80 | ~200 | 8 min |
-| **L3** | 16 | 160 | ~400 | 8 min |
-| **L4** *(si L3 aguanta)* | 24 | 240 | ~600 | 8 min |
+| L0 | 1 | 2 min | 8 min | 3 min |
+| L1 | 4 | 2 min | 8 min | 3 min |
+| L2 | 8 | 2 min | 8 min, y una repetición de 15 min | 3 min |
+| L2b | 12 | 2 min | 8 min | 3 min |
+| L3 | 16 | 2 min | 8 min | 3 min |
 
-- **Calentamiento:** 2 minutos a la tasa del nivel, descartados de la medición.
-- **Pausa entre niveles:** 3 minutos, con la cola drenada y la base en reposo.
-- **Repetición cerca del límite:** el último nivel estable se repite **15
-  minutos** para comprobar que la estabilidad no era el arranque. Un sistema que
-  aguanta ocho minutos y se cae al duodécimo no sostiene esa carga.
+L2b no estaba en el plan inicial. Se añadió para acotar el punto de
+degradación entre L2 y L3.
 
-El nivel de referencia es L2: 80 peticiones/s se acerca a las ~100 req/s de
-régimen que `objetivos-de-servicio.md` deriva de la escala del enunciado. Saber
-si la configuración básica llega ahí es la pregunta que el informe contesta.
+**Criterio de éxito de un nivel.** p95 de cada operación dentro del objetivo de
+su clase (`arquitectura/disenos/objetivos-de-servicio.md`), `5xx` por debajo
+del 0,5 %, *timeouts* por debajo del 0,1 %, ninguna máquina con CPU al 100 %
+sostenido y todas las comprobaciones funcionales correctas.
 
-### 5.4 Variante separada: ráfaga de inicios de sesión
-
-No entra en los niveles de arriba. Se ejecuta aparte y se reporta aparte (§4).
-
-Ejecutor `ramping-arrival-rate` de 1 a 20 inicios de sesión por segundo en 3
-minutos, midiendo latencia de `POST /sessions`, CPU y **memoria** del Web
-Server. Criterio de parada: p95 por encima de 5 s o memoria disponible por
-debajo de 200 MiB.
-
-### 5.5 Comprobación de integridad bajo concurrencia
-
-El enunciado la exige nominalmente: *«Incluir una comprobación de envío
-duplicado sin doble calificación.»* Se ejecuta **durante** el nivel L2, no en
-reposo, porque en reposo no comprueba nada.
-
-| Comprobación | Cómo | Qué debe pasar |
+| Clase | Objetivo p95 | Operaciones del recorrido |
 | --- | --- | --- |
-| Envío duplicado con la misma `Idempotency-Key` | Dos `:submit` idénticos seguidos | Una sola calificación; la segunda respuesta repite la primera |
-| Envío duplicado **simultáneo** | Dos `:submit` en paralelo sobre el mismo intento | Una gana, la otra recibe conflicto o la misma respuesta. **Nunca dos notas** |
-| Progreso enviado por el cliente | `POST /progress` con un porcentaje inventado | Rechazado y auditado (ADR-0012) |
-| Clave del quiz | Leer el detalle del recurso y el snapshot del intento | La respuesta correcta **no aparece** (ADR-0013) |
-| Intento ajeno | Un usuario virtual intenta enviar el intento de otro | `403` |
+| Lectura cacheable | 150 ms | Catálogo y ficha |
+| Lectura autenticada | 250 ms | Contenido y progreso calculado |
+| Escritura simple | 400 ms | Guardado de respuestas |
+| Escritura compleja | 800 ms | Inscripción, inicio y envío de intento |
+| Ingesta de evidencias | 200 ms | `POST /progress` |
 
-Verificación final: `SELECT count(*)` de calificaciones por intento es siempre
-**1**. Un `200` no demuestra que el estado quedara bien; se comprueba el estado.
+**Saturación.** p95 por encima de 3 veces el objetivo, `5xx` por encima del 1 %
+o rendimiento que deja de crecer con la tasa ofrecida.
 
-### 5.6 Qué debe contestar el informe
+**Parada.** No se sube de nivel después de uno saturado.
 
-1. ¿Qué volumen de actividad sostiene la plataforma dentro de los umbrales y en
-   qué nivel empieza a degradarse?
-2. ¿Qué operaciones concentran la latencia o los errores, y cómo se relacionan
-   con la API, Redis y su cola, el pool de conexiones y PostgreSQL?
-3. ¿Se conservan la integridad de intentos, la calificación y el progreso bajo
-   concurrencia?
-4. ¿Qué cambio aumentaría la capacidad y qué medición respalda esa propuesta?
+**Integridad bajo concurrencia.** Durante L2 corre en paralelo un segundo
+recorrido, 6 veces por minuto, con cinco comprobaciones: envío simultáneo del
+mismo intento, reenvío con la misma `Idempotency-Key`, envío del intento de
+otro estudiante, clave del quiz en el snapshot y porcentaje de progreso enviado
+por el cliente.
 
-**Hipótesis previa, para contrastarla con lo medido:** el primer límite será el
-salto de red a Redis, que está en el Worker Server (ADR-0016, D2) y se cruza
-varias veces por petición autenticada —sesión, límite de tasa y, al escribir,
-encolado—. La medición que la confirma o la descarta es la latencia de la
-llamada a Redis frente a la latencia total del endpoint. Si se confirma, la
-propuesta de evolución es un Redis local a la API para sesión y caché,
-conservando la cola en el Worker Server.
+**Variante separada.** Ráfaga de inicios de sesión de 1 a 20 por segundo en
+3 minutos (`ramping-arrival-rate`). Se detiene si el p95 del login pasa de 5 s.
 
----
+## 5. Escenario 1. Resultados
 
-## 6. Escenario 2 — Carga, procesamiento y consumo multimedia
+### 5.1 Por nivel
 
-Profesores que suben video y audio **directamente al almacenamiento de
-objetos** mientras estudiantes consumen HLS ya disponible desde ese mismo
-servicio.
+Fase de medición, sin calentamiento.
 
-### 6.1 Perfiles de archivo
-
-Tres, con duración, tamaño y resolución distintos, como exige el enunciado. Las
-rendiciones esperadas salen de la escalera de `media.VariantesPara`, que **no
-sube de resolución**: un original de 360p produce una sola variante.
-
-| Perfil | Duración | Resolución | Tamaño aprox. | Rendiciones esperadas | Segmentos de 6 s |
+| Nivel | Req/s | p50 / p95 / p99 (ms) | Errores 5xx y *timeouts* | Iteraciones perdidas | Comprobaciones |
 | --- | --- | --- | --- | --- | --- |
-| **A** corto | 20 s | 640×360 | 1,4 MiB | 360p | 4 por variante |
-| **B** medio | 1 min | 1280×720 | 8,3 MiB | 360p + 720p | 10 |
-| **C** largo | 2 min | 1920×1080 | 36 MiB | 360p + 720p + 1080p | 20 |
+| L0 | 7,7 | 18 / 24 / 32 | 0 | 0 | 100,00 % |
+| L1 | 30,2 | 17 / 23 / 30 | 0 | 0 | 100,00 % |
+| L2 | 61,2 | 17 / 25 / 32 | 0 | 0 | 100,00 % |
+| L2, repetición de 15 min | 68,3 | 17 / 24 / 31 | 0 | 0 | 99,84 % |
+| L2b | 91,1 | 19 / 272 / 959 | 0 | 0 | 99,83 % |
+| L3 | 110,4 | 2893 / 8067 / 14695 | 0 | 531 | 100,00 % |
 
-**Ajuste del 27-09, antes de la primera corrida.** La definición original
-usaba 30 s, 3 min y 10 min (hasta 180 MiB). Se acortó porque un solo archivo
-de 10 min en 1080p tarda decenas de minutos en transcodificarse con 2 vCPU, y
-el drenaje entre niveles no cabía en el tiempo de la entrega. Se conservan
-los tres perfiles distintos en duración, tamaño y resolución, y la escalera
-completa de rendiciones en C.
-
-Los archivos los genera `capacity-planning/medios/generar.sh` con el mismo
-FFmpeg de `worker-media`: imagen de prueba en movimiento (`testsrc2`) y un
-tono de 440 Hz, en H.264 y AAC. No son grabaciones reales ni ruido
-incompresible; se declaran así.
-
-Son archivos reales, no ruido: un archivo sintético incompresible falsea el
-tiempo de FFmpeg. **No se aumenta artificialmente la resolución** del original
-para forzar más rendiciones.
-
-### 6.2 Los dos flujos
-
-**Carga (profesores).** Por iteración:
-
-1. `POST /assets` — autorizar y obtener las URL firmadas por parte.
-2. `PUT` de cada parte **directo a Cloud Storage**, en paralelo. Este tráfico
-   no pasa por la API y se mide aparte.
-3. `POST /assets/{id}:complete` — confirmación, responde `202`.
-4. Sondeo de `GET /assets/{id}` hasta `ready` o estado terminal de fallo.
-
-**Consumo (estudiantes).** Por espectador:
-
-1. `POST /enrollments/{id}/media-sessions` — credencial de reproducción.
-2. `GET` del master y del playlist de la variante.
-3. `GET` de segmentos **a cadencia de reproducción: uno cada 6 segundos**.
-
-La cadencia no es un detalle. Descargar todos los segmentos tan rápido como se
-pueda es otro patrón de carga —una descarga masiva, no una reproducción— y si se
-hace, se identifica como tal y se reporta por separado. Con 6 segundos por
-segmento, 60 espectadores son 10 peticiones/s al almacenamiento, no 600.
-
-### 6.3 Niveles de carga
-
-**La concurrencia de los workers permanece fija** en todos los niveles:
-`WORKER_CONCURRENCY=1` y `WORKER_QUEUES=bulk=1` en `worker-media`. Es lo que
-convierte el escenario en una medición de capacidad de procesamiento y no en una
-medición de cuántos FFmpeg caben.
-
-| Nivel | Cargas/min | Mezcla A/B/C | Espectadores | Segmentos/s | Duración |
+| Nivel | CPU web / worker / SQL | Memoria web / worker | Red del Web Server, entrada / salida | Conexiones BD máx. | Comandos Redis/s |
 | --- | --- | --- | --- | --- | --- |
-| **M0** línea base | 1 | 1/0/0 | 5 | 0,8 | 10 min |
-| **M1** | 3 | 2/1/0 | 20 | 3,3 | 10 min |
-| **M2** | 6 | 3/2/1 | 45 | 7,5 | 10 min |
-| **M3** | 12 | 6/4/2 | 90 | 15 | 10 min |
+| L0 | 8 / 6 / 10 % | 35 / 74 % | 0,17 / 0,09 MB/s | 9 | 54 |
+| L1 | 19 / 7 / 17 % | 38 / 74 % | 0,69 / 0,34 MB/s | 12 | 160 |
+| L2 | 35 / 9 / 27 % | 44 / 74 % | 1,62 / 0,69 MB/s | 14 | 361 |
+| L2, repetición | 36 / 10 / 29 % | 53 / 75 % | 2,74 / 0,69 MB/s | 16 | 412 |
+| L2b | 44 / 13 / 35 % | 55 / 75 % | 2,50 / 1,05 MB/s | 16 | 537 |
+| L3 | 44 / 11 / 40 % | 55 / 74 % | 3,03 / 1,37 MB/s | 16 | 629 |
 
-**Ajuste del 27-09, antes de la primera corrida.** Niveles de 10 minutos, y
-cada carga sondea su estado hasta 20 minutos después de confirmarse. Lo que
-no termine en ese plazo se reporta como aceptado sin terminar, con su estado,
-y se observa el drenaje antes del nivel siguiente.
-
-Las corridas de multimedia son más largas porque el trabajo asíncrono tarda:
-con M0 no tiene sentido medir diez minutos de cola si la cola se vacía en dos.
-
-**Criterio de parada:** profundidad de la cola creciendo de forma monótona
-durante 5 minutos sin señal de drenaje, o disco del Worker Server por encima del
-85 %, o memoria disponible por debajo de 150 MiB, o trabajos muertos > 0.
-
-### 6.4 Qué se mide, separado como pide el enunciado
-
-**En la API:**
-- Latencia de autorizar la carga y emitir las URL firmadas (objetivo: p95 ≤ 150 ms).
-- Latencia de la confirmación de carga completa.
-- CPU de la API mientras firma. Firmar es criptografía, y con firma sin clave
-  descargada es además una llamada de red a IAM Credentials.
-
-**En la transferencia directa:**
-- Tiempo de transferencia al almacenamiento, tasa efectiva y errores, medidos
-  **en el generador**. Este tráfico no toca la API y hay que distinguirlo del
-  tráfico de control.
-
-**En la cola y el procesamiento:**
-- Tiempo de espera en cola.
-- Duración del procesamiento, por perfil de archivo.
-- **Tiempo desde la carga completa hasta `ready`.** Es la métrica que el usuario
-  percibe.
-- Trabajos completados por unidad de tiempo, reintentos y fallos.
-- **Evolución de la profundidad y la antigüedad de la cola.** Hoy no se exportan;
-  el trabajo está anotado en `alcance-entrega-2.md` y **bloquea este escenario**.
-
-**En el almacenamiento:**
-- Latencia, tasa de transferencia y errores de las operaciones sobre objetos.
-
-**En las máquinas:**
-- CPU, memoria, red y **disco** del Worker Server. El disco importa aquí más que
-  en ningún otro sitio: el original y las tres calidades conviven en 30 GiB
-  mientras dura el trabajo.
-
-**En la reproducción:**
-- Latencia y errores al pedir manifiestos y segmentos.
-- Si se reporta tiempo hasta el primer cuadro o interrupciones de reproducción,
-  **se miden con un reproductor**. Peticiones HTTP por sí solas no demuestran
-  eso, y el enunciado lo dice expresamente. Si no se mide con reproductor, no se
-  afirma.
-
-### 6.5 Al terminar la generación de carga
-
-Observar el drenaje de la cola y verificar que **todos los trabajos aceptados
-terminan en `ready` o en un estado de fallo diagnosticable**. Un `202` de
-aceptación no equivale a una transcodificación exitosa, y contar `202` como
-éxito es la forma más común de reportar una capacidad que no existe.
-
-Además, dentro de este escenario, la evidencia que el video necesita:
-
-| Prueba | Qué demuestra |
-| --- | --- |
-| EICAR subido como video | Termina en `infected`, **sin derivados**. El orden escaneo → transcodificación se respeta también en la nube |
-| Archivo ilegible | Termina en fallo diagnosticable, no colgado |
-| Fallo con reintento | Un trabajo falla, reintenta con *backoff* y acaba bien |
-| `:complete` duplicado | No produce dos transcodificaciones (invariante 6) |
-
-### 6.6 Hipótesis previa
-
-FFmpeg en 2 vCPU será el límite del procesamiento, y la cola crecerá antes de
-que se degrade nada más. Pero hay dos candidatos que pueden llegar primero y por
-eso se vigilan desde M0:
-
-1. **La memoria del Worker Server.** `clamd` mantiene la base de firmas
-   residente, del orden de 1 GiB, y al lado tienen que caber Redis, dos procesos
-   Go y FFmpeg en 2 GiB. Si no cabe, se documenta el fallo, el ajuste mínimo
-   aplicado y su efecto en costo y capacidad, que es lo que el enunciado manda
-   hacer en ese caso.
-2. **El disco de 30 GiB**, por la convivencia de original y derivados.
-
-Si el límite es FFmpeg, la propuesta de evolución es cuantificable con lo
-medido: `job_duration_seconds{type="media.transcode_hls"}` dividido por la
-duración del original da el costo por minuto de transcodificación, y de ahí sale
-cuántas máquinas o qué tamaño harían falta para una tasa de carga dada.
-
----
-
-## 7. Métricas que se recogen en toda corrida
-
-| Origen | Métricas |
-| --- | --- |
-| Generador (k6) | p50, p95, p99, rendimiento, errores, *timeouts*, `dropped_iterations`, comprobaciones funcionales fallidas |
-| Web Server | CPU, memoria, red, disco |
-| Worker Server | CPU, memoria, red, disco |
-| Cloud SQL | CPU, memoria, conexiones activas, operaciones de E/S, consultas lentas |
-| Redis / cola | Profundidad, antigüedad del trabajo más viejo, tasa de procesamiento, reintentos, trabajos muertos |
-| Almacenamiento | Latencia, tasa de transferencia y errores por operación |
-| Aplicación | `http_request_duration_seconds`, `jobs_processed_total`, `job_duration_seconds`, `jobs_dead_letter_total`, `rate_limited_total`, `progress_rejected_total` |
-
-Memoria y disco **no están** en las métricas por defecto de Compute Engine. Se
-recogen con un agente instalado en las dos máquinas desde el aprovisionamiento;
-si se deja para después, el primer nivel de carga se ejecuta sin ellas y hay que
-repetirlo.
-
-## 8. Definición de éxito y de saturación
-
-**Éxito de un nivel** — los cuatro a la vez:
-
-| Criterio | Umbral |
-| --- | --- |
-| Latencia | p95 dentro de la clase de `objetivos-de-servicio.md`; p99 ≤ 2× el p95 de su clase |
-| Errores | `5xx` < 0,5 %; *timeouts* < 0,1 % |
-| Recursos | Ninguna máquina con CPU al 100 % sostenido, ni memoria disponible < 200 MiB |
-| Cola | Profundidad estable o decreciente al terminar el nivel; trabajos muertos = 0 |
-| Función | Todas las comprobaciones funcionales pasan |
-
-**Saturación** — cualquiera de estos:
-
-- p95 por encima de 3× el objetivo de su clase.
-- `5xx` por encima del 1 %, o *timeouts* por encima del 0,5 %.
-- Rendimiento que deja de crecer aunque suba la tasa de llegada.
-- Cola creciendo de forma monótona sin drenar.
-- Memoria agotada o proceso reiniciado por el sistema.
-
-**Lo que no cuenta como fallo:** los `429` por límite de tasa y los rechazos por
-regla de negocio —inscripción duplicada, intento agotado, progreso inválido—.
-Se cuentan aparte y se reportan aparte. Una petición rechazada por una regla que
-funciona no es una petición fallida.
-
-**Lo que no cuenta como éxito:** un `200` sin validación del resultado. Cada
-operación con efecto comprueba su estado: la inscripción existe, el progreso
-subió, el intento tiene una nota y solo una.
-
----
-
-## 9. Resultados
-
-*Pendiente de ejecución.*
-
-### 9.1 Escenario 1
-
-Corridas del 27-09-2026, imágenes `ef646a192a82`, generador en
-`mooc-generador`. Cada fila es la fase de medición (8 min; 15 en la
-repetición), sin el calentamiento. Las cifras salen de
-`make carga-tabla ARGS="e1 …"`, que lee los archivos de
-[`resultados/`](resultados/): el resumen de k6 (`<nivel>.json`) y las métricas
-de Cloud Monitoring de la misma ventana (`<nivel>-metricas.json`).
-
-| Nivel | Iter/s | Req/s | p50 / p95 / p99 (ms) | Errores (5xx + timeouts) | CPU web / worker / SQL |
-| --- | --- | --- | --- | --- | --- |
-| L0 | 1 | 7,7 | 18 / 24 / 32 | 0,00 % | 8 / 6 / 10 % |
-| L1 | 4 | 30,2 | 17 / 23 / 30 | 0,00 % | 19 / 7 / 17 % |
-| L2 | 8 | 61,2 | 17 / 25 / 32 | 0,00 % | 35 / 9 / 27 % |
-| L2, repetición 15 min | 8 | 68,3 | 17 / 24 / 31 | 0,00 % | 36 / 10 / 29 % |
-| L2b | 12 | 91,1 | 19 / 272 / 959 | 0,00 % | 44 / 13 / 35 % |
-| L3 | 16 | 110,4 | 2893 / 8067 / 14695 | 0,00 % | 44 / 11 / 40 % |
-
-| Nivel | Memoria web / worker | Conexiones BD máx. | 429 | Comprobaciones | Iteraciones perdidas |
-| --- | --- | --- | --- | --- | --- |
-| L0 | 35 / 74 % | 9 | 0 | 100,00 % | 0 |
-| L1 | 38 / 74 % | 12 | 0 | 100,00 % | 0 |
-| L2 | 44 / 74 % | 14 | 0 | 100,00 % | 0 |
-| L2, repetición | 53 / 75 % | 16 | 0 | 99,84 % | 0 |
-| L2b | 55 / 75 % | 16 | 0 | 99,83 % | 0 |
-| L3 | 55 / 74 % | 16 | 0 | 100,00 % | 531 |
-
-La CPU del generador no pasó del 13 % en ningún nivel y no hubo errores de
-red del lado del generador: las corridas son válidas (§2). La memoria del
-Worker Server es casi constante porque la ocupa `clamd` (966 MiB en reposo).
+CPU media en la ventana. El disco de las dos máquinas no pasó del 16 % en
+ninguna corrida. Ningún nivel devolvió `429`.
 
 ![Latencia por nivel](graficas/e1-latencia-por-nivel.png)
 
 ![Recursos por nivel](graficas/e1-recursos-por-nivel.png)
 
-**Las comprobaciones que fallan no son fallos del sistema.** Aparecen solo en
-las dos corridas posteriores a L3 (113 y 96 rechazos `4xx` en la medición) y
-todas son rechazos de negocio: un inicio de intento recibe `409` porque la
-cuenta tiene otro intento abierto en ese quiz. Esos intentos quedaron abiertos
-en L3, cuando la saturación cortó iteraciones a mitad del quiz (105 en la base
-al terminar). La regla que los rechaza es el índice `attempts_one_in_progress`
-y funciona como debe. El guion ya cuenta ese `409` como rechazo de negocio.
+**Variación.** L2 y su repetición de 15 minutos dan el mismo p95 (25 y 24 ms)
+con 7 % más de tráfico. El nivel es estable.
 
-**Integridad bajo concurrencia (§5.5), durante L2:**
+**Rechazos que no son fallos.** Las comprobaciones que fallan en la repetición
+de L2 y en L2b son 113 y 96 respuestas `409` al iniciar un intento. La cuenta
+tenía otro intento abierto en ese quiz, que quedó así cuando L3 cortó
+iteraciones a mitad (105 en la base). La regla que lo rechaza es el índice
+`attempts_one_in_progress`. El guion cuenta ahora ese `409` como rechazo de
+negocio.
+
+### 5.2 Por operación
+
+p95 en milisegundos. En negrita, lo que supera el objetivo de su clase.
+
+| Operación | Objetivo | L2 | L2b | L3 |
+| --- | --- | --- | --- | --- |
+| `GET /catalog/courses` | 150 | 7 | 125 | **1635** |
+| `GET /catalog/courses/{slug}` | 150 | 7 | **161** | **3154** |
+| `GET /enrollments/{id}/content` | 250 | 20 | 241 | **6089** |
+| `GET /enrollments/{id}/progress` | 250 | 14 | 236 | **6196** |
+| `POST /enrollments/{id}/progress` | 200 | 25 | **359** | **7699** |
+| `PATCH /attempts/{id}/answers` | 400 | 36 | **782** | **20491** |
+| `POST /enrollments` | 800 | 20 | 311 | **6315** |
+| `POST …/attempts` | 800 | 21 | 423 | **10551** |
+| `POST /attempts/{id}/submit` | 800 | 24 | 364 | **10828** |
+
+L2 cumple todos los objetivos. L2b incumple tres, y L3 supera 3 veces el
+objetivo en todas las operaciones. Todas se degradan a la vez, así que
+comparten un recurso. Las escrituras de varias filas se degradan primero y
+más: `PATCH /answers` escribe 10 respuestas por llamada.
+
+### 5.3 Integridad bajo concurrencia
+
+Durante L2.
 
 | Comprobación | Correctas | Fallidas |
 | --- | --- | --- |
-| Dos envíos simultáneos del mismo intento: una sola calificación | 49 | 0 |
-| Reenvío con la misma `Idempotency-Key`: la misma respuesta | 49 | 0 |
-| Enviar el intento de otro estudiante: rechazado | 48 | 0 |
-| La clave del quiz no aparece en el snapshot del intento | 49 | 0 |
-| Un porcentaje enviado por el cliente: rechazado | 49 | 0 |
+| Dos envíos simultáneos del mismo intento, una sola calificación | 49 | 0 |
+| Reenvío con la misma `Idempotency-Key`, la misma respuesta | 49 | 0 |
+| Envío del intento de otro estudiante, rechazado | 48 | 0 |
+| La clave del quiz no aparece en el snapshot | 49 | 0 |
+| Porcentaje enviado por el cliente, rechazado | 49 | 0 |
 
-### 9.1.1 El cuello de botella, y la medición que lo sostiene
+### 5.4 Cuello de botella
 
-**La capacidad sostenible es de unas 60 a 70 peticiones por segundo**: L2
-aguanta 15 minutos con p95 de 24 ms. A 91 (L2b) empieza la degradación y a
-110 (L3) el sistema está saturado. Nunca hay errores: todo lo que responde,
-responde bien, pero tarde.
-
-**Ninguna máquina llega al 100 % de CPU.** La serie de L3 lo explica: durante
-cuatro minutos aguanta, y cuando la latencia se dispara la CPU del Web Server y
-la de Cloud SQL **bajan** (de 60 a 43 % y de 54 a 41 %). Menos CPU con más
-latencia es trabajo que espera.
+En L3 la latencia sube al minuto 4,5. En ese mismo minuto la CPU del Web
+Server baja del 60 al 43 % y la de Cloud SQL del 54 al 41 %. Las conexiones a
+la base se quedan fijas en 16.
 
 ![L3 minuto a minuto](graficas/e1-L3-serie.png)
 
-Había dos candidatos y se midieron por separado, cambiando una cosa cada vez
-(se presentan antes y después, como exige la entrega):
+La CPU consumida por la base
+(`rate(cloudsql_googleapis_com:database_cpu_usage_time[1m])`) llega a 0,54
+núcleos y cae a 0,41-0,44 con la carga ofrecida intacta. Es la cuota sostenida
+del núcleo compartido de `db-g1-small` al agotar su ráfaga.
 
-| L3, 16 iter/s | Req/s | p50 / p95 (ms) | Iteraciones perdidas | Conexiones BD |
+Se midió cambiando una sola cosa en cada corrida, a la misma tasa de L3:
+
+| Configuración | Req/s | p50 / p95 (ms) | Iteraciones perdidas | Conexiones BD |
 | --- | --- | --- | --- | --- |
-| `db-g1-small`, pool de la API en 10 (configuración base) | 110,4 | 2893 / 8067 | 531 | 16 |
-| `db-g1-small`, pool de la API en 25 | 114,3 | 1654 / 5594 | 317 | 32 |
-| `db-custom-1-3840` (1 vCPU dedicado), pool en 25 | 121,2 | 17 / 27 | 0 | 19 |
-
-1. **El pool de conexiones de la API** (`DB_MAX_CONNS=10`). Se llenó en L3, y
-   ampliarlo a 25 mejoró la latencia un 30 a 40 %. Contribuye, pero no es la
-   causa.
-2. **El núcleo compartido de `db-g1-small`.** La CPU consumida por la base
-   (`cloudsql …/database/cpu/usage_time`) llega a 0,54 núcleos y, a los dos o
-   tres minutos, cae a 0,41-0,44 aunque la carga ofrecida no cambie: es la
-   cuota sostenida de un núcleo compartido cuando se agota la ráfaga. **Con un
-   vCPU dedicado, la misma carga da p95 de 27 ms y ninguna iteración perdida**,
-   el mismo comportamiento que L2.
+| `db-g1-small`, pool de la API 10 | 110,4 | 2893 / 8067 | 531 | 16 |
+| `db-g1-small`, pool de la API 25 | 114,3 | 1654 / 5594 | 317 | 32 |
+| `db-custom-1-3840` (1 vCPU dedicado), pool 25 | 121,2 | 17 / 27 | 0 | 19 |
 
 ![L3 antes y después](graficas/e1-L3-antes-y-despues.png)
 
-![L3 con vCPU dedicado, minuto a minuto](graficas/e1-L3-sql-dedicado-serie.png)
+![L3 con vCPU dedicado](graficas/e1-L3-sql-dedicado-serie.png)
 
-**El primer límite es Cloud SQL `db-g1-small`.** El segundo es el pool de la
-API. Tras las pruebas la base volvió a `db-g1-small` y el pool quedó en 25,
-que es la configuración con la que se midió el escenario 2.
+**El primer límite es Cloud SQL `db-g1-small`.** El pool de la API es el
+segundo: ampliarlo baja el p95 un 30 %. Tras la prueba la base volvió a
+`db-g1-small`.
 
-**La hipótesis previa (§5.6) se descarta.** El salto a Redis cuesta, pero no
-satura: bajo L2, la ida y vuelta desde el Web Server mide 0,68 ms de media y
-3 ms de máximo (`redis-cli --latency`, 2.774 muestras), con unos 5,2 comandos
-por petición. En serie son unos 3,5 ms, cerca del 20 % de la mediana. El
-Worker Server, donde vive Redis, no pasa del 13 % de CPU.
+Redis no limita. Bajo L2, la ida y vuelta desde el Web Server mide 0,68 ms de
+media y 3 ms de máximo (`redis-cli --latency`, 2.774 muestras). Cada petición
+hace unos 5,2 comandos, unos 3,5 ms, y el Worker Server no pasa del 13 % de CPU.
 
-### 9.1.2 Qué operaciones concentran la latencia
+### 5.5 Respuestas del escenario
 
-p95 en milisegundos por operación, en la fase de medición:
+1. **Volumen sostenible.** 61 a 68 peticiones por segundo, unos 240
+   estudiantes activos, con todos los objetivos cumplidos durante 15 minutos.
+   La degradación empieza entre 61 y 91 peticiones por segundo.
+2. **Operaciones y componentes.** Las escrituras de varias filas concentran la
+   latencia. La causa es PostgreSQL en un núcleo compartido. El pool de la API
+   es el segundo límite. Redis no interviene.
+3. **Integridad.** Se conserva. Ningún envío duplicado produjo dos
+   calificaciones (sección 5.3).
+4. **Cambio que aumenta la capacidad.** Un vCPU dedicado en la base. Con la
+   carga de L3, el p95 pasó de 5,6 s a 27 ms.
 
-| Operación | L2 (61 req/s) | L2b (91 req/s) | L3 (110 req/s) | Qué hace en la base |
-| --- | --- | --- | --- | --- |
-| `GET /catalog/courses` | 7 | 125 | 1635 | Una lectura |
-| `GET /catalog/courses/{slug}` | 7 | 161 | 3154 | Una lectura |
-| `GET /enrollments/{id}/content` | 20 | 241 | 6089 | Lectura de 63 recursos con su progreso |
-| `GET /enrollments/{id}/progress` | 14 | 236 | 6196 | Lectura agregada |
-| `POST /enrollments` | 20 | 311 | 6315 | Upsert y auditoría en una transacción |
-| `POST /enrollments/{id}/progress` | 25 | 359 | 7699 | Evidencia, estado del recurso y porcentaje |
-| `POST …/attempts` | 21 | 423 | 10551 | Snapshot del quiz e inserción |
-| `POST /attempts/{id}/submit` | 24 | 364 | 10828 | Calificación y cierre del intento |
-| `PATCH /attempts/{id}/answers` | 36 | 782 | 20491 | Diez respuestas en una llamada |
+### 5.6 Ráfaga de inicios de sesión
 
-**Todas se degradan a la vez**, y eso descarta un endpoint lento: comparten un
-recurso. **El orden sigue al trabajo en la base**: las escrituras de varias
-filas (`PATCH /answers`, iniciar y enviar intentos) se degradan primero y más,
-las lecturas simples del catálogo lo último. Es lo esperable si lo que se
-satura es la CPU de PostgreSQL. Ninguna operación falla: la degradación es
-de latencia, no de errores.
-
-### 9.1.3 Las cuatro preguntas del escenario
-
-1. **¿Qué volumen sostiene y dónde empieza la degradación?** Unas 60 a 70
-   peticiones por segundo (8 iteraciones/s de unos 30 s cada una, unos 240 estudiantes activos a la vez) con
-   p95 de 24 ms durante 15 minutos. La degradación empieza entre 61 y 91
-   peticiones por segundo, y a 110 el sistema está saturado. La referencia de
-   régimen del producto, unas 100 peticiones por segundo, **no se alcanza** con
-   esta configuración.
-2. **¿Qué operaciones concentran la latencia, y cómo se relacionan con la API,
-   Redis, el pool y PostgreSQL?** Las escrituras de varias filas (§9.1.2). La
-   causa es PostgreSQL, en un núcleo compartido que se limita a sí mismo. El
-   pool de la API es el segundo límite: se llena y reparte la espera, y
-   ampliarlo mejora un 30 a 40 %. Redis no limita (§9.1.1).
-3. **¿Se conservan la integridad y la calificación bajo concurrencia?** Sí.
-   Ninguna comprobación funcional falló por el sistema en ningún nivel, y las
-   cinco de integridad de §5.5 pasaron todas en L2, incluido el envío duplicado
-   simultáneo sin doble calificación.
-4. **¿Qué cambio aumentaría la capacidad, y qué medición lo respalda?** Un vCPU
-   dedicado en la base. Con la misma carga de L3, el p95 pasó de 5,6 s a 27 ms
-   y las iteraciones perdidas de 317 a 0 (§9.1.1).
-
-### 9.2 Ráfaga de inicios de sesión
-
-| Momento (UTC) | Demanda ofrecida | Inicios atendidos | Memoria del Web Server |
+| Hora (UTC) | Demanda ofrecida | Inicios atendidos | Memoria del Web Server |
 | --- | --- | --- | --- |
-| 23:14:30 | 1 por segundo | — | 50 % |
+| 23:14:30 | 1 por segundo | 0 | 50 % |
 | 23:15:00 | ~4 por segundo | ~0,5 por segundo | 59 % |
-| 23:15:30 | ~7 por segundo | ~1,5 por segundo | 59 %, último dato del agente |
-| 23:16:33 | ~14 por segundo | ninguno: *timeouts* de 60 s | sin datos: máquina congelada |
+| 23:15:30 | ~7 por segundo | ~1,5 por segundo | 59 %, último dato |
+| 23:16:33 | ~14 por segundo | 0, *timeouts* de 60 s | Sin datos |
 
-**El Web Server se congela a partir de unos dos inicios de sesión por
-segundo.** Cada uno es un argon2id de 64 MiB y dos hilos. La máquina despacha
-unos 1,5 por segundo; lo que llega por encima se acumula, cada uno con su
-memoria reservada, y en 2 GiB sin swap el núcleo se queda sin memoria antes
-de que el recolector de procesos actúe. El agente de métricas dejó de informar
-a la vez que la API. Hizo falta reiniciar la máquina (`gcloud compute
-instances reset`, 23:23 UTC); volvió en un minuto y sin pérdida de datos.
+Cada inicio de sesión reserva 64 MiB para argon2id. La API atiende unos 1,5
+por segundo. Por encima se acumulan y el Web Server, con 2 GiB y sin swap, se
+queda sin memoria y deja de responder. Se recuperó reiniciando la máquina. El
+criterio de parada por p95 actuó tarde porque k6 no vigila la memoria.
 
-La corrida la paró el propio criterio de parada (p95 > 5 s), pero tarde: el
-criterio de memoria (< 200 MiB) no lo vigila k6, y cuando la latencia lo
-delató la máquina ya no respondía. Queda como limitación del experimento.
+## 6. Escenario 2. Definición
 
-**Qué lo resolvería, con esta medición detrás:** limitar cuántos hashes corren
-a la vez en la API (un semáforo del tamaño de los núcleos), para que una
-ráfaga espere en cola en vez de reservar memoria sin límite. Con 2 vCPU, dos
-hashes simultáneos ocupan 128 MiB fijos y el resto espera. El costo de cada
-login no cambia; lo que cambia es que la máquina no se cae.
+**Cargas.** Por iteración, un profesor de los 10 sube un video:
 
-### 9.3 Escenario 2
+1. `POST /assets/init` autoriza la carga y firma una URL por parte de 8 MiB.
+2. `PUT` de cada parte directo a Cloud Storage, 4 en paralelo.
+3. `POST /assets/{id}/complete` une las partes y responde `202`.
+4. `GET /assets/{id}` cada 5 s, hasta un estado terminal o 20 minutos.
 
-Corridas del 28-09-2026 con los perfiles de §6.1, `db-g1-small` y el pool de
-la API en 25. Cada carga sondea su estado hasta 20 minutos después de
-confirmarla. Las cifras salen de `make carga-tabla ARGS="e2 …"`.
+**Consumo.** Cada espectador abre una sesión de reproducción
+(`POST /enrollments/{id}/media-sessions`), pide el manifiesto maestro y el
+playlist de la variante más baja, y descarga hasta 20 segmentos, cada uno
+cuando termina el anterior. Es la cadencia de reproducción, no una descarga
+masiva.
 
-**Control (API), transferencia directa y reproducción:**
+| Nivel | Cargas/min | Mezcla A/B/C | Espectadores | Duración |
+| --- | --- | --- | --- | --- |
+| M0 | 1 | 1/0/0 | 5 | 10 min |
+| M1 | 3 | 2/1/0 | 20 | 10 min |
+| M2 | 6 | 3/2/1 | 45 | 10 min |
+| M3 | 12 | 6/4/2 | 90 | 10 min |
 
-| Nivel | Cargas/min, mezcla A/B/C, espectadores | p95 autorizar / confirmar (ms) | Transferencia directa (MiB/s) | Completa→`ready`, mediana A / B / C | p95 playlist / segmento (ms) |
+Entre niveles se espera a que la cola `bulk` quede vacía. La concurrencia de
+los workers es la misma en todos los niveles.
+
+**Criterios.** Éxito si la cola drena al terminar el nivel, no hay trabajos
+muertos y el video está listo en menos de 3 veces su duración. Saturación si la
+cola crece de forma monótona durante 5 minutos. Parada del drenaje final por
+ese mismo criterio.
+
+## 7. Escenario 2. Resultados
+
+### 7.1 Control, transferencia y reproducción
+
+| Nivel | p95 autorizar / confirmar (ms) | Transferencia (MiB/s) | p95 por parte de 8 MiB (ms) | p95 manifiesto / playlist / segmento (ms) | Segmentos fallidos |
 | --- | --- | --- | --- | --- | --- |
-| M0 | 1, 1/0/0, 5 | 204 / 316 | 14,3 | 5 s / - / - | 1284 / 111 |
-| M1 | 3, 2/1/0, 20 | 256 / 543 | 16,9 | 10 s / 35 s / - | 1045 / 78 |
-| M2 | 6, 3/2/1, 45 | 308 / 562 | 20,5 | 9,4 / 9,6 / 11,3 min | 864 / 78 |
-| M3 | 12, 6/4/2, 90 | 388 / 569 | 16,9 | 11,9 / 12,7 / 14,1 min | 823 / 80 |
+| M0 | 204 / 316 | 14,3 | 100 | 7 / 1284 / 111 | 0 de 526 |
+| M1 | 256 / 543 | 16,9 | 199 | 7 / 1045 / 78 | 0 de 2.093 |
+| M2 | 308 / 562 | 20,5 | 237 | 13 / 864 / 78 | 0 de 4.689 |
+| M3 | 388 / 569 | 16,9 | 292 | 44 / 823 / 80 | 0 de 9.451 |
 
-En ningún nivel falló un segmento (0,00 %): 526, 2.093, 4.689 y 9.451
-descargados a cadencia de reproducción.
+La transferencia no pasa por la API. La CPU del Web Server no pasó del 5 %, y
+su red de 0,06 MB/s, en ningún nivel.
 
-**Cola y Worker Server:**
+**Autorizar no cumple su objetivo de 150 ms ni en M0**, con 204 ms. Cada firma
+es una llamada a IAM `signBlob` de unos 200 ms. Confirmar supera su objetivo de
+300 ms porque une las partes con `compose`. El playlist cuesta de 0,8 a
+1,3 s porque firma cada segmento. Ninguno empeora con la carga.
 
-| Nivel | Cargas lanzadas / en `ready` al terminar el sondeo | Cola `bulk` máx. | Antigüedad máx. | CPU Worker Server, media / máx. | Memoria Worker Server máx. |
+### 7.2 Procesamiento
+
+| Nivel | Cargas lanzadas / en `ready` al terminar el sondeo | Transcodificaciones/min | De la confirmación a `ready`, mediana A / B / C | Cola `bulk` máx. | Antigüedad máx. |
 | --- | --- | --- | --- | --- | --- |
-| M0 | 11 / 11 | 0 | 0 | 16 / 70 % | 89 % |
-| M1 | 31 / 31 | 0 | 0 | 51 / 60 % | 85 % |
-| M2 | 43 / 41 | 779 | 16 min | 86 / 96 % | 90 % |
-| M3 | 71 / 33 | 2831 | 17 min | 85 / 96 % | 90 % |
+| M0 | 11 / 11 | 1,0 | 5 s / - / - | 0 | 0 |
+| M1 | 31 / 31 | 2,8 | 10 s / 35 s / - | 0 | 0 |
+| M2 | 43 / 41 | 1,3 | 9,4 / 9,6 / 11,3 min | 779 | 16 min |
+| M3 | 71 / 33 | 1,3 | 11,9 / 12,7 / 14,1 min | 2.831 | 17 min |
 
-El disco del Worker Server no pasó del 15 %.
+| Nivel | CPU Worker Server, media / máx. | Memoria Worker Server máx. | Red del Worker Server, entrada / salida | Disco máx. | Reintentos / muertos |
+| --- | --- | --- | --- | --- | --- |
+| M0 | 16 / 70 % | 89 % | 0,09 / 0,90 MB/s | 15 % | 0 / 0 |
+| M1 | 51 / 60 % | 85 % | 0,62 / 0,59 MB/s | 14 % | 0 / 0 |
+| M2 | 86 / 96 % | 90 % | 2,89 / 1,49 MB/s | 15 % | 0 / 0 |
+| M3 | 85 / 96 % | 90 % | 4,67 / 1,25 MB/s | 15 % | 1 / 0 |
 
 ![Cola en M2](graficas/e2-M2-cola.png)
 
 ![Cola en M3](graficas/e2-M3-cola.png)
 
-**Lo que ya se ve en M0 y M1:**
-
-- **El tráfico de control es barato, salvo el playlist.** Autorizar la carga y
-  firmar sus partes cuesta un p95 de 204 a 256 ms, y confirmarla (que une las
-  partes con `compose`) de 316 a 543 ms. Pedir el playlist de una variante
-  cuesta un p95 de 1 a 1,3 s, cuando el manifiesto maestro cuesta 7 ms. La API
-  firma ahí una URL por segmento con una llamada a IAM `signBlob`, unos 200 ms
-  cada una medida en B1, y el costo crece con la duración del video.
-- **La transferencia directa no pasa por la API.** El generador sube las
-  partes a Cloud Storage a unos 15 a 17 MiB/s, con un p95 de 100 a 200 ms por
-  parte de 8 MiB, y ningún error.
-- **La reproducción aguanta.** 2.093 segmentos en M1 a cadencia de
-  reproducción, con p95 de 78 ms y ningún fallo.
-- **La cola no se acumula.** En M1, con 3 cargas por minuto de A y B, nunca
-  hay trabajo pendiente, y ninguna carga tarda más de 40 s de la confirmación
-  a `ready`.
-- **La memoria del Worker Server es lo más ajustado.** `clamd` ocupa 966 MiB en
-  reposo y FFmpeg lleva la máquina al 85-89 %.
-
-### 9.3.1 El cuello de botella del procesamiento
-
-**La capacidad sostenible está entre 3 y 6 cargas por minuto** con esta
-mezcla. En M1 cada video está listo en segundos. En M2 la cola crece sin
-drenar y un video tarda de 9 a 11 minutos. En M3 el procesamiento está
-saturado muy por encima de su capacidad. La API, la transferencia directa y
-la reproducción no se degradan en ningún nivel.
-
-**El límite es FFmpeg con un solo worker.** La duración real de cada
-transcodificación, medida en la base
+Duración de cada transcodificación, medida en la base
 (`resultados/estado-de-la-base-tras-las-corridas.txt`):
 
-| Perfil | Transcodificaciones | Duración media | Por minuto de video |
+| Perfil | Transcodificaciones | Duración media | Espera en cola en M2 |
 | --- | --- | --- | --- |
-| A, 20 s en 360p | 85 | 3,3 s | ~10 s |
-| B, 1 min en 720p | 45 | 33 s | ~33 s |
-| C, 2 min en 1080p, tres variantes | 16 | 196 s | ~98 s |
+| A | 85 | 3,3 s | ~9,3 min |
+| B | 45 | 33 s | ~9,0 min |
+| C | 16 | 196 s | ~8,0 min |
 
-Un único `worker-media` con concurrencia 1 dispone de 60 s de FFmpeg por
-minuto. M1 pide unos 40 s por minuto (2 A y 1 B), así que le cabe. M2 pide
-unos 272 (3 A, 2 B y 1 C): **4,5 veces su capacidad**, y el perfil C solo ya
-pide 196. La CPU del Worker Server lo confirma: pasa de una media del 51 % en
-M1 al 86 % en M2, con picos del 96 %. La memoria se sostiene en el 90 % sin
-fallos, con `clamd` y FFmpeg a la vez, y el disco no es un factor.
+La espera en cola es la mediana de la confirmación a `ready` menos la duración
+media del procesamiento.
 
-**Al terminar, nada quedó perdido.** Media hora después de M3, 58 de sus 71
-cargas estaban en `ready`, 12 en `clean` (verificadas, escaneadas y esperando
-su turno para FFmpeg) y 1 en `processing`. Ninguna en un estado de fallo. En
-toda la campaña, 163 verificaciones y 163 escaneos terminaron bien, y ningún
-trabajo de medios murió. Un `202` de aceptación no es una transcodificación:
-por eso se contó en la base.
+**Drenaje.** El drenaje final de M3 se cortó a los 6 minutos porque la cola
+crecía de forma monótona. Media hora después, 58 de las 71 cargas de M3
+estaban en `ready`, 12 en `clean` (verificadas, esperando FFmpeg) y 1 en
+`processing`. Ninguna en un estado de fallo. En toda la campaña terminaron bien
+163 verificaciones, 163 escaneos y 148 transcodificaciones. La única
+transcodificación fallida, en M3, se reintentó con éxito.
 
-**La cola exagera el atraso, y la causa es un hallazgo.** Con la cola
-atascada, el reaper (ADR-0008) republica los trabajos que llevan tiempo en
-`queued`, aunque sigan esperando en Redis. Hasta el final de M2 lo hizo 1.477
-veces. La
-idempotencia los descarta (602 escaneos y 254 transcodificaciones
-duplicadas), **y ningún video se transcodificó dos veces**, pero la
-profundidad se infla: en M2 marcaba 621 con solo 2 transcodificaciones reales
-pendientes. Explica los dientes de sierra de la gráfica: la cola sube mientras
-el único FFmpeg trabaja y cae de golpe cuando el worker, libre, descarta
-cientos de duplicados en segundos. La medida fiable del atraso es el tiempo de
-la confirmación a `ready`.
+**La profundidad de la cola exagera el atraso.** El reaper republica los
+trabajos que llevan tiempo en `queued` aunque sigan esperando en Redis. La
+idempotencia descartó 856 duplicados en M2 y 1.698 en M3, y ningún video se
+transcodificó dos veces. Por eso la cola cae de golpe cuando el worker queda
+libre. El atraso real lo mide el tiempo hasta `ready`.
 
-**El tráfico de control más caro es el playlist.** Pedir el playlist de una
-variante cuesta un p95 de 0,8 a 1,3 s, cuando el manifiesto maestro cuesta
-7 ms. La API firma una URL por segmento con una llamada a IAM `signBlob`, de
-unos 200 ms cada una (medido en B1). No limita, pero es la carga de la API
-que más crece con la duración del video.
+### 7.3 Cuello de botella
 
-**Limitaciones del experimento.** En M3, k6 lanzó 71 de las 120 cargas
-previstas (50 iteraciones perdidas): cada carga retiene su usuario virtual
-hasta 20 minutos mientras sondea su estado, y el grupo no alcanzó a sostener
-la tasa. El máximo probado es por tanto 71 cargas en 10 minutos. El drenaje
-final de M3 se cortó a los 6 minutos por el criterio de parada (cola creciendo
-de forma monótona más de 5 minutos), y el estado final se comprobó en la base.
-No se midió tiempo hasta el primer cuadro ni cortes de reproducción: haría
-falta un reproductor, y las peticiones HTTP no lo demuestran.
+**El límite es FFmpeg con un solo `worker-media`.** La mezcla de M1 pide unos
+40 s de transcodificación por minuto (2 A y 1 B). La de M2 pide unos 272 s
+(3 A, 2 B y 1 C), 4,5 veces los 60 s por minuto de un worker con concurrencia
+1. La CPU del Worker Server pasa del 51 al 86 % y el ritmo se queda en unas 1,3
+transcodificaciones por minuto. La memoria se sostiene en el 90 % y el disco no
+interviene.
 
-### 9.4 Punto de degradación y cuello de botella
+**La capacidad sostenible está entre 3 y 6 cargas por minuto** con esta mezcla.
+M1 cumple el objetivo de video listo en menos de 3 veces su duración. M2 no lo
+cumple: el perfil C tarda 11,3 minutos para un video de 2.
 
-| Escenario | Capacidad sostenible | Se degrada | Primer límite | Evidencia |
-| --- | --- | --- | --- | --- |
-| 1, actividad académica | 60 a 70 req/s, p95 24 ms | Entre 61 y 91 req/s | Cloud SQL `db-g1-small`, núcleo compartido | CPU de la base limitada a 0,41 núcleos. Con vCPU dedicado, p95 de 27 ms con la misma carga (§9.1.1) |
-| 1, ráfaga de inicios de sesión | ~1,5 inicios/s | A partir de ~2/s | Memoria del Web Server (argon2id, 64 MiB por inicio) | La máquina se congela y hay que reiniciarla (§9.2) |
-| 2, multimedia | 3 a 6 cargas/min | Entre 3 y 6 cargas/min | FFmpeg con un solo worker | 272 s de FFmpeg pedidos por minuto frente a 60. CPU del Worker Server al 86-96 % (§9.3.1) |
+| Cambio | Efecto esperado según lo medido |
+| --- | --- |
+| Más capacidad de procesamiento | Es el cambio que sube la capacidad. Con la mezcla de M2 hacen falta unos 5 `worker-media` en máquinas separadas. Un segundo FFmpeg en la misma máquina no ayuda, con la CPU al 86-96 % |
+| Una CDN | No cambia el límite. Quita a la API la firma por segmento del playlist (0,8 a 1,3 s) con una cookie firmada por sesión, y descarga Cloud Storage |
+| Más concurrencia de transferencias | No cambia el límite. La carga directa corre a 14-20 MiB/s y nunca limitó. Subir más rápido solo llena antes la cola |
 
-### 9.5 Propuesta de evolución
+## 8. Propuesta de evolución
 
-Cada propuesta con la medición que permite esperar que aumente la capacidad.
+| Cambio | Medición que lo respalda |
+| --- | --- |
+| Cloud SQL con vCPU dedicado | Con la carga de L3, p95 de 5,6 s a 27 ms y 0 iteraciones perdidas |
+| Varios `worker-media` que escalen con el tiempo de espera de la cola | 272 s de FFmpeg pedidos por minuto frente a 60, CPU al 86-96 % |
+| Cloud CDN con cookie firmada | Playlist de 0,8 a 1,3 s por la firma de cada segmento |
+| Limitar los hashes de contraseña simultáneos | Una ráfaga de unos 2 inicios de sesión por segundo congela el Web Server |
+| Reaper que no republique trabajos todavía en cola | 2.554 duplicados descartados en M2 y M3 |
+| Redis local a la API para sesiones y límites | 3,5 ms por petición. No limita hoy. Es la hipótesis siguiente cuando la base deje de serlo |
 
-1. **Cloud SQL con vCPU dedicado.** Medido: con `db-custom-1-3840` y la misma
-   carga de L3, el p95 bajó de 5,6 s a 27 ms y las iteraciones perdidas de 317
-   a 0. Es el cambio de más efecto y menos costo (unos 0,07 USD/h frente a
-   0,035).
-2. **Más capacidad de procesamiento, no más concurrencia en la misma
-   máquina.** La CPU del Worker Server ya está al 86-96 % con un FFmpeg, así
-   que un segundo en la misma máquina se repartiría la CPU. Con la mezcla de M2
-   hacen falta unas 4,5 veces más horas de FFmpeg: unos cinco `worker-media`
-   de 2 vCPU. Es el caso para un grupo de instancias que escale con la
-   profundidad real de la cola.
-3. **Una CDN.** No cambia el límite del procesamiento. Sí quita trabajo a la
-   API: con la cookie firmada de CDN (ADR-0015, D2, que el contrato ya
-   prevé) la firma es una por sesión y no una por segmento, y el playlist deja
-   de costar casi un segundo. Además acercaría los segmentos al estudiante y
-   descargaría Cloud Storage.
-4. **La concurrencia de las transferencias no es palanca.** La carga directa
-   corre a 15-20 MiB/s con 4 partes en paralelo y nunca fue el límite. Subir
-   más rápido solo llenaría antes la cola.
-5. **Acotar los hashes simultáneos en la API.** Un semáforo del tamaño de los
-   núcleos haría que una ráfaga de inicios de sesión espere en cola en vez de
-   agotar la memoria del Web Server (§9.2).
-6. **Que el reaper no duplique trabajos que siguen en cola.** Publicar con el
-   `job_key` como identificador de tarea de asynq haría que Redis rechace el
-   duplicado. La cola mostraría el atraso real (§9.3.1).
-7. **Redis local para sesiones, más adelante.** El salto a Redis cuesta unos
-   3,5 ms por petición (§9.1.1). No limita hoy, pero es la hipótesis siguiente
-   cuando la base deje de serlo.
+## 9. Limitaciones
+
+- `db-g1-small` es de núcleo compartido y sin SLA. Parte de la variación puede
+  venir de ahí.
+- En M3, k6 lanzó 71 de las 120 cargas previstas. Cada carga retiene su usuario
+  virtual hasta 20 minutos mientras sondea, y el grupo no sostuvo la tasa. El
+  máximo probado es 71 cargas en 10 minutos.
+- La ráfaga de inicios de sesión no vigiló la memoria y congeló el Web Server.
+- Los videos son sintéticos. No se midió tiempo hasta el primer cuadro ni
+  cortes de reproducción, porque haría falta un reproductor.
+- Las métricas de la aplicación se leen cada 30 s. Picos de menos duración
+  pueden no verse.
 
 ## 10. Reproducir estas pruebas
 
 | Qué | Dónde |
 | --- | --- |
-| Guiones de k6 (versión 2.3.0, en contenedor) | [`k6/`](k6/): `preparar.js`, `escenario1.js`, `rafaga-login.js`, `preparar-medios.js`, `escenario2.js` y lo común en `comun.js` y `medios.js` |
-| Datos sintéticos | Cuentas: `make semilla-nube CARGA=1`. Cursos, sesiones, inscripciones e intentos: `preparar.js`. Videos: [`medios/generar.sh`](medios/generar.sh) |
-| Resultados originales | [`resultados/`](resultados/): el resumen de k6 y las métricas de Cloud Monitoring de cada corrida, con el mismo nombre |
+| Guiones de k6 | [`k6/`](k6/): `preparar.js`, `escenario1.js`, `rafaga-login.js`, `preparar-medios.js`, `escenario2.js`, `comun.js` y `medios.js` |
+| Videos | [`medios/generar.sh`](medios/generar.sh) |
+| Resultados originales | [`resultados/`](resultados/): el resumen de k6 (`<corrida>.json`) y las métricas de Cloud Monitoring de la misma ventana (`<corrida>-metricas.json`) |
+| Estado de la base tras las corridas | [`resultados/estado-de-la-base-tras-las-corridas.txt`](resultados/estado-de-la-base-tras-las-corridas.txt) |
 | Tablas y gráficas | [`metricas/tabla.py`](metricas/tabla.py) y [`metricas/graficas.py`](metricas/graficas.py), que leen `resultados/` |
-| Exportación de métricas | [`metricas/exportar.py`](metricas/exportar.py), PromQL contra Cloud Monitoring en la ventana de cada corrida |
+| Exportación de métricas | [`metricas/exportar.py`](metricas/exportar.py), PromQL contra Cloud Monitoring |
 
 ```bash
-make semilla-nube CARGA=1                   # 600 estudiantes y 10 profesores
-make carga-sincronizar && make carga-medios # guiones y videos al generador
+make semilla-nube CARGA=1
+make carga-sincronizar && make carga-medios
 make carga K6=preparar.js ETIQUETA=preparar
 make carga-nivel K6=escenario1.js ETIQUETA=e1-L2 ARGS="-e TASA=8 -e INTEGRIDAD=1"
 make carga-nivel K6=rafaga-login.js ETIQUETA=e1-rafaga-login ARGS="-e HASTA=20"
 make carga K6=preparar-medios.js ETIQUETA=preparar-medios
-make carga-nivel K6=escenario2.js ETIQUETA=e2-M1 \
-  ARGS="-e CARGAS=3 -e MEZCLA=2/1/0 -e ESPECTADORES=20 -e DURACION=10m -e ESPERA_MAX=20"
+make carga-nivel K6=escenario2.js ETIQUETA=e2-M2 \
+  ARGS="-e CARGAS=6 -e MEZCLA=3/2/1 -e ESPECTADORES=45 -e DURACION=10m -e ESPERA_MAX=20"
 make carga-tabla ARGS="e1 e1-L0 e1-L1 e1-L2"
 make carga-graficas ARGS="e1 e1-L0 e1-L1 e1-L2 e1-L2b e1-L3"
 ```
 
 Los archivos con sesiones (`datos.json`, `medios.json`) se quedan en el
-generador y nunca entran al repositorio.
+generador y no entran al repositorio.
 
-**Corridas descartadas**, que se conservan en `resultados/` por transparencia:
+**Corridas descartadas**, conservadas en `resultados/`:
 
-- `e1-L0-invalida-nat`. El generador salía por Cloud NAT, que reserva 64
-  puertos por VM y destino, y perdió 813 conexiones. Desde entonces tiene IP
-  externa propia.
-- `e1-L0-descartada-mezcla`. El guion elegía la cuenta por número de
-  iteración y a 1 iteración/s nunca llegaba a las cuentas por inscribir. Ahora
-  el índice se permuta.
-
-Las gráficas y las capturas sirven como evidencia, no sustituyen la
-interpretación. El informe relaciona las métricas del generador con las del Web
-Server, el Worker Server, PostgreSQL, Redis y el almacenamiento, para explicar
-**qué ocurrió y por qué**.
+- `e1-L0-invalida-nat`. El generador salía por Cloud NAT y perdió 813
+  conexiones.
+- `e1-L0-descartada-mezcla`. La elección de cuenta dejaba fuera las cuentas por
+  inscribir y la mezcla no era la de los demás niveles.

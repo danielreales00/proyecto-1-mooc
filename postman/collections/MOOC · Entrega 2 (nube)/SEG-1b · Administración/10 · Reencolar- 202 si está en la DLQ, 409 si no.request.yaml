@@ -1,0 +1,45 @@
+$kind: http-request
+name: "10 · Reencolar: 202 si está en la DLQ, 409 si no"
+description: Sirve para los dos casos. En el bloque 8b del guion, después de que un trabajo llegue a la DLQ, devuelve 202. En una ejecución normal no hay trabajos muertos y devuelve 409.
+url: "{{base_url}}/api/v1/admin/jobs/{{trabajo_reencolar}}/requeue"
+method: POST
+headers:
+  Accept: application/json
+  Authorization: Bearer {{admin_token}}
+  Idempotency-Key: "{{idem_key}}"
+scripts:
+  - type: beforeRequest
+    code: |-
+      pm.collectionVariables.set('idem_key', 'seg1b-' + Date.now() + '-' +
+        Math.random().toString(36).slice(2, 8));
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      const muerto = pm.collectionVariables.get('trabajo_muerto_id');
+      const usado = pm.collectionVariables.get('trabajo_reencolar');
+      const eraMuerto = muerto && String(muerto) === String(usado);
+
+      if (eraMuerto) {
+        pm.test('202: el trabajo muerto vuelve a la cola', () => {
+          pm.expect(pm.response.code).to.eql(202);
+        });
+        const t = pm.response.json();
+        pm.test('vuelve con la MISMA job_key', () => {
+          pm.expect(t.job_key).to.be.a('string').and.not.empty;
+          pm.expect(t.status).to.eql('queued');
+        });
+        console.log('job_key:', t.job_key, '· estado:', t.status, '· intento:', t.attempt);
+        console.log('Se reencola con la misma clave, así que volver a ejecutarlo',
+          'no produce una segunda salida: el reclamo atómico lo impide.');
+      } else {
+        pm.test('409: solo se reencola lo que está muerto o falló', () => {
+          pm.expect(pm.response.code).to.eql(409);
+        });
+        pm.test('el problema viene tipado', () => {
+          pm.expect(pm.response.json().type).to.include('not_requeueable');
+        });
+        console.log('El trabajo usado ya se completó, así que se rechaza.',
+          'Reencolarlo lo ejecutaría por segunda vez sin motivo.');
+      }
+    language: text/javascript
+order: 11000

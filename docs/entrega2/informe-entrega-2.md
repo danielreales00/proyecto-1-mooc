@@ -3,8 +3,7 @@
 Santiago Chica Castano, Josue Briceño Urquijo, Daniel Alfredo Reales Paba y
 Michael Javier Patiño Pantoja.
 
-Plataforma MOOC en Google Cloud sobre dos máquinas virtuales. URL pública
-`https://35-184-146-250.sslip.io`.
+URL pública `https://35-184-146-250.sslip.io`.
 
 ## Qué cambió desde la Entrega 1
 
@@ -221,7 +220,9 @@ Cloud SQL hace una copia diaria, la conserva siete días y la mantiene aunque se
 borre la instancia. La reconstrucción es `terraform apply`, sembrar y pasar la
 colección, con los pasos en `arquitectura/despliegue-gcp.md`.
 
-PENDIENTE_TIEMPO_RECONSTRUCCION
+Recrear la base y dejar la plataforma operativa tardó 11 min 52 s el 28 de
+septiembre. Incluye 2 minutos de corregir el procedimiento, que borraba el
+usuario y la base antes que la instancia.
 
 ### Seguridad de la sesión
 
@@ -310,23 +311,23 @@ por día.
 | Métricas de la aplicación | 0,06 USD/millón de muestras | 0,17 | 0 |
 | **Total** | | **3,82** | **0,52** |
 
-Este costo, 3,82 USD al día, es el de tener todo encendido todo el tiempo. Con
-Terraform se detienen las máquinas y la base
+Los 3,82 USD al día son con todo encendido. Con Terraform se detienen las máquinas y la base
 (`maquinas_encendidas` y `cloudsql_encendida`), y entonces solo se paga lo que
 queda persistido: discos, la IP reservada y los objetos, unos 0,52 USD al día.
-La IP reservada es lo que más cuesta detenido, y se conserva porque el nombre
-público y el certificado dependen de ella. El generador de carga suma 3,44 USD
+La IP reservada es lo que más cuesta detenido y se conserva por el nombre
+público. El generador de carga suma 3,44 USD
 al día mientras existe y se borra al terminar de medir.
 
 El presupuesto `mooc-entrega2` es de 50 USD y avisa al 50, 80 y 100 %. Excluye
 los créditos de la cuenta educativa, porque con ellos ninguna alerta saltaría.
 
-Con la instancia detenida, Cloud SQL deja de cobrar cómputo y siguen el
-almacenamiento y la IP. La documentación de Google, consultada el 28 de
-septiembre, no fija una duración máxima ni una reactivación automática. Al
-cerrar la entrega la instancia se borra y sus copias se conservan.
+Detenida, Cloud SQL cobra almacenamiento e IP. La documentación de Google,
+consultada el 28 de septiembre, no fija duración máxima ni reactivación
+automática. Al cerrar la entrega la instancia se borra y sus copias quedan.
 
-PENDIENTE_CONSUMO_OBSERVADO
+El consumo observado no se pudo contrastar. La consola muestra 0,03 USD netos
+porque la cuenta educativa paga con créditos y los datos llegan con un día de
+retraso.
 
 ## 11. Riesgos y deuda técnica
 
@@ -358,11 +359,10 @@ PENDIENTE_CONSUMO_OBSERVADO
 | Varios `worker-media` que escalen con la cola real | 4,5 veces más FFmpeg del disponible, con la CPU al 90 % |
 | Cloud CDN con cookie firmada | Cada playlist tarda cerca de 1 s firmando sus segmentos con IAM |
 | Acotar los hashes simultáneos | La ráfaga de logins agota la memoria del Web Server |
-| Reaper que no duplique trabajos en cola | 1.477 republicaciones que la idempotencia descartó |
+| Reaper que no duplique trabajos en cola | 2.554 duplicados descartados por la idempotencia en M2 y M3 |
 
-Ninguno exige cambiar el contrato de la API. Con los dos primeros, el paso
-siguiente es separar la API y los workers en grupos de instancias que escalen
-por separado, que es la arquitectura objetivo de la sección 9.
+Ninguno cambia el contrato de la API. El paso siguiente es separar la API y los
+workers en grupos de instancias que escalen solos, la arquitectura objetivo.
 
 ## 12. Glosario
 

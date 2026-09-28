@@ -6,6 +6,8 @@ localResources:
   specs:
     - ../backend/openapi/openapi.yaml
 
+# Each entry here maps a local resource to one or more corresponding objects in Postman Cloud
+
 cloudResources:
   collections:
-    ../postman/collections/Plataforma MOOC — Entrega 1: 34b3d02b-934b-4e79-8918-79c7dd69c145
+    ../postman/collections/MOOC · Entrega 2 (nube): 42a8f5f0-e94a-4878-bddc-8ebc5859c652

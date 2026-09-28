@@ -1,5 +1,11 @@
 $kind: collection
 description: |-
+  **Entrega 2: la colección de la Entrega 1 contra el despliegue en GCP.** Es la misma colección con otro nombre, para tenerla junto a la de local en Postman. Se usa con el entorno `mooc-entrega2`. La contraseña de las cuentas sintéticas no está aquí: sale de Secret Manager (`seed-password`) y se pega en *Current value*.
+
+  Si cambia `mooc.postman_collection.json`, esta se regenera igual.
+
+  ---
+
   Colección de la demostración de aceptación. Una carpeta por segmento de la §10.2.
 
   **Uso:** `make up && make seed`, importar con el entorno, y ejecutar las carpetas EN ORDEN.
@@ -8,9 +14,9 @@ description: |-
 
   **Aviso sobre SEG-7:** los heartbeats exigen 10 s de separación, a propósito. Con el Collection Runner hace falta `--delay-request 11000`, o ejecutar esas peticiones a mano. El equivalente automático es `make demo`.
 variables:
-  base_url: http://localhost:8090
-  mailpit_url: http://localhost:8026
-  demo_password: Contrasena-Demo-2026
+  base_url: https://35-184-146-250.sslip.io
+  mailpit_url: http://localhost:8027
+  demo_password: ""
   nuevo_email: ""
   verify_token: ""
   session_token: ""
@@ -35,9 +41,20 @@ variables:
   asset_id: ""
   parte_1_url: ""
   parte_1_etag: ""
-  sha256_prueba: 2f182426a670429e79b600ae44d477ada5ae141d5dae433da2eafa3da728c731
+  sha256_prueba: 0d4245fc56d42398c2856fb960075fbf6f95afa58b10d44787e037d0ff8c2321
   admin_token: ""
   admin_id: ""
   invitado_id: ""
   trabajo_vivo_id: ""
   trabajo_muerto_id: ""
+  trabajo_reencolar: ""
+  prometheus_url: ""
+  badge_image_url: ""
+  hls_playlist: ""
+  eicar: ""
+  eicar_sha256: ""
+  eicar_bytes: ""
+  eicar_asset: ""
+  eicar_url: ""
+  eicar_etag: ""
+  intentos_eicar: ""

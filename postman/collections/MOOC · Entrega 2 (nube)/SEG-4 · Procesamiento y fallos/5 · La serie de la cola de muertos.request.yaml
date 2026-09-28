@@ -1,0 +1,29 @@
+$kind: http-request
+description: La consulta exacta del panel «Dead-letter queue» del tablero de Grafana.
+url: "{{prometheus_url}}/api/v1/query?query=increase(jobs_dead_letter_total[5m])"
+method: GET
+headers:
+  Accept: "*/*"
+queryParams:
+  query: increase(jobs_dead_letter_total[5m])
+scripts:
+  - type: beforeRequest
+    code: |-
+      // Prometheus es del stack local. En la nube no se despliega (despliegue-gcp.md,
+      // «Lo que se deja fuera a propósito»): con prometheus_url vacía, se salta.
+      if (!pm.variables.get('prometheus_url')) { pm.execution.skipRequest(); }
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const d = pm.response.json();
+      pm.test('la consulta del panel devuelve series', () => {
+        pm.expect(d.status).to.eql('success');
+        pm.expect(d.data.result.length, 'no hay series: ¿arrancó el worker?').to.be.at.least(1);
+      });
+      const viva = d.data.result.filter(r => Number(r.value[1]) > 0);
+      console.log('series:', d.data.result.length, '· con incidentes:', viva.length);
+      viva.forEach(r => console.log('  ', JSON.stringify(r.metric), '=', r.value[1]));
+      console.log('Es la misma consulta que dibuja el panel de Grafana.');
+    language: text/javascript
+order: 5000

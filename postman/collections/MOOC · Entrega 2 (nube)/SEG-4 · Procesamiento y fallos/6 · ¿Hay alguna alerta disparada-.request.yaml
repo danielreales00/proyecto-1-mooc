@@ -1,0 +1,31 @@
+$kind: http-request
+name: 6 · ¿Hay alguna alerta disparada?
+description: "Tolerante a propósito: sin incidentes no hay alertas y eso no es un fallo. Después del bloque 8b del guion, aquí aparece la de la DLQ."
+url: "{{prometheus_url}}/api/v1/alerts"
+method: GET
+headers:
+  Accept: "*/*"
+scripts:
+  - type: beforeRequest
+    code: |-
+      // Prometheus es del stack local. En la nube no se despliega (despliegue-gcp.md,
+      // «Lo que se deja fuera a propósito»): con prometheus_url vacía, se salta.
+      if (!pm.variables.get('prometheus_url')) { pm.execution.skipRequest(); }
+    language: text/javascript
+  - type: afterResponse
+    code: |-
+      pm.test('200', () => pm.response.to.have.status(200));
+      const a = pm.response.json().data.alerts || [];
+      const dlq = a.filter(x => x.labels.alertname === 'TrabajoEnDeadLetterQueue');
+      if (dlq.length) {
+        pm.test('TrabajoEnDeadLetterQueue está disparada', () => {
+          pm.expect(dlq[0].state).to.be.oneOf(['pending','firing']);
+        });
+        console.log('estado:', dlq[0].state, '·', JSON.stringify(dlq[0].labels));
+      } else {
+        console.log('Ninguna alerta activa, que es lo normal si no ha fallado',
+          'nada. El bloque 8b del guion fuerza un trabajo a la DLQ para verla.');
+      }
+      console.log('alertas activas ahora mismo:', a.length);
+    language: text/javascript
+order: 6000
