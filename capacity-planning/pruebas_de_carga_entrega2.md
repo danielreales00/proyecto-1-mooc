@@ -76,8 +76,6 @@ Web Server se queda sin memoria y deja de responder
 | --- | --- |
 | Cloud SQL con vCPU dedicado | Con la carga de L3, p95 de 5,6 s a 27 ms y 0 iteraciones perdidas |
 | Varios `worker-media` que escalen con el tiempo de espera de la cola | 272 s de FFmpeg pedidos por minuto frente a 60, CPU al 86-96 % |
-| Cloud CDN con cookie firmada | Playlist de 0,8 a 1,3 s por la firma de cada segmento |
-| Limitar los hashes de contraseña simultáneos | Una ráfaga de unos 2 inicios de sesión por segundo congela el Web Server |
 | Reaper que no republique trabajos todavía en cola | 2.554 duplicados descartados en M2 y M3 |
 | Redis local a la API para sesiones y límites | 3,5 ms por petición. No limita hoy. Es la hipótesis siguiente cuando la base deje de serlo |
 
