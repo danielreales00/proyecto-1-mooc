@@ -9,7 +9,7 @@ guiones y las gráficas están en este directorio (sección 10).
 | Escenario | Capacidad sostenible | Primer cuello de botella | Segundo |
 | --- | --- | --- | --- |
 | 1. Sesión de estudio | 61 a 68 peticiones por segundo, unos 240 estudiantes activos, p95 de 24-25 ms durante 15 minutos | Cloud SQL `db-g1-small` | Pool de conexiones de la API |
-| 2. Carga y procesamiento de video | Entre 3 y 6 cargas por minuto con la mezcla A/B/C | FFmpeg con un solo `worker-media` | Ninguno medido |
+| 2. Carga y procesamiento de video | Entre 3 y 6 cargas por minuto de videos de 20 s, 1 min y 2 min | FFmpeg con un solo `worker-media` | Ninguno medido |
 
 En ningún nivel hubo errores `5xx` ni cargas perdidas. Lo que se degrada es la
 latencia, no la corrección.
@@ -21,19 +21,21 @@ ráfaga de CPU y, al agotarla, baja a su cuota.
 
 **Por qué es la base y no otro componente:**
 
-- **Todas las operaciones se degradan a la vez.** En L2b el p95 pasa de 25 a
-  272 ms y en L3 a 8 s, en las nueve operaciones. Comparten un recurso
+- **Todas las operaciones se degradan a la vez.** Al pasar de 61 a 91
+  peticiones por segundo, el p95 sube de 25 a 272 ms. A 110 llega a 8 s. Pasa
+  en las nueve operaciones del recorrido, así que comparten un recurso
   ([6.2](#62-por-operación)).
-- **La base se frena sola con la carga intacta.** En L3, al minuto 4,5, su CPU
-  cae de 0,54 a 0,41 núcleos. En ese mismo minuto la del Web Server baja del 60
-  al 43 %: la API espera a la base, no calcula ([6.4](#64-cuello-de-botella)).
-- **Cambiar solo la base lo resuelve.** A la tasa de L3, un vCPU dedicado
-  (`db-custom-1-3840`) baja el p95 de 5,6 s a 27 ms, sin iteraciones perdidas.
-  Ampliar el pool de la API de 10 a 25 conexiones solo lo baja de 8,1 a 5,6 s:
-  es el segundo límite, no el primero.
-- **El resto tiene margen.** El Web Server promedia el 44 % de CPU en L3.
-  Redis responde en 0,68 ms de media y el Worker Server no pasa del 13 %. El
-  generador no pasó del 42 %.
+- **La base se frena sola con la carga intacta.** A 110 peticiones por
+  segundo, al minuto 4,5 su CPU cae de 0,54 a 0,41 núcleos. En ese mismo minuto
+  la del Web Server baja del 60 al 43 %: la API espera a la base, no calcula
+  ([6.4](#64-cuello-de-botella)).
+- **Cambiar solo la base lo resuelve.** Con esas mismas 110 peticiones por
+  segundo, un vCPU dedicado (`db-custom-1-3840`) baja el p95 de 5,6 s a 27 ms,
+  sin sesiones de estudio perdidas. Ampliar el pool de la API de 10 a 25
+  conexiones solo lo baja de 8,1 a 5,6 s: es el segundo límite, no el primero.
+- **El resto tiene margen.** Con la base saturada, el Web Server promedia el
+  44 % de CPU. Redis responde en 0,68 ms de media y el Worker Server no pasa del
+  13 %. El generador de carga no pasó del 42 %.
 
 **La integridad se conserva bajo carga.** Las 244 comprobaciones de
 concurrencia pasaron: ningún envío duplicado dio dos calificaciones, la clave
@@ -51,14 +53,16 @@ Web Server se queda sin memoria y deja de responder
 
 **Por qué es FFmpeg y no otro componente:**
 
-- **La demanda supera lo que hay.** La mezcla de M2 pide unos 272 s de
-  transcodificación por minuto. Un worker dispone de 60. La de M1 pide 40 y
-  cumple ([8.3](#83-cuello-de-botella)).
-- **El ritmo no crece con la carga.** M2 y M3 procesan lo mismo, 1,3
-  transcodificaciones por minuto, aunque M3 ofrece el doble. La CPU del Worker
+- **La demanda supera lo que hay.** Con 6 cargas por minuto (3 de 20 s, 2 de
+  1 min y 1 de 2 min) se piden unos 272 s de transcodificación por minuto. Un
+  worker dispone de 60. Con 3 cargas por minuto se piden 40 y cumple
+  ([8.3](#83-cuello-de-botella)).
+- **El ritmo no crece con la carga.** Con 43 o con 71 cargas en 10 minutos, el
+  worker procesa lo mismo: 1,3 transcodificaciones por minuto. La CPU del Worker
   Server se queda en el 86-96 % ([8.2](#82-procesamiento)).
 - **El atraso se acumula en la cola, no en los errores.** Con 6 cargas por
-  minuto el video tarda de 9 a 14 minutos en estar listo; con 3, segundos. No
+  minuto o más, el video tarda de 9 a 14 minutos en estar listo; con 3,
+  segundos. No
   hubo trabajos muertos y la única transcodificación fallida se reintentó con
   éxito.
 - **El resto tiene margen.** La carga va directa a Cloud Storage a
@@ -67,16 +71,16 @@ Web Server se queda sin memoria y deja de responder
   ([8.1](#81-control-transferencia-y-reproducción)).
 
 **Objetivo incumplido sin relación con la carga.** Autorizar una carga tarda
-204 ms en p95 desde M0, frente a 150 ms. Cada firma es una llamada a IAM
+204 ms en p95 incluso con una sola carga por minuto, frente a 150 ms. Cada firma es una llamada a IAM
 `signBlob`.
 
 ### 1.3 Qué cambiar
 
 | Cambio | Medición que lo respalda |
 | --- | --- |
-| Cloud SQL con vCPU dedicado | Con la carga de L3, p95 de 5,6 s a 27 ms y 0 iteraciones perdidas |
+| Cloud SQL con vCPU dedicado | A 110 peticiones por segundo, p95 de 5,6 s a 27 ms y ninguna sesión de estudio perdida |
 | Varios `worker-media` que escalen con el tiempo de espera de la cola | 272 s de FFmpeg pedidos por minuto frente a 60, CPU al 86-96 % |
-| Reaper que no republique trabajos todavía en cola | El reaper da por perdido un trabajo que lleva tiempo en `queued` y lo publica otra vez. Con la cola atrasada, ese trabajo seguía esperando en Redis. La idempotencia descartó 2.554 duplicados en M2 y M3, pero cada uno ocupa la cola ([8.2](#82-procesamiento)) |
+| Reaper que no republique trabajos todavía en cola | El reaper da por perdido un trabajo que lleva tiempo en `queued` y lo publica otra vez. Con la cola atrasada, ese trabajo seguía esperando en Redis. Con 6 cargas por minuto o más, la idempotencia descartó 2.554 duplicados, pero cada uno ocupa la cola ([8.2](#82-procesamiento)) |
 | Redis local a la API para sesiones y límites | 3,5 ms por petición. No limita hoy. Es la hipótesis siguiente cuando la base deje de serlo |
 
 El resto del informe da las condiciones, las definiciones y los datos que
