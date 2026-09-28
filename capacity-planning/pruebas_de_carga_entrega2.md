@@ -106,7 +106,7 @@ ese ajuste, `login_ip` (60 por minuto) habría medido el limitador.
 **El generador no limitó ninguna corrida válida.** Su CPU máxima fue del 42 %
 y no hubo errores de red de su lado. La primera corrida salía por Cloud NAT y
 perdió 813 conexiones por agotamiento de puertos. Se descartó y el generador
-pasó a tener IP externa (sección 10).
+pasó a tener IP externa.
 
 ## 3. Herramienta
 
@@ -470,13 +470,3 @@ make carga-nivel K6=escenario2.js ETIQUETA=e2-M2 \
 make carga-tabla ARGS="e1 e1-L0 e1-L1 e1-L2"
 make carga-graficas ARGS="e1 e1-L0 e1-L1 e1-L2 e1-L2b e1-L3"
 ```
-
-Los archivos con sesiones (`datos.json`, `medios.json`) se quedan en el
-generador y no entran al repositorio.
-
-**Corridas descartadas**, conservadas en `resultados/`:
-
-- `e1-L0-invalida-nat`. El generador salía por Cloud NAT y perdió 813
-  conexiones.
-- `e1-L0-descartada-mezcla`. La elección de cuenta dejaba fuera las cuentas por
-  inscribir y la mezcla no era la de los demás niveles.
