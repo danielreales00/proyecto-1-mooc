@@ -16,63 +16,83 @@ latencia, no la corrección.
 
 ### 1.1 Escenario 1. La base de datos
 
-**Qué limita.** Cloud SQL `db-g1-small`. Es de núcleo compartido: sostiene una
-ráfaga de CPU y, al agotarla, baja a su cuota.
+El primer límite del escenario 1 es Cloud SQL `db-g1-small`. Esta instancia
+usa un núcleo compartido: puede consumir más CPU durante una ráfaga corta, pero
+al agotarla queda reducida a una cuota sostenida menor.
 
-**Por qué es la base y no otro componente:**
+Hasta 61-68 peticiones por segundo el sistema cumple todos los objetivos, con
+un p95 de 24-25 ms, también durante 15 minutos seguidos. A 91 peticiones por
+segundo el p95 sube a 272 ms, y a 110 llega a 8 s. La degradación aparece al
+mismo tiempo en las nueve operaciones del recorrido, lecturas del catálogo
+incluidas, lo que apunta a un recurso que todas comparten y no a un endpoint
+lento. Las que más se degradan son las escrituras de varias filas, como el
+guardado de respuestas, que escribe diez por llamada
+([6.2](#62-por-operación)).
 
-- **Todas las operaciones se degradan a la vez.** Al pasar de 61 a 91
-  peticiones por segundo, el p95 sube de 25 a 272 ms. A 110 llega a 8 s. Pasa
-  en las nueve operaciones del recorrido, así que comparten un recurso
-  ([6.2](#62-por-operación)).
-- **La base se frena sola con la carga intacta.** A 110 peticiones por
-  segundo, al minuto 4,5 su CPU cae de 0,54 a 0,41 núcleos. En ese mismo minuto
-  la del Web Server baja del 60 al 43 %: la API espera a la base, no calcula
-  ([6.4](#64-cuello-de-botella)).
-- **Cambiar solo la base lo resuelve.** Con esas mismas 110 peticiones por
-  segundo, un vCPU dedicado (`db-custom-1-3840`) baja el p95 de 5,6 s a 27 ms,
-  sin sesiones de estudio perdidas. Ampliar el pool de la API de 10 a 25
-  conexiones solo lo baja de 8,1 a 5,6 s: es el segundo límite, no el primero.
-- **El resto tiene margen.** Con la base saturada, el Web Server promedia el
-  44 % de CPU. Redis responde en 0,68 ms de media y el Worker Server no pasa del
-  13 %. El generador de carga no pasó del 42 %.
+La serie minuto a minuto a 110 peticiones por segundo muestra cuál es ese
+recurso. Al minuto 4,5 la latencia se dispara y, en ese mismo minuto, la CPU de
+la base cae de 0,54 a 0,41 núcleos aunque la carga ofrecida no cambia: es el
+paso de la ráfaga a la cuota sostenida. La CPU del Web Server también baja, del
+60 al 43 %, porque la API pasa el tiempo esperando a la base, y las conexiones
+abiertas se quedan fijas en el máximo del pool ([6.4](#64-cuello-de-botella)).
 
-**La integridad se conserva bajo carga.** Las 244 comprobaciones de
-concurrencia pasaron: ningún envío duplicado dio dos calificaciones, la clave
-del quiz no salió y el porcentaje enviado por el cliente se rechazó
+Para confirmarlo se repitió esa carga cambiando una sola cosa en cada corrida.
+Con el pool de la API ampliado de 10 a 25 conexiones, el p95 bajó de 8,1 a
+5,6 s: la API esperaba conexiones, pero con más conexiones la base sigue sin
+CPU. Con un vCPU dedicado en la base (`db-custom-1-3840`) y el mismo pool, el
+p95 bajó a 27 ms y no se perdió ninguna sesión de estudio. Por eso la base es el
+primer límite y el pool de conexiones el segundo.
+
+Los demás componentes tenían margen en ese momento. El Web Server promedió el
+44 % de CPU. Redis respondió en 0,68 ms de media, unos 3,5 ms por petición, con
+el Worker Server por debajo del 13 %. El disco de las dos máquinas no pasó del
+16 % y el generador de carga no pasó del 42 % de CPU.
+
+La integridad se conserva bajo carga. Las 244 comprobaciones de concurrencia,
+ejecutadas a 61 peticiones por segundo, pasaron todas: ningún envío duplicado
+produjo dos calificaciones, la clave del quiz no apareció en el snapshot y el
+porcentaje enviado por el cliente se rechazó
 ([6.3](#63-integridad-bajo-concurrencia)).
 
-**Límite aparte: la ráfaga de inicios de sesión.** Cada inicio reserva 64 MiB
-para argon2id. La API atiende unos 1,5 por segundo; con unos 2 por segundo el
-Web Server se queda sin memoria y deja de responder
+Fuera del recorrido medido hay un límite distinto: el inicio de sesión. Cada
+uno reserva 64 MiB de memoria para calcular argon2id. La API atiende unos 1,5
+por segundo. Con unos 2 por segundo las peticiones se acumulan y el Web Server,
+con 2 GiB y sin swap, se queda sin memoria y deja de responder hasta reiniciarlo
 ([6.5](#65-ráfaga-de-inicios-de-sesión)).
 
 ### 1.2 Escenario 2. El procesamiento de video
 
-**Qué limita.** FFmpeg, con un solo `worker-media` de concurrencia 1.
+El límite del escenario 2 es la transcodificación. FFmpeg corre en un solo
+`worker-media`, con concurrencia 1, en el Worker Server de 2 vCPU.
 
-**Por qué es FFmpeg y no otro componente:**
+El tiempo de FFmpeg crece con la duración y la resolución del video: 3,3 s de
+media para uno de 20 s en 360p, 33 s para uno de 1 min en 720p y 196 s para uno
+de 2 min en 1080p. Con 3 cargas por minuto (2 de 20 s y 1 de 1 min) se piden
+unos 40 s de transcodificación por minuto y el worker los absorbe: cada video
+queda listo en segundos. Con 6 cargas por minuto (3 de 20 s, 2 de 1 min y 1 de
+2 min) se piden unos 272 s por minuto, 4,5 veces los 60 s de los que dispone un
+worker ([8.3](#83-cuello-de-botella)).
 
-- **La demanda supera lo que hay.** Con 6 cargas por minuto (3 de 20 s, 2 de
-  1 min y 1 de 2 min) se piden unos 272 s de transcodificación por minuto. Un
-  worker dispone de 60. Con 3 cargas por minuto se piden 40 y cumple
-  ([8.3](#83-cuello-de-botella)).
-- **El ritmo no crece con la carga.** Con 43 o con 71 cargas en 10 minutos, el
-  worker procesa lo mismo: 1,3 transcodificaciones por minuto. La CPU del Worker
-  Server se queda en el 86-96 % ([8.2](#82-procesamiento)).
-- **El atraso se acumula en la cola, no en los errores.** Con 6 cargas por
-  minuto o más, el video tarda de 9 a 14 minutos en estar listo; con 3,
-  segundos. No
-  hubo trabajos muertos y la única transcodificación fallida se reintentó con
-  éxito.
-- **El resto tiene margen.** La carga va directa a Cloud Storage a
-  14-20 MiB/s, sin pasar por la API. El Web Server no pasa del 5 % de CPU. La
-  reproducción sirvió 16.759 segmentos sin un fallo
-  ([8.1](#81-control-transferencia-y-reproducción)).
+Pasado ese punto, el ritmo de procesamiento deja de crecer. Con 43 o con 71
+cargas lanzadas en 10 minutos, el worker completó lo mismo, 1,3
+transcodificaciones por minuto, con la CPU del Worker Server entre el 86 y el
+96 % y la memoria en el 90 %. El trabajo sobrante se acumula en la cola `bulk`:
+cada video tarda de 9 a 14 minutos en estar listo, casi todo esperando turno, y
+ninguno cumple el objetivo de estar listo en menos de 3 veces su duración
+([8.2](#82-procesamiento)). El atraso no se convierte en fallos. No hubo
+trabajos muertos, la única transcodificación fallida se reintentó con éxito y,
+media hora después de la última corrida, ninguna carga estaba en un estado de
+error.
 
-**Objetivo incumplido sin relación con la carga.** Autorizar una carga tarda
-204 ms en p95 incluso con una sola carga por minuto, frente a 150 ms. Cada firma es una llamada a IAM
-`signBlob`.
+El resto de la cadena no se degradó con la carga. La transferencia va directa
+del cliente a Cloud Storage con URLs firmadas, a 14-20 MiB/s, sin pasar por la
+API, y el Web Server no pasó del 5 % de CPU. La reproducción sirvió 16.759
+segmentos sin un solo fallo
+([8.1](#81-control-transferencia-y-reproducción)).
+
+Un objetivo se incumple con independencia de la carga. Autorizar una carga
+tarda 204 ms en p95 incluso con una sola carga por minuto, frente a 150 ms,
+porque cada firma de URL es una llamada a IAM `signBlob`.
 
 ### 1.3 Qué cambiar
 
