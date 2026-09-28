@@ -120,6 +120,12 @@ se publica en Redis después del commit.
 
 ## 6. Vista de ejecución
 
+La vista de ejecución muestra cómo colaboran los componentes en tiempo de
+ejecución para resolver un caso de uso concreto. Se describe el más exigente
+para la infraestructura desplegada: subir un video y reproducirlo. Atraviesa
+las dos máquinas virtuales, la cola en Redis, los dos buckets de Cloud Storage
+y el worker de medios, que es el cuello de botella del escenario 2.
+
 1. La API crea el asset y firma una URL por parte de 8 MiB.
 2. El cliente sube las partes a `tmp/{uploadID}/` en `originals`.
 3. La API las une con `compose`, responde 202 y encola la verificación.
@@ -180,8 +186,10 @@ flowchart TB
 | `mooc-denegar-resto` | Internet | Toda la VPC | Todo, con registro |
 
 Las reglas apuntan a cuentas de servicio. Cloud SQL no lleva regla porque está
-al otro lado del peering y no tiene IP pública. La red `default` de Compute
-Engine se borró con Terraform. El Worker Server sale a Internet por Cloud NAT
+al otro lado del peering y no tiene IP pública. Todo proyecto nuevo de GCP
+trae una red `default` con reglas abiertas a Internet, como SSH y RDP desde
+cualquier dirección. Se eliminó con Terraform para que la única red del
+proyecto sea `mooc` y las únicas reglas, las de la tabla. El Worker Server sale a Internet por Cloud NAT
 para descargar imágenes y paquetes. Las dos máquinas llegan a Cloud Storage,
 Artifact Registry y Secret Manager por el acceso privado a Google de la subred.
 El generador de carga es una tercera máquina que existe solo mientras se mide.
@@ -198,7 +206,7 @@ El generador de carga es una tercera máquina que existe solo mientras se mide.
 | Migrar | El servicio `migrate` corre antes que la API en cada arranque |
 | Verificar | `make postman-nube` pasa la colección entera contra la URL pública |
 | Administrar | `make ssh MAQUINA=mooc-worker`, por el túnel de IAP con OS Login |
-| Reiniciar | Reiniciar la máquina vuelve a ejecutar el arranque y deja todo en pie |
+| Suspender las máquinas | `maquinas_encendidas = false` en `terraform.tfvars`. Al volver a `true`, el arranque levanta todo sin intervención |
 | Pausar la base | `cloudsql_encendida = false` en `terraform.tfvars` |
 
 Cada máquina recibe por metadatos su composición y un `.env` sin secretos.
@@ -272,8 +280,8 @@ El contrato de la API es el mismo en las dos columnas.
 
 ### Capacidad medida
 
-La definición, los resultados por nivel y la evidencia están en
-`capacity-planning/pruebas_de_carga_entrega2.md`.
+La definición, los resultados por nivel y la evidencia están en el
+[informe de las pruebas de carga](../../capacity-planning/pruebas_de_carga_entrega2.md).
 
 El escenario 1 sostiene unas 60 a 70 peticiones por segundo con p95 de 25 ms
 durante 15 minutos. A 91 empieza la degradación y a 110 el p95 llega a 8 s.
