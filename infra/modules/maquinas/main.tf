@@ -41,6 +41,9 @@ resource "google_compute_instance" "m" {
   # recrearla y perder el disco.
   allow_stopping_for_update = true
 
+  # Detenidas entre sesiones de trabajo: sin cómputo, solo disco e IP.
+  desired_status = var.encendidas ? "RUNNING" : "TERMINATED"
+
   boot_disk {
     initialize_params {
       image = var.imagen

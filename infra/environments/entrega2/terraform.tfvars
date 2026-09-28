@@ -30,6 +30,10 @@ cloudsql_disco_gb = 10
 # git si la base debería estar encendida.
 cloudsql_encendida = true
 
+# Lo mismo para las dos máquinas: detenidas no pagan cómputo, sí disco e IP
+# estática. Al encenderlas, el arranque deja todo en pie solo.
+maquinas_encendidas = true
+
 # Máquinas: 2 vCPU completas y 2048 MiB, la combinación exacta del enunciado,
 # y 30 GiB de disco. Es el tipo del catálogo e2-highcpu-2: pedirlo como
 # e2-custom-2-2048 funciona, pero GCP lo normaliza a este nombre y Terraform ve

@@ -70,3 +70,8 @@ variable "env_worker" {
   description = "Variables sin secretos del Worker Server, en formato .env."
   type        = string
 }
+
+variable "encendidas" {
+  description = "false detiene las dos máquinas sin borrarlas."
+  type        = bool
+}

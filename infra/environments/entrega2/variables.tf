@@ -124,3 +124,8 @@ variable "db_max_conns_api" {
   description = "Pool de la API. Separado del de los workers: es el que atiende el tráfico síncrono."
   type        = number
 }
+
+variable "maquinas_encendidas" {
+  description = "false detiene el Web Server y el Worker Server sin borrarlos. Se cambia en terraform.tfvars."
+  type        = bool
+}

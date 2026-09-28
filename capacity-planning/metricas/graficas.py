@@ -103,6 +103,32 @@ def e1(etiquetas):
     guardar(fig, "e1-recursos-por-nivel.png")
 
 
+def comparar(etiquetas):
+    """Antes y después en el mismo nivel: una barra por configuración."""
+    nombres = {"e1-L3": "g1-small, pool 10", "e1-L3-pool25": "g1-small, pool 25",
+               "e1-L3-sql-dedicado": "1 vCPU dedicado, pool 25"}
+    filas = []
+    for et in etiquetas:
+        d, m = cargar(f"{et}.json"), cargar(f"{et}-metricas.json")
+        dur = "http_req_duration{scenario:medicion}"
+        uso = met(m, "sql_cpu", None, "valores") or []
+        filas.append((nombres.get(et, et), k6(d, dur, "med"), k6(d, dur, "p(95)"),
+                      k6(d, "dropped_iterations", "count") or 0))
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(8, 3.6))
+    x = range(len(filas))
+    a1.bar([i - 0.2 for i in x], [f[1] for f in filas], 0.4, label="p50")
+    a1.bar([i + 0.2 for i in x], [f[2] for f in filas], 0.4, label="p95")
+    a1.set_yscale("log")
+    a1.set_ylabel("latencia (ms, escala log)")
+    a1.set_xticks(list(x), [f[0] for f in filas], rotation=15, fontsize=7)
+    a1.legend()
+    a2.bar(list(x), [f[3] for f in filas], color="tab:red")
+    a2.set_ylabel("iteraciones perdidas")
+    a2.set_xticks(list(x), [f[0] for f in filas], rotation=15, fontsize=7)
+    fig.suptitle("Escenario 1, L3 (16 iter/s): qué cambia cada ajuste")
+    guardar(fig, "e1-L3-antes-y-despues.png")
+
+
 def minutos(valores, t0):
     return [(float(t) - t0) / 60 for t, _ in valores], [float(v) for _, v in valores]
 
@@ -171,6 +197,8 @@ if __name__ == "__main__":
     modo, etqs = sys.argv[1], sys.argv[2:]
     if modo == "e1":
         e1(etqs)
+    elif modo == "comparar":
+        comparar(etqs)
     else:
         for e in etqs:
             {"serie": serie, "cola": cola}[modo](e)

@@ -28,6 +28,7 @@ module "maquinas" {
   source = "../../modules/maquinas"
 
   zona         = var.zona
+  encendidas   = var.maquinas_encendidas
   tipo_maquina = var.tipo_maquina
   imagen       = var.imagen_maquinas
   disco_gb     = var.disco_maquinas_gb

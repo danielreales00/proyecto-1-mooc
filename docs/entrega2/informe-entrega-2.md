@@ -3,18 +3,16 @@
 Santiago Chica Castano, Josue Briceño Urquijo, Daniel Alfredo Reales Paba y
 Michael Javier Patiño Pantoja.
 
-Plataforma MOOC desplegada en Google Cloud sobre dos máquinas virtuales, con la
-base en Cloud SQL y los archivos en Cloud Storage. URL pública
+Plataforma MOOC en Google Cloud sobre dos máquinas virtuales. URL pública
 `https://35-184-146-250.sslip.io`.
 
 ## Qué cambió desde la Entrega 1
 
-La aplicación es la misma. Cambia dónde corre. La API, los workers y Redis
-pasan de un Compose local a dos máquinas de Compute Engine. PostgreSQL pasa a
-Cloud SQL y MinIO a Cloud Storage. El código nuevo es el que el despliegue y la
-medición exigen: un adaptador nativo de Cloud Storage, métricas de la cola,
-límites por IP configurables y la configuración que separa local de nube. La
-colección de Postman de la Entrega 1 pasa entera contra la URL pública.
+La aplicación es la misma y cambia dónde corre. La API, los workers y Redis
+pasan a dos máquinas de Compute Engine, PostgreSQL a Cloud SQL y MinIO a Cloud
+Storage. El código nuevo es el que exigen el despliegue y la medición. Son un
+adaptador de Cloud Storage, métricas de la cola y límites por IP
+configurables. La colección de Postman de la Entrega 1 pasa entera en la nube.
 
 ## 1. Introducción y objetivos
 
@@ -56,18 +54,16 @@ conserve las reglas de negocio y permita medir dónde se degrada.
 
 ## 3. Contexto y alcance
 
-Los usuarios llegan por HTTPS al Web Server. Los archivos no pasan por la API.
-El cliente los sube a Cloud Storage con URL firmadas por parte y los descarga
-de la misma forma. El correo de la entrega lo recibe un Mailpit en el Worker
-Server, sin salida a Internet, porque no hay proveedor de correo contratado.
+Los usuarios llegan por HTTPS al Web Server. Los archivos van directamente a
+Cloud Storage con URL firmadas. El correo lo recibe un Mailpit en el Worker
+Server, sin salida a Internet, porque no hay proveedor contratado.
 
 ## 4. Estrategia de solución
 
-Se reutiliza lo que ya funcionaba. Cada máquina corre el mismo `docker compose`
-de local, recortado a sus servicios y con las imágenes del registro. Lo que
-cambia entre local y nube son variables de entorno y un adaptador de objetos
-elegido con `OBJECT_STORE`. Terraform crea todo salvo el bucket de su propio
-estado. El detalle de la ejecución está en `arquitectura/despliegue-gcp.md`.
+Cada máquina corre el `docker compose` de local recortado a sus servicios, con
+las imágenes del registro. Entre local y nube cambian variables de entorno y el
+adaptador de objetos (`OBJECT_STORE`). Terraform crea todo salvo el bucket de su
+propio estado. La ejecución está en `arquitectura/despliegue-gcp.md`.
 
 ## 5. Vista de bloques
 
@@ -104,11 +100,26 @@ flowchart LR
 ```
 
 La API atiende todo el tráfico síncrono. Consulta Redis en cada petición
-autenticada para la sesión y el límite de tasa, y encola ahí los trabajos
-después de confirmarlos en PostgreSQL. El `worker` consume correo e insignias.
-El `worker-media` consume la cola `bulk`, que verifica, escanea y transcodifica.
-El cliente habla directamente con Cloud Storage para los bytes. La API solo
-autoriza, firma y confirma.
+autenticada para la sesión y el límite de tasa. El cliente habla directamente
+con Cloud Storage para los bytes, y la API solo autoriza, firma y confirma.
+
+| Módulo de la API | Responsabilidad |
+| --- | --- |
+| `identity` y `admin` | Cuentas, sesiones, roles, estados y administración |
+| `authoring` | Jerarquía del curso y publicación de versiones inmutables |
+| `learning` | Catálogo, inscripción, contenido y progreso calculado en el servidor |
+| `assessment` | Quizzes, intentos, calificación en el servidor |
+| `media` | Carga por partes, verificación, escaneo, HLS y sesiones de reproducción |
+| `badges` y `audit` | Insignias verificables y registro de auditoría |
+
+Lo asíncrono se registra en PostgreSQL en la misma transacción que el cambio y
+se publica en Redis después del commit.
+
+| Trabajo | Cola | Lo consume |
+| --- | --- | --- |
+| `email.send`, `badge.issue` | `critical` | `worker` |
+| `media.probe` | `default` | `worker` |
+| `media.scan`, `media.transcode_hls` | `bulk` | `worker-media` |
 
 ## 6. Vista de ejecución
 
@@ -124,8 +135,8 @@ La carga de un video sigue siete pasos.
 7. FFmpeg genera las variantes HLS en el bucket de derivados y el asset pasa a
    `ready`.
 
-La reproducción abre una sesión por inscripción. El manifiesto maestro sale de
-la API y cada segmento es una URL firmada hacia Cloud Storage.
+La reproducción abre una sesión por inscripción. El manifiesto sale de la API y
+cada segmento es una URL firmada hacia Cloud Storage.
 
 ## 7. Vista de despliegue
 
@@ -176,9 +187,12 @@ flowchart TB
 | `mooc-ssh-iap` | Rango de IAP | Las dos cuentas | 22 |
 | `mooc-denegar-resto` | Internet | Toda la VPC | Todo, con registro |
 
-Las reglas apuntan a cuentas de servicio y no a etiquetas. Cloud SQL no lleva
-regla porque está al otro lado del peering y no tiene IP pública. La red
-`default` que crea Compute Engine se borró con Terraform.
+Las reglas apuntan a cuentas de servicio. Cloud SQL no lleva regla porque está
+al otro lado del peering y no tiene IP pública. La red `default` de Compute
+Engine se borró con Terraform. El Worker Server sale a Internet por Cloud NAT
+para descargar imágenes y paquetes. Las dos máquinas llegan a Cloud Storage,
+Artifact Registry y Secret Manager por el acceso privado a Google de la subred.
+El generador de carga es una tercera máquina que existe solo mientras se mide.
 
 ## 8. Conceptos transversales
 
@@ -195,28 +209,28 @@ regla porque está al otro lado del peering y no tiene IP pública. La red
 | Reiniciar | Reiniciar la máquina vuelve a ejecutar el arranque y deja todo en pie |
 | Pausar la base | `cloudsql_encendida = false` en `terraform.tfvars` |
 
-Cada máquina recibe por metadatos su composición, su configuración y un `.env`
-sin secretos. El script `deploy/arranque.sh` instala Docker y el agente de
-operaciones, lee los secretos de Secret Manager con la identidad de la máquina,
-escribe el `.env` con permisos 0600 y levanta la composición.
+Cada máquina recibe por metadatos su composición y un `.env` sin secretos.
+`deploy/arranque.sh` instala Docker y el agente de operaciones, lee los
+secretos de Secret Manager con la identidad de la máquina, escribe el `.env`
+con permisos 0600 y levanta la composición.
 
 ### Secretos
 
-`database-url` y `seed-password` los genera Terraform como valores efímeros y
-los escribe con atributos de solo escritura. No quedan en el estado ni en el
-plan. `smtp-password` existe vacío hasta que haya proveedor. Ninguna imagen ni
-archivo del repositorio contiene un secreto, y `scripts/sin-credenciales.sh` lo
-comprueba en cada CI. La contraseña de demostración de la Entrega 1 no sirve en
-la nube. La semilla la rechaza fuera de desarrollo y el login con ella devuelve
-401.
+Terraform genera `database-url` y `seed-password` como valores efímeros y los
+escribe con atributos de solo escritura, así que no quedan en el estado.
+Ninguna imagen ni archivo del repositorio contiene un secreto, y
+`scripts/sin-credenciales.sh` lo comprueba en cada CI. La contraseña de
+demostración de la Entrega 1 devuelve 401 en la nube.
 
 ### Respaldo y reconstrucción
 
 Cloud SQL hace una copia diaria y la conserva siete días. Las copias sobreviven
 al borrado de la instancia (`retain_backups_on_delete`). La reconstrucción
 parte del repositorio y del bucket del estado. Se ejecuta `terraform apply`, se
-publican las imágenes, se siembra y se pasa la colección. El tiempo medido está
-en la sección 10.
+publican las imágenes, se siembra y se pasa la colección. Los pasos están en
+`arquitectura/despliegue-gcp.md`.
+
+PENDIENTE_TIEMPO_RECONSTRUCCION
 
 ### Seguridad de la sesión
 
@@ -226,10 +240,9 @@ hay token CSRF. El token se revoca en Redis y todo el tráfico va por HTTPS.
 
 ### Observabilidad
 
-El agente de operaciones envía a Cloud Monitoring CPU, memoria, disco y red de
-cada máquina. También rasca `/metrics` de la API y de los workers y lee Redis.
-Las métricas de la cola son nuevas en esta entrega: profundidad por estado,
-antigüedad del trabajo más viejo y tasa de procesamiento.
+El agente de operaciones envía a Cloud Monitoring CPU, memoria, disco y red, y
+lee Redis y el `/metrics` de cada proceso dentro de la máquina. `/metrics` no
+es público. La cola exporta profundidad, antigüedad y tasa de procesamiento.
 
 ## 9. Decisiones de arquitectura
 
@@ -241,7 +254,17 @@ antigüedad del trabajo más viejo y tasa de procesamiento.
 | URL firmadas con `signBlob` | La cuenta firma sin clave descargada, con permiso sobre sí misma | ADR-0015, D3 |
 | TLS en Caddy con `sslip.io` | Sin balanceador no hay certificado gestionado | ADR-0016, D4 |
 | Cloud SQL `db-g1-small` | Cabe en el presupuesto de 50 USD. Se registra como limitación | `terraform.tfvars` |
-| `worker-media` con concurrencia 1 | Con 2 vCPU un segundo FFmpeg solo le quita CPU al primero | `deploy/compose.worker.yml` |
+| `worker` con concurrencia 20 en `critical=6,default=3` | Trabajos cortos y de red | `deploy/compose.worker.yml` |
+| `worker-media` con concurrencia 1 en `bulk` | Con 2 vCPU un segundo FFmpeg solo le quita CPU al primero | `deploy/compose.worker.yml` |
+| Pool de la API de 25 conexiones | Con 10 se llenaba antes que la CPU (sección 10) | `terraform.tfvars` |
+
+### Migración de los objetos
+
+Los objetos de MinIO eran de prueba y no se trasladaron. Se crean en la nube
+con los mismos buckets y claves que en local. El trabajo `media.probe`
+recalcula el SHA-256 de cada original leyendo de Cloud Storage y lo compara con
+el declarado y con la referencia de la base. Esa es la verificación de
+integridad.
 
 ### Diferencias frente a la arquitectura objetivo
 
@@ -283,12 +306,13 @@ PENDIENTE_RESUMEN_E2
 ### Costo
 
 Estimación del 27 de septiembre de 2026 con precios de lista de `us-central1`.
-Supone las máquinas encendidas solo durante el trabajo y las pruebas, unas 80
-horas, y la base encendida dos semanas.
+Supone las máquinas y la base encendidas dos semanas, las del trabajo y las
+pruebas, y detenidas después. `maquinas_encendidas` y `cloudsql_encendida` en
+`terraform.tfvars` las detienen sin borrarlas.
 
 | Recurso | Unidad | Precio de lista | Uso previsto | Costo |
 | --- | --- | --- | --- | --- |
-| 2 × `e2-highcpu-2` | hora | 0,0495 USD | 160 h | 7,92 USD |
+| 2 × `e2-highcpu-2` | hora | 0,0495 USD | 672 h | 33,26 USD |
 | Generador `e2-standard-4` | hora | 0,134 USD | 12 h | 1,61 USD |
 | Discos `pd-balanced` | GiB-mes | 0,10 USD | 90 GiB × 0,5 mes | 4,50 USD |
 | Cloud SQL `db-g1-small` | hora | 0,035 USD | 336 h | 11,76 USD |
@@ -297,11 +321,19 @@ horas, y la base encendida dos semanas.
 | Cloud Storage y operaciones | GiB-mes | 0,020 USD | 20 GiB | 0,40 USD |
 | Métricas de la aplicación | millón de muestras | 0,06 USD | 40 millones | 2,40 USD |
 
-El total previsto es de unos 31 USD, dentro del presupuesto de 50 USD. El
+El total previsto es de unos 56 USD, por encima del presupuesto de 50 USD si
+las máquinas no se detienen. Detenerlas fuera de las sesiones de trabajo lo
+deja en unos 35 USD, con unas 120 horas por máquina. El
 presupuesto `mooc-entrega2` avisa al 50, 80 y 100 %. Excluye los créditos de la
 cuenta educativa, porque con ellos el gasto neto sería cero y ninguna alerta
 saltaría. El tráfico de los segmentos no paga salida a Internet en las pruebas
 porque el generador llega a Cloud Storage por la red de Google.
+
+Con la instancia detenida Cloud SQL deja de cobrar cómputo, y siguen el
+almacenamiento y la IP. Con 10 GiB de SSD a 0,17 USD por GiB y mes y la IP solo
+privada, detenida cuesta unos 0,06 USD al día frente a 0,85 encendida. La documentación de Google, consultada el 28 de
+septiembre, no fija una duración máxima ni una reactivación automática. Al
+cerrar la entrega la instancia se borra y sus copias se conservan.
 
 PENDIENTE_CONSUMO_OBSERVADO
 
@@ -323,7 +355,10 @@ PENDIENTE_CONSUMO_OBSERVADO
   reposo y sin swap.
 - Cada firma de URL es una llamada a IAM de unos 200 ms, y la API firma las
   partes en serie.
-- `/metrics` es público a través de Caddy.
+- El playlist de cada variante tarda cientos de milisegundos porque la API
+  firma cada segmento con una llamada a IAM.
+- La ráfaga de inicios de sesión se detuvo tarde. El criterio de memoria no lo
+  vigila k6, y hubo que reiniciar el Web Server.
 - El correo no sale a Internet.
 
 ### Hacia una aplicación elástica
@@ -338,4 +373,3 @@ PENDIENTE_EVOLUCION
 | IAP | Proxy con identidad de Google para entrar por SSH sin abrir el puerto |
 | `compose` | Operación de Cloud Storage que une objetos sin descargarlos |
 | `signBlob` | Operación de IAM que firma con la clave de una cuenta de servicio |
-| Nivel | Tasa de llegada fija durante una corrida de carga |

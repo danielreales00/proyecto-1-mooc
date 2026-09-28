@@ -503,6 +503,18 @@ exporta de Cloud Monitoring las métricas de la misma ventana
    3. Las máquinas se levantan solas. `migrate` crea el esquema.
    4. `make semilla-nube` y, para medir, `make semilla-nube CARGA=1`.
    5. `make postman-nube` confirma que todo responde.
+   **Recrear solo la base**, que es lo que se borra por costo:
+   ```bash
+   # 1. Quitar la protección de la instancia actual (Terraform no borra lo protegido)
+   make tf ENTORNO=entrega2 ARGS="plan -var proteger_borrado=false -out=p.tfplan"
+   make tf ENTORNO=entrega2 ARGS="apply p.tfplan"
+   # 2. Instancia nueva con nombre nuevo: un nombre borrado no se reutiliza en días
+   make tf ENTORNO=entrega2 ARGS="plan -var proteger_borrado=false \
+     -replace=module.cloudsql.random_id.sufijo -out=p.tfplan"
+   make tf ENTORNO=entrega2 ARGS="apply p.tfplan"
+   # 3. Protección de vuelta: el plan normal la restablece
+   make tf ENTORNO=entrega2 ARGS="plan -out=p.tfplan" && make tf ENTORNO=entrega2 ARGS="apply p.tfplan"
+   ```
    Si solo se borró la base, el paso 1 la recrea y reescribe `database-url` con
    la IP y la clave nuevas en el mismo `apply`. Las máquinas leen el secreto al
    arrancar, así que después hay que volver a ejecutar su arranque

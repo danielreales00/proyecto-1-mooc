@@ -612,6 +612,10 @@ Había dos candidatos y se midieron por separado, cambiando una cosa cada vez
    vCPU dedicado, la misma carga da p95 de 27 ms y ninguna iteración perdida**,
    el mismo comportamiento que L2.
 
+![L3 antes y después](graficas/e1-L3-antes-y-despues.png)
+
+![L3 con vCPU dedicado, minuto a minuto](graficas/e1-L3-sql-dedicado-serie.png)
+
 **El primer límite es Cloud SQL `db-g1-small`.** El segundo es el pool de la
 API. Tras las pruebas la base volvió a `db-g1-small` y el pool quedó en 25,
 que es la configuración con la que se midió el escenario 2.
@@ -622,6 +626,50 @@ satura: bajo L2, la ida y vuelta desde el Web Server mide 0,68 ms de media y
 por petición. En serie son unos 3,5 ms, cerca del 20 % de la mediana. El
 Worker Server, donde vive Redis, no pasa del 13 % de CPU.
 
+### 9.1.2 Qué operaciones concentran la latencia
+
+p95 en milisegundos por operación, en la fase de medición:
+
+| Operación | L2 (61 req/s) | L2b (91 req/s) | L3 (110 req/s) | Qué hace en la base |
+| --- | --- | --- | --- | --- |
+| `GET /catalog/courses` | 7 | 125 | 1635 | Una lectura |
+| `GET /catalog/courses/{slug}` | 7 | 161 | 3154 | Una lectura |
+| `GET /enrollments/{id}/content` | 20 | 241 | 6089 | Lectura de 63 recursos con su progreso |
+| `GET /enrollments/{id}/progress` | 14 | 236 | 6196 | Lectura agregada |
+| `POST /enrollments` | 20 | 311 | 6315 | Upsert y auditoría en una transacción |
+| `POST /enrollments/{id}/progress` | 25 | 359 | 7699 | Evidencia, estado del recurso y porcentaje |
+| `POST …/attempts` | 21 | 423 | 10551 | Snapshot del quiz e inserción |
+| `POST /attempts/{id}/submit` | 24 | 364 | 10828 | Calificación y cierre del intento |
+| `PATCH /attempts/{id}/answers` | 36 | 782 | 20491 | Diez respuestas en una llamada |
+
+**Todas se degradan a la vez**, y eso descarta un endpoint lento: comparten un
+recurso. **El orden sigue al trabajo en la base**: las escrituras de varias
+filas (`PATCH /answers`, iniciar y enviar intentos) se degradan primero y más,
+las lecturas simples del catálogo lo último. Es lo esperable si lo que se
+satura es la CPU de PostgreSQL. Ninguna operación falla: la degradación es
+de latencia, no de errores.
+
+### 9.1.3 Las cuatro preguntas del escenario
+
+1. **¿Qué volumen sostiene y dónde empieza la degradación?** Unas 60 a 70
+   peticiones por segundo (8 iteraciones/s de unos 30 s cada una, unos 240 estudiantes activos a la vez) con
+   p95 de 24 ms durante 15 minutos. La degradación empieza entre 61 y 91
+   peticiones por segundo, y a 110 el sistema está saturado. La referencia de
+   régimen del producto, unas 100 peticiones por segundo, **no se alcanza** con
+   esta configuración.
+2. **¿Qué operaciones concentran la latencia, y cómo se relacionan con la API,
+   Redis, el pool y PostgreSQL?** Las escrituras de varias filas (§9.1.2). La
+   causa es PostgreSQL, en un núcleo compartido que se limita a sí mismo. El
+   pool de la API es el segundo límite: se llena y reparte la espera, y
+   ampliarlo mejora un 30 a 40 %. Redis no limita (§9.1.1).
+3. **¿Se conservan la integridad y la calificación bajo concurrencia?** Sí.
+   Ninguna comprobación funcional falló por el sistema en ningún nivel, y las
+   cinco de integridad de §5.5 pasaron todas en L2, incluido el envío duplicado
+   simultáneo sin doble calificación.
+4. **¿Qué cambio aumentaría la capacidad, y qué medición lo respalda?** Un vCPU
+   dedicado en la base. Con la misma carga de L3, el p95 pasó de 5,6 s a 27 ms
+   y las iteraciones perdidas de 317 a 0 (§9.1.1).
+
 ### 9.2 Ráfaga de inicios de sesión
 
 | Momento (UTC) | Demanda ofrecida | Inicios atendidos | Memoria del Web Server |
@@ -629,7 +677,7 @@ Worker Server, donde vive Redis, no pasa del 13 % de CPU.
 | 23:14:30 | 1 por segundo | — | 50 % |
 | 23:15:00 | ~4 por segundo | ~0,5 por segundo | 59 % |
 | 23:15:30 | ~7 por segundo | ~1,5 por segundo | 59 %, último dato del agente |
-| 23:16:33 | ~11 por segundo | ninguno: *timeouts* de 60 s | sin datos: máquina congelada |
+| 23:16:33 | ~14 por segundo | ninguno: *timeouts* de 60 s | sin datos: máquina congelada |
 
 **El Web Server se congela a partir de unos dos inicios de sesión por
 segundo.** Cada uno es un argon2id de 64 MiB y dos hilos. La máquina despacha
@@ -671,7 +719,38 @@ aumente la capacidad.*
 
 ## 10. Reproducir estas pruebas
 
-*Pendiente: guiones, datos, órdenes y resultados originales.*
+| Qué | Dónde |
+| --- | --- |
+| Guiones de k6 (versión 2.3.0, en contenedor) | [`k6/`](k6/): `preparar.js`, `escenario1.js`, `rafaga-login.js`, `preparar-medios.js`, `escenario2.js` y lo común en `comun.js` y `medios.js` |
+| Datos sintéticos | Cuentas: `make semilla-nube CARGA=1`. Cursos, sesiones, inscripciones e intentos: `preparar.js`. Videos: [`medios/generar.sh`](medios/generar.sh) |
+| Resultados originales | [`resultados/`](resultados/): el resumen de k6 y las métricas de Cloud Monitoring de cada corrida, con el mismo nombre |
+| Tablas y gráficas | [`metricas/tabla.py`](metricas/tabla.py) y [`metricas/graficas.py`](metricas/graficas.py), que leen `resultados/` |
+| Exportación de métricas | [`metricas/exportar.py`](metricas/exportar.py), PromQL contra Cloud Monitoring en la ventana de cada corrida |
+
+```bash
+make semilla-nube CARGA=1                   # 600 estudiantes y 10 profesores
+make carga-sincronizar && make carga-medios # guiones y videos al generador
+make carga K6=preparar.js ETIQUETA=preparar
+make carga-nivel K6=escenario1.js ETIQUETA=e1-L2 ARGS="-e TASA=8 -e INTEGRIDAD=1"
+make carga-nivel K6=rafaga-login.js ETIQUETA=e1-rafaga-login ARGS="-e HASTA=20"
+make carga K6=preparar-medios.js ETIQUETA=preparar-medios
+make carga-nivel K6=escenario2.js ETIQUETA=e2-M1 \
+  ARGS="-e CARGAS=3 -e MEZCLA=2/1/0 -e ESPECTADORES=20 -e DURACION=10m -e ESPERA_MAX=20"
+make carga-tabla ARGS="e1 e1-L0 e1-L1 e1-L2"
+make carga-graficas ARGS="e1 e1-L0 e1-L1 e1-L2 e1-L2b e1-L3"
+```
+
+Los archivos con sesiones (`datos.json`, `medios.json`) se quedan en el
+generador y nunca entran al repositorio.
+
+**Corridas descartadas**, que se conservan en `resultados/` por transparencia:
+
+- `e1-L0-invalida-nat`. El generador salía por Cloud NAT, que reserva 64
+  puertos por VM y destino, y perdió 813 conexiones. Desde entonces tiene IP
+  externa propia.
+- `e1-L0-descartada-mezcla`. El guion elegía la cuenta por número de
+  iteración y a 1 iteración/s nunca llegaba a las cuentas por inscribir. Ahora
+  el índice se permuta.
 
 Las gráficas y las capturas sirven como evidencia, no sustituyen la
 interpretación. El informe relaciona las métricas del generador con las del Web

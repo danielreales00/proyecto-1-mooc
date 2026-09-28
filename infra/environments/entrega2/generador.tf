@@ -13,8 +13,8 @@ module "generador" {
   red_id       = module.red.red_id
 
   secreto_semilla = module.secretos.ids["seed-password"]
-  repositorio  = "mooc"
-  arranque     = file("${path.module}/../../../deploy/arranque-generador.sh")
+  repositorio     = "mooc"
+  arranque        = file("${path.module}/../../../deploy/arranque-generador.sh")
 
   depends_on = [module.registry]
 }
