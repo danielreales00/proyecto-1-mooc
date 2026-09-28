@@ -88,6 +88,43 @@ def e1(etiquetas):
             print(f"| {f['et']} | {f['429']} | {f['chk']} | {f['caidas']} | {f['cpu_gen']} | {f['conex']} |")
 
 
+def e2(etiquetas):
+    """Escenario 2: control (API), transferencia directa, cola y reproducción."""
+    def v(d, m, k):
+        x = d["metrics"].get(m)
+        return x["values"].get(k) if x else None
+    print("| Nivel | p95 autorizar / confirmar (ms) | Transferencia (MiB/s) | Completa→ready p50 A / B / C (s) | p95 playlist / segmento (ms) | Segmentos fallidos |")
+    print("| --- | --- | --- | --- | --- | --- |")
+    filas2 = []
+    for et in etiquetas:
+        d, met = cargar(f"{et}.json"), cargar(f"{et}-metricas.json")
+        if not d:
+            continue
+        rd = lambda p: (v(d, f"completa_a_ready_s{{perfil:{p}}}", "med")
+                        if v(d, f"completa_a_ready_s{{perfil:{p}}}", "count") else None)
+        f = lambda x: "-" if x is None else f"{x:.0f}"
+        print(f"| {et} | {ms(v(d, 'http_req_duration{name:POST /assets/init}', 'p(95)'))} / "
+              f"{ms(v(d, 'http_req_duration{name:POST /assets/complete}', 'p(95)'))} | "
+              f"{(v(d, 'transferencia_mib_s', 'med') or 0):.1f} | {f(rd('a'))} / {f(rd('b'))} / {f(rd('c'))} | "
+              f"{ms(v(d, 'http_req_duration{name:GET playlist}', 'p(95)'))} / "
+              f"{ms(v(d, 'http_req_duration{name:GET segmento (almacén)}', 'p(95)'))} | "
+              f"{(v(d, 'http_req_failed{name:GET segmento (almacén)}', 'rate') or 0) * 100:.2f} % |")
+        if met:
+            filas2.append((et, met))
+    print()
+    print("| Nivel | Cola bulk máx. (pendientes) | Antigüedad máx. (s) | CPU worker media / máx. | Memoria worker máx. | Disco worker máx. |")
+    print("| --- | --- | --- | --- | --- | --- |")
+    for et, met in filas2:
+        pend = serie(met, "cola_profundidad", {"queue": "bulk", "state": "pending"})
+        ant = serie(met, "cola_antiguedad_s", {"queue": "bulk"})
+        cm = serie(met, "cpu_uso", {"instance_name": "mooc-worker"}, "media")
+        cx = serie(met, "cpu_uso", {"instance_name": "mooc-worker"})
+        mx = serie(met, "memoria_uso_pct", {"metadata_system_name": "mooc-worker"})
+        dx = serie(met, "disco_uso_pct", {"metadata_system_name": "mooc-worker"})
+        print(f"| {et} | {ms(pend)} | {ms(ant)} | {pct(cm)} / {pct(cx)} | "
+              f"{'-' if mx is None else f'{mx:.0f} %'} | {'-' if dx is None else f'{dx:.0f} %'} |")
+
+
 def detalle(et):
     d, met = cargar(f"{et}.json"), cargar(f"{et}-metricas.json")
     print(f"== {et}")
@@ -105,4 +142,5 @@ def detalle(et):
 
 if __name__ == "__main__":
     modo, etiquetas = sys.argv[1], sys.argv[2:]
-    {"e1": lambda: e1(etiquetas), "detalle": lambda: [detalle(e) for e in etiquetas]}[modo]()
+    {"e1": lambda: e1(etiquetas), "e2": lambda: e2(etiquetas),
+     "detalle": lambda: [detalle(e) for e in etiquetas]}[modo]()

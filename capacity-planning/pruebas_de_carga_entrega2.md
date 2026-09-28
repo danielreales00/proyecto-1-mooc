@@ -3,7 +3,7 @@
 Informe de capacidad de la plataforma MOOC sobre el despliegue básico en la nube
 pública. La ruta de este archivo la fija el enunciado de la entrega.
 
-**Estado: en ejecución (27-09-2026).** La definición de abajo se fijó antes de
+**Estado: ejecutado (27 y 28-09-2026).** La definición de abajo se fijó antes de
 tocar el generador; los ajustes que exigió la plataforma real están en §1.1 y
 §5.2.1, y los resultados en §9, con lo medido y no con lo esperado.
 
@@ -699,23 +699,154 @@ login no cambia; lo que cambia es que la máquina no se cae.
 
 ### 9.3 Escenario 2
 
-| Nivel | Cargas/min | Espectadores | p95 autorizar | Transferencia | Espera en cola | Duración A/B/C | Completa→`ready` | Prof. cola | Disco | Veredicto |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| M0 | 1 | 5 | | | | | | | | |
-| M1 | 3 | 20 | | | | | | | | |
-| M2 | 6 | 45 | | | | | | | | |
-| M3 | 12 | 90 | | | | | | | | |
+Corridas del 28-09-2026 con los perfiles de §6.1, `db-g1-small` y el pool de
+la API en 25. Cada carga sondea su estado hasta 20 minutos después de
+confirmarla. Las cifras salen de `make carga-tabla ARGS="e2 …"`.
+
+**Control (API), transferencia directa y reproducción:**
+
+| Nivel | Cargas/min, mezcla A/B/C, espectadores | p95 autorizar / confirmar (ms) | Transferencia directa (MiB/s) | Completa→`ready`, mediana A / B / C | p95 playlist / segmento (ms) |
+| --- | --- | --- | --- | --- | --- |
+| M0 | 1, 1/0/0, 5 | 204 / 316 | 14,3 | 5 s / - / - | 1284 / 111 |
+| M1 | 3, 2/1/0, 20 | 256 / 543 | 16,9 | 10 s / 35 s / - | 1045 / 78 |
+| M2 | 6, 3/2/1, 45 | 308 / 562 | 20,5 | 9,4 / 9,6 / 11,3 min | 864 / 78 |
+| M3 | 12, 6/4/2, 90 | 388 / 569 | 16,9 | 11,9 / 12,7 / 14,1 min | 823 / 80 |
+
+En ningún nivel falló un segmento (0,00 %): 526, 2.093, 4.689 y 9.451
+descargados a cadencia de reproducción.
+
+**Cola y Worker Server:**
+
+| Nivel | Cargas lanzadas / en `ready` al terminar el sondeo | Cola `bulk` máx. | Antigüedad máx. | CPU Worker Server, media / máx. | Memoria Worker Server máx. |
+| --- | --- | --- | --- | --- | --- |
+| M0 | 11 / 11 | 0 | 0 | 16 / 70 % | 89 % |
+| M1 | 31 / 31 | 0 | 0 | 51 / 60 % | 85 % |
+| M2 | 43 / 41 | 779 | 16 min | 86 / 96 % | 90 % |
+| M3 | 71 / 33 | 2831 | 17 min | 85 / 96 % | 90 % |
+
+El disco del Worker Server no pasó del 15 %.
+
+![Cola en M2](graficas/e2-M2-cola.png)
+
+![Cola en M3](graficas/e2-M3-cola.png)
+
+**Lo que ya se ve en M0 y M1:**
+
+- **El tráfico de control es barato, salvo el playlist.** Autorizar la carga y
+  firmar sus partes cuesta un p95 de 204 a 256 ms, y confirmarla (que une las
+  partes con `compose`) de 316 a 543 ms. Pedir el playlist de una variante
+  cuesta un p95 de 1 a 1,3 s, cuando el manifiesto maestro cuesta 7 ms. La API
+  firma ahí una URL por segmento con una llamada a IAM `signBlob`, unos 200 ms
+  cada una medida en B1, y el costo crece con la duración del video.
+- **La transferencia directa no pasa por la API.** El generador sube las
+  partes a Cloud Storage a unos 15 a 17 MiB/s, con un p95 de 100 a 200 ms por
+  parte de 8 MiB, y ningún error.
+- **La reproducción aguanta.** 2.093 segmentos en M1 a cadencia de
+  reproducción, con p95 de 78 ms y ningún fallo.
+- **La cola no se acumula.** En M1, con 3 cargas por minuto de A y B, nunca
+  hay trabajo pendiente, y ninguna carga tarda más de 40 s de la confirmación
+  a `ready`.
+- **La memoria del Worker Server es lo más ajustado.** `clamd` ocupa 966 MiB en
+  reposo y FFmpeg lleva la máquina al 85-89 %.
+
+### 9.3.1 El cuello de botella del procesamiento
+
+**La capacidad sostenible está entre 3 y 6 cargas por minuto** con esta
+mezcla. En M1 cada video está listo en segundos. En M2 la cola crece sin
+drenar y un video tarda de 9 a 11 minutos. En M3 el procesamiento está
+saturado muy por encima de su capacidad. La API, la transferencia directa y
+la reproducción no se degradan en ningún nivel.
+
+**El límite es FFmpeg con un solo worker.** La duración real de cada
+transcodificación, medida en la base
+(`resultados/estado-de-la-base-tras-las-corridas.txt`):
+
+| Perfil | Transcodificaciones | Duración media | Por minuto de video |
+| --- | --- | --- | --- |
+| A, 20 s en 360p | 85 | 3,3 s | ~10 s |
+| B, 1 min en 720p | 45 | 33 s | ~33 s |
+| C, 2 min en 1080p, tres variantes | 16 | 196 s | ~98 s |
+
+Un único `worker-media` con concurrencia 1 dispone de 60 s de FFmpeg por
+minuto. M1 pide unos 40 s por minuto (2 A y 1 B), así que le cabe. M2 pide
+unos 272 (3 A, 2 B y 1 C): **4,5 veces su capacidad**, y el perfil C solo ya
+pide 196. La CPU del Worker Server lo confirma: pasa de una media del 51 % en
+M1 al 86 % en M2, con picos del 96 %. La memoria se sostiene en el 90 % sin
+fallos, con `clamd` y FFmpeg a la vez, y el disco no es un factor.
+
+**Al terminar, nada quedó perdido.** Media hora después de M3, 58 de sus 71
+cargas estaban en `ready`, 12 en `clean` (verificadas, escaneadas y esperando
+su turno para FFmpeg) y 1 en `processing`. Ninguna en un estado de fallo. En
+toda la campaña, 163 verificaciones y 163 escaneos terminaron bien, y ningún
+trabajo de medios murió. Un `202` de aceptación no es una transcodificación:
+por eso se contó en la base.
+
+**La cola exagera el atraso, y la causa es un hallazgo.** Con la cola
+atascada, el reaper (ADR-0008) republica los trabajos que llevan tiempo en
+`queued`, aunque sigan esperando en Redis. Hasta el final de M2 lo hizo 1.477
+veces. La
+idempotencia los descarta (602 escaneos y 254 transcodificaciones
+duplicadas), **y ningún video se transcodificó dos veces**, pero la
+profundidad se infla: en M2 marcaba 621 con solo 2 transcodificaciones reales
+pendientes. Explica los dientes de sierra de la gráfica: la cola sube mientras
+el único FFmpeg trabaja y cae de golpe cuando el worker, libre, descarta
+cientos de duplicados en segundos. La medida fiable del atraso es el tiempo de
+la confirmación a `ready`.
+
+**El tráfico de control más caro es el playlist.** Pedir el playlist de una
+variante cuesta un p95 de 0,8 a 1,3 s, cuando el manifiesto maestro cuesta
+7 ms. La API firma una URL por segmento con una llamada a IAM `signBlob`, de
+unos 200 ms cada una (medido en B1). No limita, pero es la carga de la API
+que más crece con la duración del video.
+
+**Limitaciones del experimento.** En M3, k6 lanzó 71 de las 120 cargas
+previstas (50 iteraciones perdidas): cada carga retiene su usuario virtual
+hasta 20 minutos mientras sondea su estado, y el grupo no alcanzó a sostener
+la tasa. El máximo probado es por tanto 71 cargas en 10 minutos. El drenaje
+final de M3 se cortó a los 6 minutos por el criterio de parada (cola creciendo
+de forma monótona más de 5 minutos), y el estado final se comprobó en la base.
+No se midió tiempo hasta el primer cuadro ni cortes de reproducción: haría
+falta un reproductor, y las peticiones HTTP no lo demuestran.
 
 ### 9.4 Punto de degradación y cuello de botella
 
-*Pendiente. Con la evidencia que lo sustenta y las limitaciones del experimento.*
+| Escenario | Capacidad sostenible | Se degrada | Primer límite | Evidencia |
+| --- | --- | --- | --- | --- |
+| 1, actividad académica | 60 a 70 req/s, p95 24 ms | Entre 61 y 91 req/s | Cloud SQL `db-g1-small`, núcleo compartido | CPU de la base limitada a 0,41 núcleos. Con vCPU dedicado, p95 de 27 ms con la misma carga (§9.1.1) |
+| 1, ráfaga de inicios de sesión | ~1,5 inicios/s | A partir de ~2/s | Memoria del Web Server (argon2id, 64 MiB por inicio) | La máquina se congela y hay que reiniciarla (§9.2) |
+| 2, multimedia | 3 a 6 cargas/min | Entre 3 y 6 cargas/min | FFmpeg con un solo worker | 272 s de FFmpeg pedidos por minuto frente a 60. CPU del Worker Server al 86-96 % (§9.3.1) |
 
 ### 9.5 Propuesta de evolución
 
-*Pendiente. Cada propuesta con la medición que permite esperar que ese cambio
-aumente la capacidad.*
+Cada propuesta con la medición que permite esperar que aumente la capacidad.
 
----
+1. **Cloud SQL con vCPU dedicado.** Medido: con `db-custom-1-3840` y la misma
+   carga de L3, el p95 bajó de 5,6 s a 27 ms y las iteraciones perdidas de 317
+   a 0. Es el cambio de más efecto y menos costo (unos 0,07 USD/h frente a
+   0,035).
+2. **Más capacidad de procesamiento, no más concurrencia en la misma
+   máquina.** La CPU del Worker Server ya está al 86-96 % con un FFmpeg, así
+   que un segundo en la misma máquina se repartiría la CPU. Con la mezcla de M2
+   hacen falta unas 4,5 veces más horas de FFmpeg: unos cinco `worker-media`
+   de 2 vCPU. Es el caso para un grupo de instancias que escale con la
+   profundidad real de la cola.
+3. **Una CDN.** No cambia el límite del procesamiento. Sí quita trabajo a la
+   API: con la cookie firmada de CDN (ADR-0015, D2, que el contrato ya
+   prevé) la firma es una por sesión y no una por segmento, y el playlist deja
+   de costar casi un segundo. Además acercaría los segmentos al estudiante y
+   descargaría Cloud Storage.
+4. **La concurrencia de las transferencias no es palanca.** La carga directa
+   corre a 15-20 MiB/s con 4 partes en paralelo y nunca fue el límite. Subir
+   más rápido solo llenaría antes la cola.
+5. **Acotar los hashes simultáneos en la API.** Un semáforo del tamaño de los
+   núcleos haría que una ráfaga de inicios de sesión espere en cola en vez de
+   agotar la memoria del Web Server (§9.2).
+6. **Que el reaper no duplique trabajos que siguen en cola.** Publicar con el
+   `job_key` como identificador de tarea de asynq haría que Redis rechace el
+   duplicado. La cola mostraría el atraso real (§9.3.1).
+7. **Redis local para sesiones, más adelante.** El salto a Redis cuesta unos
+   3,5 ms por petición (§9.1.1). No limita hoy, pero es la hipótesis siguiente
+   cuando la base deje de serlo.
 
 ## 10. Reproducir estas pruebas
 

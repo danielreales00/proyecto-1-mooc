@@ -10,9 +10,8 @@ Plataforma MOOC en Google Cloud sobre dos máquinas virtuales. URL pública
 
 La aplicación es la misma y cambia dónde corre. La API, los workers y Redis
 pasan a dos máquinas de Compute Engine, PostgreSQL a Cloud SQL y MinIO a Cloud
-Storage. El código nuevo es el que exigen el despliegue y la medición. Son un
-adaptador de Cloud Storage, métricas de la cola y límites por IP
-configurables. La colección de Postman de la Entrega 1 pasa entera en la nube.
+Storage. El código nuevo es el que exigen el despliegue y la medición, y la
+colección de Postman de la Entrega 1 pasa entera en la nube.
 
 ## 1. Introducción y objetivos
 
@@ -50,7 +49,6 @@ conserve las reglas de negocio y permita medir dónde se degrada.
 | Base administrada zonal, sin réplicas | Cloud SQL `ZONAL` con copias diarias |
 | Conexión privada a la base | Cloud SQL sin IP pública, por acceso privado a servicios |
 | Ningún secreto en el repositorio ni en las imágenes | Secret Manager, leído por cada máquina al arrancar |
-| Ninguna clave JSON de cuenta de servicio | Identidad de la instancia y ADC de usuario (ADR-0015, D3) |
 
 ## 3. Contexto y alcance
 
@@ -123,17 +121,12 @@ se publica en Redis después del commit.
 
 ## 6. Vista de ejecución
 
-La carga de un video sigue siete pasos.
-
-1. La API crea el asset y devuelve una URL firmada por parte de 8 MiB.
-2. El cliente sube cada parte a `tmp/{uploadID}/` en el bucket de originales.
-3. Al completar, la API une las partes con `compose`, en niveles de 32.
-4. La API responde 202 y encola la verificación, sin esperar al worker.
-5. El worker recalcula el SHA-256 leyendo de Cloud Storage y lo compara con el
-   declarado.
-6. ClamAV escanea el original. Lo infectado va a cuarentena y no llega a FFmpeg.
-7. FFmpeg genera las variantes HLS en el bucket de derivados y el asset pasa a
-   `ready`.
+1. La API crea el asset y firma una URL por parte de 8 MiB.
+2. El cliente sube las partes a `tmp/{uploadID}/` en `originals`.
+3. La API las une con `compose`, responde 202 y encola la verificación.
+4. El worker recalcula el SHA-256 leyendo de Cloud Storage.
+5. ClamAV escanea. Lo infectado va a cuarentena y no llega a FFmpeg.
+6. FFmpeg escribe las variantes HLS en `derived` y el asset pasa a `ready`.
 
 La reproducción abre una sesión por inscripción. El manifiesto sale de la API y
 cada segmento es una URL firmada hacia Cloud Storage.
@@ -210,9 +203,9 @@ El generador de carga es una tercera máquina que existe solo mientras se mide.
 | Pausar la base | `cloudsql_encendida = false` en `terraform.tfvars` |
 
 Cada máquina recibe por metadatos su composición y un `.env` sin secretos.
-`deploy/arranque.sh` instala Docker y el agente de operaciones, lee los
-secretos de Secret Manager con la identidad de la máquina, escribe el `.env`
-con permisos 0600 y levanta la composición.
+`deploy/arranque.sh` instala Docker y el agente, añade los secretos de Secret
+Manager con la identidad de la máquina, en un `.env` con permisos 0600, y
+levanta la composición.
 
 ### Secretos
 
@@ -224,25 +217,22 @@ demostración de la Entrega 1 devuelve 401 en la nube.
 
 ### Respaldo y reconstrucción
 
-Cloud SQL hace una copia diaria y la conserva siete días. Las copias sobreviven
-al borrado de la instancia (`retain_backups_on_delete`). La reconstrucción
-parte del repositorio y del bucket del estado. Se ejecuta `terraform apply`, se
-publican las imágenes, se siembra y se pasa la colección. Los pasos están en
-`arquitectura/despliegue-gcp.md`.
+Cloud SQL hace una copia diaria, la conserva siete días y la mantiene aunque se
+borre la instancia. La reconstrucción es `terraform apply`, sembrar y pasar la
+colección, con los pasos en `arquitectura/despliegue-gcp.md`.
 
 PENDIENTE_TIEMPO_RECONSTRUCCION
 
 ### Seguridad de la sesión
 
-La API autentica con un token opaco en `Authorization`, no con cookies. Sin
-cookie de sesión no hay petición que un tercer sitio pueda forjar, por eso no
-hay token CSRF. El token se revoca en Redis y todo el tráfico va por HTTPS.
+La API autentica con un token opaco en `Authorization`, no con cookies, así
+que un tercer sitio no puede forjar peticiones y no hace falta token CSRF.
 
 ### Observabilidad
 
-El agente de operaciones envía a Cloud Monitoring CPU, memoria, disco y red, y
-lee Redis y el `/metrics` de cada proceso dentro de la máquina. `/metrics` no
-es público. La cola exporta profundidad, antigüedad y tasa de procesamiento.
+El agente de operaciones lleva a Cloud Monitoring CPU, memoria, disco, red,
+Redis y el `/metrics` de cada proceso, que no es público. La cola exporta
+profundidad, antigüedad y tasa de procesamiento.
 
 ## 9. Decisiones de arquitectura
 
@@ -260,11 +250,10 @@ es público. La cola exporta profundidad, antigüedad y tasa de procesamiento.
 
 ### Migración de los objetos
 
-Los objetos de MinIO eran de prueba y no se trasladaron. Se crean en la nube
-con los mismos buckets y claves que en local. El trabajo `media.probe`
-recalcula el SHA-256 de cada original leyendo de Cloud Storage y lo compara con
-el declarado y con la referencia de la base. Esa es la verificación de
-integridad.
+Los objetos de MinIO eran de prueba y no se trasladaron. En la nube se crean
+con los mismos buckets y claves, y `media.probe` verifica la integridad de cada
+original recalculando su SHA-256 contra el declarado y la referencia de la
+base.
 
 ### Diferencias frente a la arquitectura objetivo
 
@@ -276,8 +265,7 @@ integridad.
 | Cloud CDN con cookie firmada | URL firmada directa a Cloud Storage |
 | Despliegue desde CI con Workload Identity Federation | Desde una máquina del equipo con ADC de usuario |
 
-El contrato de la API no cambia entre las dos columnas. `media-sessions`
-devuelve `signed_url` y el campo `delivery` permitirá pasar a cookie de CDN.
+El contrato de la API es el mismo en las dos columnas.
 
 ## 10. Requisitos de calidad
 
@@ -290,48 +278,51 @@ El escenario 1 sostiene unas 60 a 70 peticiones por segundo con p95 de 25 ms
 durante 15 minutos. A 91 empieza la degradación y a 110 el p95 llega a 8 s.
 No hay errores en ningún nivel. Todo lo que responde, responde bien.
 
-El primer límite es Cloud SQL `db-g1-small`. Su núcleo compartido consume
-0,54 núcleos y, al agotar la ráfaga, baja a 0,41 aunque la carga siga. Ninguna
-máquina pasa del 60 % de CPU. Se comprobó cambiando una cosa cada vez. Ampliar
-el pool de la API de 10 a 25 conexiones bajó el p95 de 8,1 a 5,6 s. Un vCPU
-dedicado en la base lo bajó a 27 ms con la misma carga. El salto a Redis cuesta
-0,68 ms de ida y vuelta y no satura.
+El primer límite es Cloud SQL `db-g1-small`. Su núcleo compartido llega a 0,54
+núcleos y, al agotar la ráfaga, baja a 0,41 con la carga intacta. Ampliar el
+pool de la API de 10 a 25 bajó el p95 de 8,1 a 5,6 s. Un vCPU dedicado en la
+base lo bajó a 27 ms con la misma carga. Redis no satura.
 
-La ráfaga de inicios de sesión congela el Web Server a partir de unos dos por
-segundo. Cada inicio reserva 64 MiB para argon2id y la máquina tiene 2 GiB sin
-swap.
+Una ráfaga de unos dos inicios de sesión por segundo congela el Web Server,
+porque cada uno reserva 64 MiB para argon2id.
 
-PENDIENTE_RESUMEN_E2
+El escenario 2 sostiene entre 3 y 6 cargas de video por minuto. Con 3 cada
+video está listo en segundos, y con 6 tarda de 9 a 11 minutos. El límite es
+FFmpeg con un solo worker. La mezcla de 6 cargas por minuto pide 272 s de
+transcodificación por minuto y el worker dispone de 60, con la CPU al 86-96 %.
+La API, la carga directa a 15-20 MiB/s y la reproducción no se degradan, sin
+un solo segmento fallido. Ninguna carga se perdió.
 
 ### Costo
 
-Estimación del 27 de septiembre de 2026 con precios de lista de `us-central1`.
-Supone las máquinas y la base encendidas dos semanas, las del trabajo y las
-pruebas, y detenidas después. `maquinas_encendidas` y `cloudsql_encendida` en
-`terraform.tfvars` las detienen sin borrarlas.
+Estimación del 27 de septiembre de 2026 con precios de lista de `us-central1`,
+por día.
 
-| Recurso | Unidad | Precio de lista | Uso previsto | Costo |
-| --- | --- | --- | --- | --- |
-| 2 × `e2-highcpu-2` | hora | 0,0495 USD | 672 h | 33,26 USD |
-| Generador `e2-standard-4` | hora | 0,134 USD | 12 h | 1,61 USD |
-| Discos `pd-balanced` | GiB-mes | 0,10 USD | 90 GiB × 0,5 mes | 4,50 USD |
-| Cloud SQL `db-g1-small` | hora | 0,035 USD | 336 h | 11,76 USD |
-| IP externa en uso | hora | 0,005 USD | 336 h | 1,68 USD |
-| Cloud NAT | hora | 0,0014 USD | 336 h | 0,47 USD |
-| Cloud Storage y operaciones | GiB-mes | 0,020 USD | 20 GiB | 0,40 USD |
-| Métricas de la aplicación | millón de muestras | 0,06 USD | 40 millones | 2,40 USD |
+| Recurso | Precio de lista | Encendido (USD/día) | Detenido (USD/día) |
+| --- | --- | --- | --- |
+| 2 × `e2-highcpu-2` | 0,0495 USD/h | 2,38 | 0 |
+| Cloud SQL `db-g1-small`, cómputo | 0,035 USD/h | 0,84 | 0 |
+| Discos de las máquinas, 60 GiB `pd-balanced` | 0,10 USD/GiB-mes | 0,20 | 0,20 |
+| Disco de Cloud SQL, 10 GiB SSD | 0,17 USD/GiB-mes | 0,06 | 0,06 |
+| IP externa del Web Server | 0,005 USD/h en uso, 0,01 sin usar | 0,12 | 0,24 |
+| Cloud NAT | 0,0014 USD/h | 0,03 | 0 |
+| Cloud Storage, Artifact Registry y secretos | ~22 GiB | 0,02 | 0,02 |
+| Métricas de la aplicación | 0,06 USD/millón de muestras | 0,17 | 0 |
+| **Total** | | **3,82** | **0,52** |
 
-El total previsto es de unos 56 USD, por encima del presupuesto de 50 USD si
-las máquinas no se detienen. Detenerlas fuera de las sesiones de trabajo lo
-deja en unos 35 USD, con unas 120 horas por máquina. El
-presupuesto `mooc-entrega2` avisa al 50, 80 y 100 %. Excluye los créditos de la
-cuenta educativa, porque con ellos el gasto neto sería cero y ninguna alerta
-saltaría. El tráfico de los segmentos no paga salida a Internet en las pruebas
-porque el generador llega a Cloud Storage por la red de Google.
+Este costo, 3,82 USD al día, es el de tener todo encendido todo el tiempo. Con
+Terraform se detienen las máquinas y la base
+(`maquinas_encendidas` y `cloudsql_encendida`), y entonces solo se paga lo que
+queda persistido: discos, la IP reservada y los objetos, unos 0,52 USD al día.
+La IP reservada es lo que más cuesta detenido, y se conserva porque el nombre
+público y el certificado dependen de ella. El generador de carga suma 3,44 USD
+al día mientras existe y se borra al terminar de medir.
 
-Con la instancia detenida Cloud SQL deja de cobrar cómputo, y siguen el
-almacenamiento y la IP. Con 10 GiB de SSD a 0,17 USD por GiB y mes y la IP solo
-privada, detenida cuesta unos 0,06 USD al día frente a 0,85 encendida. La documentación de Google, consultada el 28 de
+El presupuesto `mooc-entrega2` es de 50 USD y avisa al 50, 80 y 100 %. Excluye
+los créditos de la cuenta educativa, porque con ellos ninguna alerta saltaría.
+
+Con la instancia detenida, Cloud SQL deja de cobrar cómputo y siguen el
+almacenamiento y la IP. La documentación de Google, consultada el 28 de
 septiembre, no fija una duración máxima ni una reactivación automática. Al
 cerrar la entrega la instancia se borra y sus copias se conservan.
 
@@ -353,23 +344,30 @@ PENDIENTE_CONSUMO_OBSERVADO
   aviso.
 - ClamAV ocupa 966 MiB residentes. El Worker Server queda con 373 MiB libres en
   reposo y sin swap.
-- Cada firma de URL es una llamada a IAM de unos 200 ms, y la API firma las
-  partes en serie.
-- El playlist de cada variante tarda cientos de milisegundos porque la API
-  firma cada segmento con una llamada a IAM.
+- Cada firma de URL es una llamada a IAM de unos 200 ms. La API firma en serie
+  las partes de una carga y los segmentos de un playlist.
 - La ráfaga de inicios de sesión se detuvo tarde. El criterio de memoria no lo
   vigila k6, y hubo que reiniciar el Web Server.
 - El correo no sale a Internet.
 
 ### Hacia una aplicación elástica
 
-PENDIENTE_EVOLUCION
+| Cambio | Medición que lo respalda |
+| --- | --- |
+| Cloud SQL con vCPU dedicado | Con la misma carga saturada, p95 de 5,6 s a 27 ms |
+| Varios `worker-media` que escalen con la cola real | 4,5 veces más FFmpeg del disponible, con la CPU al 90 % |
+| Cloud CDN con cookie firmada | Cada playlist tarda cerca de 1 s firmando sus segmentos con IAM |
+| Acotar los hashes simultáneos | La ráfaga de logins agota la memoria del Web Server |
+| Reaper que no duplique trabajos en cola | 1.477 republicaciones que la idempotencia descartó |
+
+Ninguno exige cambiar el contrato de la API. Con los dos primeros, el paso
+siguiente es separar la API y los workers en grupos de instancias que escalen
+por separado, que es la arquitectura objetivo de la sección 9.
 
 ## 12. Glosario
 
 | Término | Significado |
 | --- | --- |
-| ADC | Credenciales por defecto de la aplicación de Google |
 | IAP | Proxy con identidad de Google para entrar por SSH sin abrir el puerto |
 | `compose` | Operación de Cloud Storage que une objetos sin descargarlos |
 | `signBlob` | Operación de IAM que firma con la clave de una cuenta de servicio |

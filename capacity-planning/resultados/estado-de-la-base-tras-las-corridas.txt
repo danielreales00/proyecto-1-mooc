@@ -1,0 +1,44 @@
+
+
+          consultado           
+-------------------------------
+ 2026-09-28 01:46:08.842058+00
+(1 row)
+
+ estado_del_asset | cargas 
+------------------+--------
+ ready            |     58
+ clean            |     12
+ processing       |      1
+(3 rows)
+
+ estado_del_asset | cargas 
+------------------+--------
+ ready            |    146
+ clean            |     12
+ processing       |      1
+(3 rows)
+
+        perfil         | transcodificaciones | segundos_media | segundos_max 
+-----------------------+---------------------+----------------+--------------
+ archivo-de-prueba.mp4 |                   2 |            1.4 |          1.8
+ carga-a.mp4           |                  85 |            3.3 |          4.3
+ carga-b.mp4           |                  45 |           33.1 |         34.6
+ carga-c.mp4           |                  16 |          195.6 |        411.6
+(4 rows)
+
+ estado_del_intento | count 
+--------------------+-------
+ in_progress        |   100
+ submitted          | 15135
+(2 rows)
+
+        type         |  status   | count 
+---------------------+-----------+-------
+ media.probe         | succeeded |   163
+ media.scan          | succeeded |   163
+ media.transcode_hls | queued    |    12
+ media.transcode_hls | running   |     1
+ media.transcode_hls | succeeded |   148
+(5 rows)
+

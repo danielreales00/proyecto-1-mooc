@@ -33,3 +33,8 @@ coverage.out
 # Archivos de las pruebas de carga: se regeneran con make medios-carga.
 capacity-planning/medios/*.mp4
 capacity-planning/medios/manifiesto.jsonl
+
+# Guiones y reparto de los videos: se trabajan en local, no se versionan.
+demo/guion.md
+demo/guion-entrega2.md
+demo/reparto.md

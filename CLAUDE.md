@@ -103,8 +103,9 @@ También se cerró `media-sessions`: la credencial de reproducción por
 inscripción, que en GCP pasa de URL firmada a cookie de CDN sin que el cliente
 cambie (ADR-0015, D2).
 
-**El guion de `demo/guion.md` describe lo que se grabó**, no el estado actual
-del repositorio: no se actualiza hacia atrás.
+**Los guiones y el reparto de los videos no se versionan** (`demo/guion.md`,
+`demo/guion-entrega2.md`, `demo/reparto.md`): se trabajan en local y están en el `.gitignore`. El
+de la Entrega 1 describe lo que se grabó, no el estado actual del repositorio.
 
 **La Entrega 2 es el despliegue básico en la nube**, sobre **dos máquinas
 virtuales**: el enunciado prohíbe Cloud Run, CDN, balanceadores, autoescalado y
@@ -115,9 +116,9 @@ decisión en `adr/0016` —que corrige el `adr/0015`— y el plan ejecutable en
 [`arquitectura/despliegue-gcp.md`](arquitectura/despliegue-gcp.md), que es el
 punto de entrada de la conversación que lo ejecute.
 
-La demostración se hace con Postman. El guion del video está en
-`demo/guion.md`, dimensionado para el **máximo de 20 minutos**, y el reparto
-entre las cuatro personas en `demo/reparto.md`. Ver
+La demostración se hace con Postman. Los videos duran como **máximo 20
+minutos**. El reparto entre las cuatro personas (`demo/reparto.md`) tampoco se
+versiona. Ver
 `arquitectura/alcance-entrega-1.md` y `arquitectura/pendientes.md`.
 
 **Antes de empujar, `make ci` y esperar su código de salida.** No basta leer

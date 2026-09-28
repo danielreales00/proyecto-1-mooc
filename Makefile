@@ -225,9 +225,9 @@ tunel-mailpit: ## Túnel SSH por IAP al Mailpit del Worker Server (contenedor mo
 	@docker rm -f mooc-tunel >/dev/null 2>&1 || true
 	@# Mailpit solo escucha en el 127.0.0.1 del Worker Server. El túnel lo trae
 	@# a mooc-tunel:8025 dentro de la red $(NUBE_RED); no se abre ningún puerto.
-	@# También en 127.0.0.1:8026 de esta máquina: Postman de escritorio lo lee
-	@# con el mailpit_url de siempre.
-	@docker run -d --name mooc-tunel --network $(NUBE_RED) -p 127.0.0.1:8026:8025 \
+	@# También en 127.0.0.1:8027 de esta máquina (8026 es el Mailpit local): Postman de escritorio lo lee
+	@# con mailpit_url=http://localhost:8027.
+	@docker run -d --name mooc-tunel --network $(NUBE_RED) -p 127.0.0.1:8027:8025 \
 		-v mooc-gcloud:/root/.config/gcloud -v mooc-ssh:/root/.ssh $(GCLOUD_IMAGE) \
 		gcloud compute ssh mooc-worker --zone us-central1-a --tunnel-through-iap --quiet \
 		-- -N -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes \
