@@ -2,9 +2,89 @@
 
 Informe de capacidad de la plataforma MOOC desplegada en Google Cloud.
 Corridas del 27 y 28 de septiembre de 2026. Los resultados originales, los
-guiones y las gráficas están en este directorio (sección 9).
+guiones y las gráficas están en este directorio (sección 10).
 
-## 1. Condiciones fijas
+## 1. Conclusiones
+
+| Escenario | Capacidad sostenible | Primer cuello de botella | Segundo |
+| --- | --- | --- | --- |
+| 1. Sesión de estudio | 61 a 68 peticiones por segundo, unos 240 estudiantes activos, p95 de 24-25 ms durante 15 minutos | Cloud SQL `db-g1-small` | Pool de conexiones de la API |
+| 2. Carga y procesamiento de video | Entre 3 y 6 cargas por minuto con la mezcla A/B/C | FFmpeg con un solo `worker-media` | Ninguno medido |
+
+En ningún nivel hubo errores `5xx` ni cargas perdidas. Lo que se degrada es la
+latencia, no la corrección.
+
+### 1.1 Escenario 1. La base de datos
+
+**Qué limita.** Cloud SQL `db-g1-small`. Es de núcleo compartido: sostiene una
+ráfaga de CPU y, al agotarla, baja a su cuota.
+
+**Por qué es la base y no otro componente:**
+
+- **Todas las operaciones se degradan a la vez.** En L2b el p95 pasa de 25 a
+  272 ms y en L3 a 8 s, en las nueve operaciones. Comparten un recurso
+  ([6.2](#62-por-operación)).
+- **La base se frena sola con la carga intacta.** En L3, al minuto 4,5, su CPU
+  cae de 0,54 a 0,41 núcleos. En ese mismo minuto la del Web Server baja del 60
+  al 43 %: la API espera a la base, no calcula ([6.4](#64-cuello-de-botella)).
+- **Cambiar solo la base lo resuelve.** A la tasa de L3, un vCPU dedicado
+  (`db-custom-1-3840`) baja el p95 de 5,6 s a 27 ms, sin iteraciones perdidas.
+  Ampliar el pool de la API de 10 a 25 conexiones solo lo baja de 8,1 a 5,6 s:
+  es el segundo límite, no el primero.
+- **El resto tiene margen.** El Web Server promedia el 44 % de CPU en L3.
+  Redis responde en 0,68 ms de media y el Worker Server no pasa del 13 %. El
+  generador no pasó del 42 %.
+
+**La integridad se conserva bajo carga.** Las 244 comprobaciones de
+concurrencia pasaron: ningún envío duplicado dio dos calificaciones, la clave
+del quiz no salió y el porcentaje enviado por el cliente se rechazó
+([6.3](#63-integridad-bajo-concurrencia)).
+
+**Límite aparte: la ráfaga de inicios de sesión.** Cada inicio reserva 64 MiB
+para argon2id. La API atiende unos 1,5 por segundo; con unos 2 por segundo el
+Web Server se queda sin memoria y deja de responder
+([6.5](#65-ráfaga-de-inicios-de-sesión)).
+
+### 1.2 Escenario 2. El procesamiento de video
+
+**Qué limita.** FFmpeg, con un solo `worker-media` de concurrencia 1.
+
+**Por qué es FFmpeg y no otro componente:**
+
+- **La demanda supera lo que hay.** La mezcla de M2 pide unos 272 s de
+  transcodificación por minuto. Un worker dispone de 60. La de M1 pide 40 y
+  cumple ([8.3](#83-cuello-de-botella)).
+- **El ritmo no crece con la carga.** M2 y M3 procesan lo mismo, 1,3
+  transcodificaciones por minuto, aunque M3 ofrece el doble. La CPU del Worker
+  Server se queda en el 86-96 % ([8.2](#82-procesamiento)).
+- **El atraso se acumula en la cola, no en los errores.** Con 6 cargas por
+  minuto el video tarda de 9 a 14 minutos en estar listo; con 3, segundos. No
+  hubo trabajos muertos y la única transcodificación fallida se reintentó con
+  éxito.
+- **El resto tiene margen.** La carga va directa a Cloud Storage a
+  14-20 MiB/s, sin pasar por la API. El Web Server no pasa del 5 % de CPU. La
+  reproducción sirvió 16.759 segmentos sin un fallo
+  ([8.1](#81-control-transferencia-y-reproducción)).
+
+**Objetivo incumplido sin relación con la carga.** Autorizar una carga tarda
+204 ms en p95 desde M0, frente a 150 ms. Cada firma es una llamada a IAM
+`signBlob`.
+
+### 1.3 Qué cambiar
+
+| Cambio | Medición que lo respalda |
+| --- | --- |
+| Cloud SQL con vCPU dedicado | Con la carga de L3, p95 de 5,6 s a 27 ms y 0 iteraciones perdidas |
+| Varios `worker-media` que escalen con el tiempo de espera de la cola | 272 s de FFmpeg pedidos por minuto frente a 60, CPU al 86-96 % |
+| Cloud CDN con cookie firmada | Playlist de 0,8 a 1,3 s por la firma de cada segmento |
+| Limitar los hashes de contraseña simultáneos | Una ráfaga de unos 2 inicios de sesión por segundo congela el Web Server |
+| Reaper que no republique trabajos todavía en cola | 2.554 duplicados descartados en M2 y M3 |
+| Redis local a la API para sesiones y límites | 3,5 ms por petición. No limita hoy. Es la hipótesis siguiente cuando la base deje de serlo |
+
+El resto del informe da las condiciones, las definiciones y los datos que
+respaldan estas conclusiones.
+
+## 2. Condiciones fijas
 
 | Elemento | Valor |
 | --- | --- |
@@ -15,7 +95,7 @@ guiones y las gráficas están en este directorio (sección 9).
 | Objetos | Cloud Storage, cuatro buckets en `US-CENTRAL1` |
 | Versión de la aplicación | Imágenes `ef646a192a82` |
 | Concurrencia de workers | `worker` 20 en `critical=6,default=3`. `worker-media` 1 en `bulk=1` |
-| Pool de conexiones | `DB_MAX_CONNS=10` por proceso. La API pasó a 25 tras la sección 5.4 y así se midió el escenario 2 |
+| Pool de conexiones | `DB_MAX_CONNS=10` por proceso. La API pasó a 25 tras la sección 6.4 y así se midió el escenario 2 |
 | Caché | Redis, base 2, sin cambios respecto a la Entrega 1 |
 | Límites de tasa | Los tres límites por IP multiplicados por 100 (`RATE_LIMIT_IP_FACTOR`). Los límites por cuenta y por sesión, sin cambios |
 | Generador | `mooc-generador`, `e2-standard-4` (4 vCPU, 16 GiB), `us-central1-a`, IP externa propia |
@@ -26,9 +106,9 @@ ese ajuste, `login_ip` (60 por minuto) habría medido el limitador.
 **El generador no limitó ninguna corrida válida.** Su CPU máxima fue del 42 %
 y no hubo errores de red de su lado. La primera corrida salía por Cloud NAT y
 perdió 813 conexiones por agotamiento de puertos. Se descartó y el generador
-pasó a tener IP externa (sección 9).
+pasó a tener IP externa (sección 10).
 
-## 2. Herramienta
+## 3. Herramienta
 
 k6 2.3.0, en contenedor. Modela cada recorrido como un guion en JavaScript,
 valida el cuerpo de cada respuesta con `check()` y exporta un resumen JSON por
@@ -38,7 +118,7 @@ Los dos escenarios usan tasa de llegada fija (`constant-arrival-rate`). La
 carga ofrecida no baja cuando el servidor se pone lento, y la saturación se ve.
 Una corrida vale solo si `dropped_iterations` es 0 o la pérdida se explica.
 
-## 3. Datos sintéticos
+## 4. Datos sintéticos
 
 | Dato | Cantidad | Cómo se crea |
 | --- | --- | --- |
@@ -60,7 +140,7 @@ Los videos se generan con `medios/generar.sh` y el FFmpeg de `worker-media`.
 Son imagen de prueba en movimiento y un tono de 440 Hz en H.264 y AAC. La
 resolución del original nunca se aumenta.
 
-## 4. Escenario 1. Definición
+## 5. Escenario 1. Definición
 
 Cada iteración es una sesión de estudio de un estudiante con cuenta propia.
 La cuenta se elige con una permutación del número de iteración, así que dos
@@ -120,9 +200,9 @@ por el cliente.
 **Variante separada.** Ráfaga de inicios de sesión de 1 a 20 por segundo en
 3 minutos (`ramping-arrival-rate`). Se detiene si el p95 del login pasa de 5 s.
 
-## 5. Escenario 1. Resultados
+## 6. Escenario 1. Resultados
 
-### 5.1 Por nivel
+### 6.1 Por nivel
 
 Fase de medición, sin calentamiento.
 
@@ -161,7 +241,7 @@ iteraciones a mitad (105 en la base). La regla que lo rechaza es el índice
 `attempts_one_in_progress`. El guion cuenta ahora ese `409` como rechazo de
 negocio.
 
-### 5.2 Por operación
+### 6.2 Por operación
 
 p95 en milisegundos. En negrita, lo que supera el objetivo de su clase.
 
@@ -182,7 +262,7 @@ objetivo en todas las operaciones. Todas se degradan a la vez, así que
 comparten un recurso. Las escrituras de varias filas se degradan primero y
 más: `PATCH /answers` escribe 10 respuestas por llamada.
 
-### 5.3 Integridad bajo concurrencia
+### 6.3 Integridad bajo concurrencia
 
 Durante L2.
 
@@ -194,7 +274,7 @@ Durante L2.
 | La clave del quiz no aparece en el snapshot | 49 | 0 |
 | Porcentaje enviado por el cliente, rechazado | 49 | 0 |
 
-### 5.4 Cuello de botella
+### 6.4 Cuello de botella
 
 En L3 la latencia sube al minuto 4,5. En ese mismo minuto la CPU del Web
 Server baja del 60 al 43 % y la de Cloud SQL del 54 al 41 %. Las conexiones a
@@ -227,20 +307,7 @@ Redis no limita. Bajo L2, la ida y vuelta desde el Web Server mide 0,68 ms de
 media y 3 ms de máximo (`redis-cli --latency`, 2.774 muestras). Cada petición
 hace unos 5,2 comandos, unos 3,5 ms, y el Worker Server no pasa del 13 % de CPU.
 
-### 5.5 Respuestas del escenario
-
-1. **Volumen sostenible.** 61 a 68 peticiones por segundo, unos 240
-   estudiantes activos, con todos los objetivos cumplidos durante 15 minutos.
-   La degradación empieza entre 61 y 91 peticiones por segundo.
-2. **Operaciones y componentes.** Las escrituras de varias filas concentran la
-   latencia. La causa es PostgreSQL en un núcleo compartido. El pool de la API
-   es el segundo límite. Redis no interviene.
-3. **Integridad.** Se conserva. Ningún envío duplicado produjo dos
-   calificaciones (sección 5.3).
-4. **Cambio que aumenta la capacidad.** Un vCPU dedicado en la base. Con la
-   carga de L3, el p95 pasó de 5,6 s a 27 ms.
-
-### 5.6 Ráfaga de inicios de sesión
+### 6.5 Ráfaga de inicios de sesión
 
 | Hora (UTC) | Demanda ofrecida | Inicios atendidos | Memoria del Web Server |
 | --- | --- | --- | --- |
@@ -254,7 +321,7 @@ por segundo. Por encima se acumulan y el Web Server, con 2 GiB y sin swap, se
 queda sin memoria y deja de responder. Se recuperó reiniciando la máquina. El
 criterio de parada por p95 actuó tarde porque k6 no vigila la memoria.
 
-## 6. Escenario 2. Definición
+## 7. Escenario 2. Definición
 
 **Cargas.** Por iteración, un profesor de los 10 sube un video:
 
@@ -284,9 +351,9 @@ muertos y el video está listo en menos de 3 veces su duración. Saturación si 
 cola crece de forma monótona durante 5 minutos. Parada del drenaje final por
 ese mismo criterio.
 
-## 7. Escenario 2. Resultados
+## 8. Escenario 2. Resultados
 
-### 7.1 Control, transferencia y reproducción
+### 8.1 Control, transferencia y reproducción
 
 | Nivel | p95 autorizar / confirmar (ms) | Transferencia (MiB/s) | p95 por parte de 8 MiB (ms) | p95 manifiesto / playlist / segmento (ms) | Segmentos fallidos |
 | --- | --- | --- | --- | --- | --- |
@@ -303,7 +370,7 @@ es una llamada a IAM `signBlob` de unos 200 ms. Confirmar supera su objetivo de
 300 ms porque une las partes con `compose`. El playlist cuesta de 0,8 a
 1,3 s porque firma cada segmento. Ninguno empeora con la carga.
 
-### 7.2 Procesamiento
+### 8.2 Procesamiento
 
 | Nivel | Cargas lanzadas / en `ready` al terminar el sondeo | Transcodificaciones/min | De la confirmación a `ready`, mediana A / B / C | Cola `bulk` máx. | Antigüedad máx. |
 | --- | --- | --- | --- | --- | --- |
@@ -348,7 +415,7 @@ idempotencia descartó 856 duplicados en M2 y 1.698 en M3, y ningún video se
 transcodificó dos veces. Por eso la cola cae de golpe cuando el worker queda
 libre. El atraso real lo mide el tiempo hasta `ready`.
 
-### 7.3 Cuello de botella
+### 8.3 Cuello de botella
 
 **El límite es FFmpeg con un solo `worker-media`.** La mezcla de M1 pide unos
 40 s de transcodificación por minuto (2 A y 1 B). La de M2 pide unos 272 s
@@ -366,17 +433,6 @@ cumple: el perfil C tarda 11,3 minutos para un video de 2.
 | Más capacidad de procesamiento | Es el cambio que sube la capacidad. Con la mezcla de M2 hacen falta unos 5 `worker-media` en máquinas separadas. Un segundo FFmpeg en la misma máquina no ayuda, con la CPU al 86-96 % |
 | Una CDN | No cambia el límite. Quita a la API la firma por segmento del playlist (0,8 a 1,3 s) con una cookie firmada por sesión, y descarga Cloud Storage |
 | Más concurrencia de transferencias | No cambia el límite. La carga directa corre a 14-20 MiB/s y nunca limitó. Subir más rápido solo llena antes la cola |
-
-## 8. Propuesta de evolución
-
-| Cambio | Medición que lo respalda |
-| --- | --- |
-| Cloud SQL con vCPU dedicado | Con la carga de L3, p95 de 5,6 s a 27 ms y 0 iteraciones perdidas |
-| Varios `worker-media` que escalen con el tiempo de espera de la cola | 272 s de FFmpeg pedidos por minuto frente a 60, CPU al 86-96 % |
-| Cloud CDN con cookie firmada | Playlist de 0,8 a 1,3 s por la firma de cada segmento |
-| Limitar los hashes de contraseña simultáneos | Una ráfaga de unos 2 inicios de sesión por segundo congela el Web Server |
-| Reaper que no republique trabajos todavía en cola | 2.554 duplicados descartados en M2 y M3 |
-| Redis local a la API para sesiones y límites | 3,5 ms por petición. No limita hoy. Es la hipótesis siguiente cuando la base deje de serlo |
 
 ## 9. Limitaciones
 
