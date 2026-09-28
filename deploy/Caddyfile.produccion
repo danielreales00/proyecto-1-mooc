@@ -15,6 +15,13 @@
 		format json
 	}
 
+	# /metrics no sale a Internet: cuenta cuánto tráfico hay, por ruta y por
+	# estado, y cómo va la cola. El agente de operaciones la lee dentro de la
+	# máquina (127.0.0.1:8080), sin pasar por aquí.
+	handle /metrics* {
+		respond 404
+	}
+
 	handle /docs* {
 		reverse_proxy swagger:8080
 	}

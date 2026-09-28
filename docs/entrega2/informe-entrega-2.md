@@ -263,7 +263,22 @@ devuelve `signed_url` y el campo `delivery` permitirá pasar a cookie de CDN.
 La definición, los resultados por nivel y la evidencia están en
 `capacity-planning/pruebas_de_carga_entrega2.md`.
 
-PENDIENTE_RESUMEN_CAPACIDAD
+El escenario 1 sostiene unas 60 a 70 peticiones por segundo con p95 de 25 ms
+durante 15 minutos. A 91 empieza la degradación y a 110 el p95 llega a 8 s.
+No hay errores en ningún nivel. Todo lo que responde, responde bien.
+
+El primer límite es Cloud SQL `db-g1-small`. Su núcleo compartido consume
+0,54 núcleos y, al agotar la ráfaga, baja a 0,41 aunque la carga siga. Ninguna
+máquina pasa del 60 % de CPU. Se comprobó cambiando una cosa cada vez. Ampliar
+el pool de la API de 10 a 25 conexiones bajó el p95 de 8,1 a 5,6 s. Un vCPU
+dedicado en la base lo bajó a 27 ms con la misma carga. El salto a Redis cuesta
+0,68 ms de ida y vuelta y no satura.
+
+La ráfaga de inicios de sesión congela el Web Server a partir de unos dos por
+segundo. Cada inicio reserva 64 MiB para argon2id y la máquina tiene 2 GiB sin
+swap.
+
+PENDIENTE_RESUMEN_E2
 
 ### Costo
 

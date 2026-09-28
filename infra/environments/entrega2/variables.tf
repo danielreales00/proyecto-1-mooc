@@ -93,7 +93,7 @@ variable "version_imagenes" {
 }
 
 variable "db_max_conns" {
-  description = "Pool por proceso. Tres procesos (api, worker, worker-media) contra el límite de la instancia."
+  description = "Pool de cada worker. La API tiene el suyo (db_max_conns_api)."
   type        = number
 }
 
@@ -118,4 +118,9 @@ variable "factor_limite_ip" {
   description = "RATE_LIMIT_IP_FACTOR del Web Server. 1 en producción; más solo para pruebas de carga."
   type        = number
   default     = 1
+}
+
+variable "db_max_conns_api" {
+  description = "Pool de la API. Separado del de los workers: es el que atiende el tráfico síncrono."
+  type        = number
 }

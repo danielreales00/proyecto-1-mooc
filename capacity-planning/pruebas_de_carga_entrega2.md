@@ -30,7 +30,7 @@ resultados como una configuración distinta.
 | Generador de carga | `mooc-generador`, `e2-standard-4` (4 vCPU, 16 GiB), `us-central1-a`, sin IP externa, sale por Cloud NAT | Fijado |
 | Versión de la aplicación | Imágenes `ef646a192a82` | Fijado |
 | Concurrencia de workers | `worker` 20 (`critical=6,default=3`); `worker-media` 1 (`bulk=1`) | Fijado |
-| Pool de conexiones | `DB_MAX_CONNS=10` por proceso | Fijado |
+| Pool de conexiones | `DB_MAX_CONNS=10` por proceso en el escenario 1. La API pasó a 25 tras medirlo (§9.1.1), y el escenario 2 se mide así | Fijado por escenario |
 | Límites por IP | `RATE_LIMIT_IP_FACTOR=100` (§3.1); por cuenta y sesión sin tocar | Fijado |
 | Caché de la aplicación | Redis, base 2, sin cambios respecto a la Entrega 1 | Fijado |
 
@@ -334,9 +334,21 @@ sube de resolución**: un original de 360p produce una sola variante.
 
 | Perfil | Duración | Resolución | Tamaño aprox. | Rendiciones esperadas | Segmentos de 6 s |
 | --- | --- | --- | --- | --- | --- |
-| **A** corto | 30 s | 640×360 | ~2 MiB | 360p | 5 por variante |
-| **B** medio | 3 min | 1280×720 | ~25 MiB | 360p + 720p | 30 |
-| **C** largo | 10 min | 1920×1080 | ~180 MiB | 360p + 720p + 1080p | 100 |
+| **A** corto | 20 s | 640×360 | 1,4 MiB | 360p | 4 por variante |
+| **B** medio | 1 min | 1280×720 | 8,3 MiB | 360p + 720p | 10 |
+| **C** largo | 2 min | 1920×1080 | 36 MiB | 360p + 720p + 1080p | 20 |
+
+**Ajuste del 27-09, antes de la primera corrida.** La definición original
+usaba 30 s, 3 min y 10 min (hasta 180 MiB). Se acortó porque un solo archivo
+de 10 min en 1080p tarda decenas de minutos en transcodificarse con 2 vCPU, y
+el drenaje entre niveles no cabía en el tiempo de la entrega. Se conservan
+los tres perfiles distintos en duración, tamaño y resolución, y la escalera
+completa de rendiciones en C.
+
+Los archivos los genera `capacity-planning/medios/generar.sh` con el mismo
+FFmpeg de `worker-media`: imagen de prueba en movimiento (`testsrc2`) y un
+tono de 440 Hz, en H.264 y AAC. No son grabaciones reales ni ruido
+incompresible; se declaran así.
 
 Son archivos reales, no ruido: un archivo sintético incompresible falsea el
 tiempo de FFmpeg. **No se aumenta artificialmente la resolución** del original
@@ -373,9 +385,14 @@ medición de cuántos FFmpeg caben.
 | Nivel | Cargas/min | Mezcla A/B/C | Espectadores | Segmentos/s | Duración |
 | --- | --- | --- | --- | --- | --- |
 | **M0** línea base | 1 | 1/0/0 | 5 | 0,8 | 10 min |
-| **M1** | 3 | 2/1/0 | 20 | 3,3 | 15 min |
-| **M2** | 6 | 3/2/1 | 45 | 7,5 | 15 min |
-| **M3** | 12 | 6/4/2 | 90 | 15 | 15 min |
+| **M1** | 3 | 2/1/0 | 20 | 3,3 | 10 min |
+| **M2** | 6 | 3/2/1 | 45 | 7,5 | 10 min |
+| **M3** | 12 | 6/4/2 | 90 | 15 | 10 min |
+
+**Ajuste del 27-09, antes de la primera corrida.** Niveles de 10 minutos, y
+cada carga sondea su estado hasta 20 minutos después de confirmarse. Lo que
+no termine en ese plazo se reporta como aceptado sin terminar, con su estado,
+y se observa el drenaje antes del nivel siguiente.
 
 Las corridas de multimedia son más largas porque el trabajo asíncrono tarda:
 con M0 no tiene sentido medir diez minutos de cola si la cola se vacía en dos.
@@ -511,18 +528,126 @@ subió, el intento tiene una nota y solo una.
 
 ### 9.1 Escenario 1
 
-| Nivel | Iter/s | Req/s | p50 | p95 | p99 | Errores | 429 | CPU web | CPU worker | Mem | Conex. BD | Veredicto |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| L0 | 1 | | | | | | | | | | | |
-| L1 | 4 | | | | | | | | | | | |
-| L2 | 8 | | | | | | | | | | | |
-| L3 | 16 | | | | | | | | | | | |
-| L4 | 24 | | | | | | | | | | | |
+Corridas del 27-09-2026, imágenes `ef646a192a82`, generador en
+`mooc-generador`. Cada fila es la fase de medición (8 min; 15 en la
+repetición), sin el calentamiento. Las cifras salen de
+`make carga-tabla ARGS="e1 …"`, que lee los archivos de
+[`resultados/`](resultados/): el resumen de k6 (`<nivel>.json`) y las métricas
+de Cloud Monitoring de la misma ventana (`<nivel>-metricas.json`).
+
+| Nivel | Iter/s | Req/s | p50 / p95 / p99 (ms) | Errores (5xx + timeouts) | CPU web / worker / SQL |
+| --- | --- | --- | --- | --- | --- |
+| L0 | 1 | 7,7 | 18 / 24 / 32 | 0,00 % | 8 / 6 / 10 % |
+| L1 | 4 | 30,2 | 17 / 23 / 30 | 0,00 % | 19 / 7 / 17 % |
+| L2 | 8 | 61,2 | 17 / 25 / 32 | 0,00 % | 35 / 9 / 27 % |
+| L2, repetición 15 min | 8 | 68,3 | 17 / 24 / 31 | 0,00 % | 36 / 10 / 29 % |
+| L2b | 12 | 91,1 | 19 / 272 / 959 | 0,00 % | 44 / 13 / 35 % |
+| L3 | 16 | 110,4 | 2893 / 8067 / 14695 | 0,00 % | 44 / 11 / 40 % |
+
+| Nivel | Memoria web / worker | Conexiones BD máx. | 429 | Comprobaciones | Iteraciones perdidas |
+| --- | --- | --- | --- | --- | --- |
+| L0 | 35 / 74 % | 9 | 0 | 100,00 % | 0 |
+| L1 | 38 / 74 % | 12 | 0 | 100,00 % | 0 |
+| L2 | 44 / 74 % | 14 | 0 | 100,00 % | 0 |
+| L2, repetición | 53 / 75 % | 16 | 0 | 99,84 % | 0 |
+| L2b | 55 / 75 % | 16 | 0 | 99,83 % | 0 |
+| L3 | 55 / 74 % | 16 | 0 | 100,00 % | 531 |
+
+La CPU del generador no pasó del 13 % en ningún nivel y no hubo errores de
+red del lado del generador: las corridas son válidas (§2). La memoria del
+Worker Server es casi constante porque la ocupa `clamd` (966 MiB en reposo).
+
+![Latencia por nivel](graficas/e1-latencia-por-nivel.png)
+
+![Recursos por nivel](graficas/e1-recursos-por-nivel.png)
+
+**Las comprobaciones que fallan no son fallos del sistema.** Aparecen solo en
+las dos corridas posteriores a L3 (113 y 96 rechazos `4xx` en la medición) y
+todas son rechazos de negocio: un inicio de intento recibe `409` porque la
+cuenta tiene otro intento abierto en ese quiz. Esos intentos quedaron abiertos
+en L3, cuando la saturación cortó iteraciones a mitad del quiz (105 en la base
+al terminar). La regla que los rechaza es el índice `attempts_one_in_progress`
+y funciona como debe. El guion ya cuenta ese `409` como rechazo de negocio.
+
+**Integridad bajo concurrencia (§5.5), durante L2:**
+
+| Comprobación | Correctas | Fallidas |
+| --- | --- | --- |
+| Dos envíos simultáneos del mismo intento: una sola calificación | 49 | 0 |
+| Reenvío con la misma `Idempotency-Key`: la misma respuesta | 49 | 0 |
+| Enviar el intento de otro estudiante: rechazado | 48 | 0 |
+| La clave del quiz no aparece en el snapshot del intento | 49 | 0 |
+| Un porcentaje enviado por el cliente: rechazado | 49 | 0 |
+
+### 9.1.1 El cuello de botella, y la medición que lo sostiene
+
+**La capacidad sostenible es de unas 60 a 70 peticiones por segundo**: L2
+aguanta 15 minutos con p95 de 24 ms. A 91 (L2b) empieza la degradación y a
+110 (L3) el sistema está saturado. Nunca hay errores: todo lo que responde,
+responde bien, pero tarde.
+
+**Ninguna máquina llega al 100 % de CPU.** La serie de L3 lo explica: durante
+cuatro minutos aguanta, y cuando la latencia se dispara la CPU del Web Server y
+la de Cloud SQL **bajan** (de 60 a 43 % y de 54 a 41 %). Menos CPU con más
+latencia es trabajo que espera.
+
+![L3 minuto a minuto](graficas/e1-L3-serie.png)
+
+Había dos candidatos y se midieron por separado, cambiando una cosa cada vez
+(se presentan antes y después, como exige la entrega):
+
+| L3, 16 iter/s | Req/s | p50 / p95 (ms) | Iteraciones perdidas | Conexiones BD |
+| --- | --- | --- | --- | --- |
+| `db-g1-small`, pool de la API en 10 (configuración base) | 110,4 | 2893 / 8067 | 531 | 16 |
+| `db-g1-small`, pool de la API en 25 | 114,3 | 1654 / 5594 | 317 | 32 |
+| `db-custom-1-3840` (1 vCPU dedicado), pool en 25 | 121,2 | 17 / 27 | 0 | 19 |
+
+1. **El pool de conexiones de la API** (`DB_MAX_CONNS=10`). Se llenó en L3, y
+   ampliarlo a 25 mejoró la latencia un 30 a 40 %. Contribuye, pero no es la
+   causa.
+2. **El núcleo compartido de `db-g1-small`.** La CPU consumida por la base
+   (`cloudsql …/database/cpu/usage_time`) llega a 0,54 núcleos y, a los dos o
+   tres minutos, cae a 0,41-0,44 aunque la carga ofrecida no cambie: es la
+   cuota sostenida de un núcleo compartido cuando se agota la ráfaga. **Con un
+   vCPU dedicado, la misma carga da p95 de 27 ms y ninguna iteración perdida**,
+   el mismo comportamiento que L2.
+
+**El primer límite es Cloud SQL `db-g1-small`.** El segundo es el pool de la
+API. Tras las pruebas la base volvió a `db-g1-small` y el pool quedó en 25,
+que es la configuración con la que se midió el escenario 2.
+
+**La hipótesis previa (§5.6) se descarta.** El salto a Redis cuesta, pero no
+satura: bajo L2, la ida y vuelta desde el Web Server mide 0,68 ms de media y
+3 ms de máximo (`redis-cli --latency`, 2.774 muestras), con unos 5,2 comandos
+por petición. En serie son unos 3,5 ms, cerca del 20 % de la mediana. El
+Worker Server, donde vive Redis, no pasa del 13 % de CPU.
 
 ### 9.2 Ráfaga de inicios de sesión
 
-| Tasa | p95 `POST /sessions` | CPU web | Memoria disponible | Veredicto |
-| --- | --- | --- | --- | --- |
+| Momento (UTC) | Demanda ofrecida | Inicios atendidos | Memoria del Web Server |
+| --- | --- | --- | --- |
+| 23:14:30 | 1 por segundo | — | 50 % |
+| 23:15:00 | ~4 por segundo | ~0,5 por segundo | 59 % |
+| 23:15:30 | ~7 por segundo | ~1,5 por segundo | 59 %, último dato del agente |
+| 23:16:33 | ~11 por segundo | ninguno: *timeouts* de 60 s | sin datos: máquina congelada |
+
+**El Web Server se congela a partir de unos dos inicios de sesión por
+segundo.** Cada uno es un argon2id de 64 MiB y dos hilos. La máquina despacha
+unos 1,5 por segundo; lo que llega por encima se acumula, cada uno con su
+memoria reservada, y en 2 GiB sin swap el núcleo se queda sin memoria antes
+de que el recolector de procesos actúe. El agente de métricas dejó de informar
+a la vez que la API. Hizo falta reiniciar la máquina (`gcloud compute
+instances reset`, 23:23 UTC); volvió en un minuto y sin pérdida de datos.
+
+La corrida la paró el propio criterio de parada (p95 > 5 s), pero tarde: el
+criterio de memoria (< 200 MiB) no lo vigila k6, y cuando la latencia lo
+delató la máquina ya no respondía. Queda como limitación del experimento.
+
+**Qué lo resolvería, con esta medición detrás:** limitar cuántos hashes corren
+a la vez en la API (un semáforo del tamaño de los núcleos), para que una
+ráfaga espere en cola en vez de reservar memoria sin límite. Con 2 vCPU, dos
+hashes simultáneos ocupan 128 MiB fijos y el resto espera. El costo de cada
+login no cambia; lo que cambia es que la máquina no se cae.
 
 ### 9.3 Escenario 2
 

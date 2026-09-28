@@ -12,6 +12,7 @@
 import http from 'k6/http';
 import { sleep, check } from 'k6';
 import { SharedArray } from 'k6/data';
+import exec from 'k6/execution';
 import { BASE, get, post, patch, json, pausa, clave, iteracion, resumir, submetricas } from './comun.js';
 
 const TASA = Number(__ENV.TASA || 1);
@@ -61,9 +62,18 @@ export const options = {
 
 // Cada estudiante con su cuenta, su curso y su intento: dos iteraciones
 // concurrentes no comparten fila salvo cuando la prueba quiere contención.
+//
+// El índice se permuta: multiplicar por un primo coprimo con el número de
+// cuentas recorre todas sin repetir en N iteraciones seguidas, y reparte
+// igual las ya inscritas y las que se inscriben. Con el índice tal cual, cada
+// nivel empezaría por las primeras cuentas, todas inscritas, y la mezcla
+// cambiaría de un nivel a otro. La medición arranca desplazada para no
+// coincidir con las iteraciones del calentamiento que aún terminan.
+const PRIMO = 7919;
 function estudiante() {
   const e = datos[0].estudiantes;
-  return e[iteracion() % e.length];
+  const desp = exec.scenario.name === 'medicion' ? Math.floor(e.length / 2) : 0;
+  return e[((iteracion() + desp) * PRIMO) % e.length];
 }
 
 // Pausa de lectura entre acciones, 1 a 3 s (§5.2).
@@ -150,6 +160,10 @@ function presentar(inscripcion, t, recursos) {
   const q = quizzes[Math.floor(Math.random() * quizzes.length)];
   let r = post(`/enrollments/${inscripcion}/quizzes/${q.stable_id}/attempts`, null, t, 'POST /attempts', true);
   const intento = json(r);
+  // 409: la cuenta ya tiene un intento abierto en ese quiz, de una iteración
+  // anterior que se cortó a mitad (una corrida saturada). La regla que lo
+  // rechaza funciona: es un rechazo de negocio, no una comprobación fallida.
+  if (r.status === 409) return null;
   if (!check(r, { 'intento iniciado': () => r.status === 201 && intento && intento.questions.length > 0 })) return null;
   const respuestas = intento.questions.map((p) => ({
     question_stable_id: p.stable_id,

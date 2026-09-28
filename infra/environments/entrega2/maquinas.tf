@@ -12,7 +12,6 @@ locals {
     LOG_LEVEL=info
     LOG_FORMAT=gcp
     PUBLIC_BASE_URL=https://${local.nombre_publico}
-    DB_MAX_CONNS=${var.db_max_conns}
     REDIS_TLS=false
     OBJECT_STORE=gcs
     S3_BUCKET_ORIGINALS=${module.gcs.nombres["originals"]}
@@ -49,6 +48,7 @@ module "maquinas" {
   env_web = <<-EOT
     ${local.env_comun}
     HTTP_ADDR=:8080
+    DB_MAX_CONNS=${var.db_max_conns_api}
     DOMINIO=${local.nombre_publico}
     TRUSTED_PROXY_HOPS=0
     RATE_LIMIT_IP_FACTOR=${var.factor_limite_ip}
@@ -60,6 +60,7 @@ module "maquinas" {
   env_worker = <<-EOT
     ${local.env_comun}
     IP_PRIVADA=${module.red.ip_interna_worker}
+    DB_MAX_CONNS=${var.db_max_conns}
     REDIS_ADDR=redis:6379
     CLAMAV_ADDR=clamav:3310
     # Mailpit hasta elegir proveedor en A4.

@@ -225,7 +225,9 @@ tunel-mailpit: ## Túnel SSH por IAP al Mailpit del Worker Server (contenedor mo
 	@docker rm -f mooc-tunel >/dev/null 2>&1 || true
 	@# Mailpit solo escucha en el 127.0.0.1 del Worker Server. El túnel lo trae
 	@# a mooc-tunel:8025 dentro de la red $(NUBE_RED); no se abre ningún puerto.
-	@docker run -d --name mooc-tunel --network $(NUBE_RED) \
+	@# También en 127.0.0.1:8026 de esta máquina: Postman de escritorio lo lee
+	@# con el mailpit_url de siempre.
+	@docker run -d --name mooc-tunel --network $(NUBE_RED) -p 127.0.0.1:8026:8025 \
 		-v mooc-gcloud:/root/.config/gcloud -v mooc-ssh:/root/.ssh $(GCLOUD_IMAGE) \
 		gcloud compute ssh mooc-worker --zone us-central1-a --tunnel-through-iap --quiet \
 		-- -N -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes \
@@ -234,6 +236,13 @@ tunel-mailpit: ## Túnel SSH por IAP al Mailpit del Worker Server (contenedor mo
 		docker run --rm --network $(NUBE_RED) --entrypoint curl $(GCLOUD_IMAGE) \
 			-fsS -o /dev/null http://mooc-tunel:8025/api/v1/info 2>/dev/null && { echo "túnel listo: mooc-tunel:8025"; exit 0; }; \
 		sleep 2; done; echo "el túnel no respondió"; docker logs mooc-tunel | tail -5; exit 1
+
+.PHONY: psql-nube
+psql-nube: ## psql interactivo contra Cloud SQL, a través del Web Server
+	@# La base solo tiene IP privada: se entra desde la máquina que la usa. La
+	@# URL con la clave la lee allí mismo, del .env, y no pasa por aquí.
+	@$(SSH_NUBE) mooc-web -- -t 'cd /opt/mooc && sudo docker run --rm -it postgres:17-alpine \
+		psql "$$(sudo grep ^DATABASE_URL= .env | cut -d= -f2-)"'
 
 .PHONY: semilla-nube
 semilla-nube: ## Cuentas sintéticas en Cloud SQL, con la contraseña de Secret Manager
@@ -315,6 +324,19 @@ carga-metricas: ## Exporta de Cloud Monitoring las métricas de una corrida
 		> capacity-planning/resultados/$(ETIQUETA)-metricas.json
 	@echo "capacity-planning/resultados/$(ETIQUETA)-metricas.json"
 
+# Uso: make carga-tabla ARGS="e1 e1-L0 e1-L1"   o   ARGS="detalle e1-L2"
+.PHONY: carga-tabla
+carga-tabla: ## Filas de las tablas de resultados a partir de los archivos de cada corrida
+	@docker run --rm -v "$(CURDIR)/capacity-planning":/c:ro --entrypoint python3 $(GCLOUD_IMAGE) \
+		/c/metricas/tabla.py $(ARGS)
+
+# Uso: make carga-graficas ARGS="e1 e1-L0 e1-L1 e1-L2 e1-L3"  o  ARGS="serie e1-L3"
+.PHONY: carga-graficas
+carga-graficas: ## Gráficas del informe de capacidad a partir de los resultados
+	@docker run --rm -u $$(id -u):$$(id -g) -e HOME=/tmp -e MPLCONFIGDIR=/tmp \
+		-v "$(CURDIR)/capacity-planning":/c -w /c python:3.13-slim sh -c \
+		"pip install -q --no-warn-script-location --user matplotlib==3.10.7 2>/dev/null && python metricas/graficas.py $(ARGS)"
+
 .PHONY: postman-nube
 postman-nube: tunel-mailpit ## Colección entera contra la URL pública (tarda ~8 min)
 	@echo "Contra https://$(NUBE_HOST). Los heartbeats exigen 10 s de separación: esto tarda."
@@ -329,6 +351,7 @@ postman-nube: tunel-mailpit ## Colección entera contra la URL pública (tarda ~
 			--env-var base_url=https://$(NUBE_HOST) \
 			--env-var mailpit_url=http://mooc-tunel:8025 \
 			--env-var prometheus_url= \
+			--env-var metricas_publicas=no \
 			--env-var demo_password="$$DEMO_PASSWORD" \
 			--delay-request 11000'; \
 	rc=$$?; docker rm -f mooc-tunel >/dev/null 2>&1; exit $$rc

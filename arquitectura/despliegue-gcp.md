@@ -459,6 +459,31 @@ No se improvisa en la corrida.
 **Comprobación:** las tablas de resultados del informe llenas, con el punto de
 degradación identificado y el cuello de botella sustentado con evidencia.
 
+**Cómo se corre** (27-09):
+
+```bash
+make semilla-nube CARGA=1             # 600 estudiantes y 10 profesores en la base
+make carga-sincronizar                # guiones al generador
+make carga-medios                     # videos A, B y C, generados allí
+make carga K6=preparar.js ETIQUETA=preparar          # cursos, sesiones, inscripciones
+make carga-nivel K6=escenario1.js ETIQUETA=e1-L2 ARGS="-e TASA=8 -e INTEGRIDAD=1"
+make carga-tabla ARGS="e1 e1-L0 e1-L1 e1-L2"         # filas del informe
+```
+
+`carga-nivel` corre el nivel en el generador, espera, trae el resumen de k6 y
+exporta de Cloud Monitoring las métricas de la misma ventana
+(`capacity-planning/metricas/exportar.py`). Los archivos con sesiones
+(`datos.json`, `medios.json`) se quedan en el generador y nunca se traen.
+
+**Dos corridas descartadas, y por qué** (quedan en `capacity-planning/resultados/`):
+
+- `e1-L0-invalida-nat`: el generador salía por Cloud NAT, que reserva 64
+  puertos por VM y destino, y perdió 813 conexiones hacia el 443. El generador
+  pasó a tener IP externa propia. El NAT no es parte del sistema medido.
+- `e1-L0-descartada-mezcla`: el guion elegía la cuenta por el número de
+  iteración, y a 1 iteración/s nunca llegaba a las cuentas sin inscribir. La
+  mezcla no era la de los demás niveles. Ahora el índice se permuta.
+
 ### C2 · Entregables, costos y apagado
 
 **Objetivo:** cerrar la entrega sin dejar la factura corriendo.
@@ -470,7 +495,20 @@ degradación identificado y el cuello de botella sustentado con evidencia.
 4. **Video de sustentación**, máximo 20 minutos, enlazado desde el `README.md`.
 5. **Estimación de costos con fecha y supuestos**, contrastada con el consumo
    observado.
-6. **Procedimiento de reconstrucción**, probado. No es documentación de adorno:
+6. **Procedimiento de reconstrucción**, probado. Pasos, en orden:
+   1. `make tf ENTORNO=entrega2 ARGS="plan -out=p.tfplan"`, revisar y aplicar.
+      Crea red, base, buckets, secretos, registro y máquinas. La base tarda
+      unos 5 minutos.
+   2. `make publicar` y el SHA en `version_imagenes`, si el registro se borró.
+   3. Las máquinas se levantan solas. `migrate` crea el esquema.
+   4. `make semilla-nube` y, para medir, `make semilla-nube CARGA=1`.
+   5. `make postman-nube` confirma que todo responde.
+   Si solo se borró la base, el paso 1 la recrea y reescribe `database-url` con
+   la IP y la clave nuevas en el mismo `apply`. Las máquinas leen el secreto al
+   arrancar, así que después hay que volver a ejecutar su arranque
+   (`make ssh MAQUINA=mooc-web CMD="sudo google_metadata_script_runner startup"`
+   y lo mismo en `mooc-worker`), que además aplica las migraciones.
+   No es documentación de adorno:
    el equipo docente puede pedir sustentación síncrona y repetir una prueba, y
    si los recursos se borraron, recrearlos es responsabilidad del equipo.
    **Entre sesiones de trabajo, la base se detiene, no se borra:**

@@ -2836,6 +2836,17 @@
           },
           "event": [
             {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// En la nube /metrics no es público: lo lee el agente de operaciones dentro",
+                  "// de la máquina. Con metricas_publicas=no, esta petición se salta.",
+                  "if (pm.variables.get('metricas_publicas') === 'no') { pm.execution.skipRequest(); }"
+                ]
+              }
+            },
+            {
               "listen": "test",
               "script": {
                 "type": "text/javascript",

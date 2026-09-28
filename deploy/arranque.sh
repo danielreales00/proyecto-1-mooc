@@ -97,6 +97,7 @@ fi
 # --- Configuración ----------------------------------------------------------
 mkdir -p "$DIR"
 md mooc-compose > "$DIR/compose.yml"
+caddy_antes=$(sha256sum "$DIR/Caddyfile" 2>/dev/null || true)
 case "$ROL" in
   web)    md mooc-caddyfile > "$DIR/Caddyfile" ;;
   worker) md mooc-clamd > "$DIR/clamd.conf" ;;
@@ -139,6 +140,11 @@ docker compose pull --quiet
 # que el Worker Server esté listo; diez minutos cubren su arranque en frío.
 for intento in $(seq 1 60); do
   if docker compose up -d --remove-orphans --wait --wait-timeout 120; then
+    # Caddy corre con la API de administración apagada y no recarga solo: si
+    # su configuración cambió, se reinicia el proxy.
+    if [ "$ROL" = web ] && [ "$caddy_antes" != "$(sha256sum "$DIR/Caddyfile")" ]; then
+      docker compose restart proxy
+    fi
     echo "mooc: ${ROL} levantado"
     exit 0
   fi

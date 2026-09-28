@@ -14,9 +14,12 @@ perfil() { # nombre segundos WxH kbps
     -t "$2" -c:v libx264 -preset veryfast -b:v "$4k" -maxrate "$4k" -bufsize "$(( $4 * 2 ))k" \
     -pix_fmt yuv420p -c:a aac -b:a 96k -movflags +faststart "$1.mp4"
 }
-perfil a 30 640x360 450
-perfil b 180 1280x720 1050
-perfil c 600 1920x1080 2400
+# Duraciones cortas a propósito (decidido el 27-09): tres perfiles distintos
+# en duración, tamaño y resolución, con la escalera completa de rendiciones en
+# C, sin que un solo archivo tarde decenas de minutos en transcodificarse.
+perfil a 20 640x360 450
+perfil b 60 1280x720 1050
+perfil c 120 1920x1080 2400
 for f in a b c; do
   printf '{"perfil":"%s","bytes":%s,"sha256":"%s"}\n' "$f" "$(wc -c < "$f.mp4")" "$(sha256sum "$f.mp4" | cut -d' ' -f1)"
 done > manifiesto.jsonl

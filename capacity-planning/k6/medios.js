@@ -33,7 +33,10 @@ export async function subir(archivo, meta, token, perfil) {
     size_bytes: meta.bytes, sha256: meta.sha256, kind: 'video',
   }, token, 'POST /assets/init', true);
   const t = json(r);
-  if (!check(r, { 'carga autorizada': () => r.status === 201 && t && t.parts.length > 0 })) return null;
+  if (!check(r, { 'carga autorizada': () => r.status === 201 && t && t.parts.length > 0 })) {
+    console.error(`init de ${perfil}: HTTP ${r.status} ${String(r.body).slice(0, 300)}`);
+    return null;
+  }
 
   const inicio = Date.now();
   const etags = [];
@@ -47,7 +50,10 @@ export async function subir(archivo, meta, token, perfil) {
     const res = await Promise.all(lote.map((p, k) =>
       http.asyncRequest('PUT', p.url, cuerpos[k], { tags: { name: 'PUT parte (almacén)' } })));
     for (let k = 0; k < lote.length; k++) {
-      if (!check(res[k], { 'parte subida al almacén': (x) => x.status === 200 })) return null;
+      if (!check(res[k], { 'parte subida al almacén': (x) => x.status === 200 })) {
+        console.error(`parte ${lote[k].part_number} de ${perfil}: HTTP ${res[k].status} ${String(res[k].body).slice(0, 300)}`);
+        return null;
+      }
       etags.push({ part_number: lote[k].part_number, etag: (res[k].headers.Etag || res[k].headers.ETag || '').replace(/"/g, '') });
     }
   }
@@ -55,8 +61,11 @@ export async function subir(archivo, meta, token, perfil) {
   transferencia.add(segundos, { perfil });
   tasaTransferencia.add(meta.bytes / 1048576 / segundos, { perfil });
 
-  r = post(`/assets/${t.asset_id}/complete`, { parts: etags }, token, 'POST /assets/complete');
-  if (!check(r, { 'carga confirmada (202)': () => r.status === 202 })) return null;
+  r = post(`/assets/${t.asset_id}/complete`, { parts: etags }, token, 'POST /assets/complete', true);
+  if (!check(r, { 'carga confirmada (202)': () => r.status === 202 })) {
+    console.error(`complete de ${perfil}: HTTP ${r.status} ${String(r.body).slice(0, 300)}`);
+    return null;
+  }
   return { id: t.asset_id, confirmada: Date.now() };
 }
 
