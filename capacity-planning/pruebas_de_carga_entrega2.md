@@ -76,7 +76,7 @@ Web Server se queda sin memoria y deja de responder
 | --- | --- |
 | Cloud SQL con vCPU dedicado | Con la carga de L3, p95 de 5,6 s a 27 ms y 0 iteraciones perdidas |
 | Varios `worker-media` que escalen con el tiempo de espera de la cola | 272 s de FFmpeg pedidos por minuto frente a 60, CPU al 86-96 % |
-| Reaper que no republique trabajos todavía en cola | 2.554 duplicados descartados en M2 y M3 |
+| Reaper que no republique trabajos todavía en cola | El reaper da por perdido un trabajo que lleva tiempo en `queued` y lo publica otra vez. Con la cola atrasada, ese trabajo seguía esperando en Redis. La idempotencia descartó 2.554 duplicados en M2 y M3, pero cada uno ocupa la cola ([8.2](#82-procesamiento)) |
 | Redis local a la API para sesiones y límites | 3,5 ms por petición. No limita hoy. Es la hipótesis siguiente cuando la base deje de serlo |
 
 El resto del informe da las condiciones, las definiciones y los datos que
