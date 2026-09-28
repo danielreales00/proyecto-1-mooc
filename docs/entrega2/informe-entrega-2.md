@@ -329,9 +329,7 @@ al día mientras existe y se borra al terminar de medir.
 El presupuesto `mooc-entrega2` es de 50 USD y avisa al 50, 80 y 100 %. Excluye
 los créditos de la cuenta educativa, porque con ellos ninguna alerta saltaría.
 
-Detenida, Cloud SQL cobra almacenamiento e IP. La documentación de Google,
-consultada el 28 de septiembre, no fija duración máxima ni reactivación
-automática. Al cerrar la entrega la instancia se borra y sus copias quedan.
+Detenida, Cloud SQL cobra almacenamiento e IP.
 
 El consumo observado no se pudo contrastar. La consola muestra 0,03 USD netos
 porque la cuenta educativa paga con créditos y los datos llegan con un día de
@@ -366,7 +364,6 @@ retraso.
 | Cloud SQL con vCPU dedicado | Con la misma carga saturada, p95 de 5,6 s a 27 ms |
 | Varios `worker-media` que escalen con la cola real | 4,5 veces más FFmpeg del disponible, con la CPU al 90 % |
 | Cloud CDN con cookie firmada | Cada playlist tarda cerca de 1 s firmando sus segmentos con IAM |
-| Acotar los hashes simultáneos | La ráfaga de logins agota la memoria del Web Server |
 | Reaper que no duplique trabajos en cola | 2.554 duplicados descartados por la idempotencia en M2 y M3 |
 
 Ninguno cambia el contrato de la API. El paso siguiente es separar la API y los
