@@ -28,11 +28,11 @@ cloudsql_disco_gb = 10
 # ARGS=apply`. Aquí y no con -var: con -var, el siguiente apply sin él la
 # volvería a encender sin que nadie lo note. Se versiona, así el equipo ve en
 # git si la base debería estar encendida.
-cloudsql_encendida = true
+cloudsql_encendida = false
 
 # Lo mismo para las dos máquinas: detenidas no pagan cómputo, sí disco e IP
 # estática. Al encenderlas, el arranque deja todo en pie solo.
-maquinas_encendidas = true
+maquinas_encendidas = false
 
 # Máquinas: 2 vCPU completas y 2048 MiB, la combinación exacta del enunciado,
 # y 30 GiB de disco. Es el tipo del catálogo e2-highcpu-2: pedirlo como
@@ -61,5 +61,5 @@ factor_limite_ip = 100
 
 # Generador de carga: solo encendido mientras se mide (capacity-planning/).
 # 4 vCPU para que su CPU no pase del 60 % y no sea él quien limite.
-generador_encendido = true
+generador_encendido = false
 tipo_generador      = "e2-standard-4"
