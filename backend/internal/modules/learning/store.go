@@ -46,14 +46,16 @@ type OutlineModule struct {
 // ResourceRef es lo mínimo del recurso que el progreso necesita: tipo,
 // obligatoriedad y duración del binario si lo tiene.
 type ResourceRef struct {
-	StableID  uuid.UUID
-	Title     string
-	Type      string
-	Visible   bool
-	Required  bool
-	Duration  *float64
-	ContentMD *string
-	AssetID   *uuid.UUID
+	StableID     uuid.UUID
+	Title        string
+	Type         string
+	Visible      bool
+	Required     bool
+	Duration     *float64
+	ContentMD    *string
+	ExternalURL  *string
+	Downloadable bool
+	AssetID      *uuid.UUID
 }
 
 type Store interface {

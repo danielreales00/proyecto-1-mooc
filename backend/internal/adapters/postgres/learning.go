@@ -196,7 +196,7 @@ func (s *LearningStore) UpdateEnrollment(ctx context.Context, db dbx.DB, e learn
 func (s *LearningStore) ResourcesOfVersion(ctx context.Context, db dbx.DB, versionID uuid.UUID) ([]learning.ResourceRef, error) {
 	rows, err := db.Query(ctx, `
 		SELECT r.stable_id, r.title, r.type, r.visible, r.required,
-		       a.duration_seconds, r.content_md, r.asset_id
+		       a.duration_seconds, r.content_md, r.asset_id, r.external_url, r.downloadable
 		  FROM authoring.resources r
 		  LEFT JOIN media.assets a ON a.id = r.asset_id
 		  JOIN authoring.units u ON u.id = r.unit_id
@@ -211,7 +211,7 @@ func (s *LearningStore) ResourcesOfVersion(ctx context.Context, db dbx.DB, versi
 	for rows.Next() {
 		var r learning.ResourceRef
 		if err := rows.Scan(&r.StableID, &r.Title, &r.Type, &r.Visible, &r.Required,
-			&r.Duration, &r.ContentMD, &r.AssetID); err != nil {
+			&r.Duration, &r.ContentMD, &r.AssetID, &r.ExternalURL, &r.Downloadable); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

@@ -1,0 +1,14 @@
+{
+  "name": "mooc-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/api.test.mjs",
+    "format": "prettier --write app.js api.js styles.css index.html tests/*.mjs",
+    "test:browser": "node tests/e2e.mjs"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2",
+    "playwright": "1.56.1"
+  }
+}

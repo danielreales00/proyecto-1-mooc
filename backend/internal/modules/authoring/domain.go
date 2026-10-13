@@ -153,7 +153,12 @@ func (r Resource) ProcessingStatus() string {
 	switch r.AssetStatus {
 	case "ready":
 		return "ready"
-	case "processing", "scanning", "clean":
+	case "clean":
+		if r.Type != TypeVideo && r.Type != TypeAudio {
+			return "ready"
+		}
+		return "processing"
+	case "processing", "scanning":
 		return "processing"
 	case "rejected", "infected", "failed":
 		return "failed"

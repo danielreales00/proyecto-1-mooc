@@ -148,3 +148,17 @@ func TestNuevaCargaValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestFirmasDeImagenYAudioSinConfiarEnExtension(t *testing.T) {
+	for _, c := range []struct{ data, mime string }{
+		{"\x89PNG\r\n\x1a\nresto", "image/png"}, {"\xff\xd8\xffresto", "image/jpeg"},
+		{"GIF89aresto", "image/gif"}, {"RIFF1234WEBPresto", "image/webp"},
+		{"RIFF1234WAVEresto", "audio/wav"}, {"ID3resto", "audio/mpeg"}, {"OggSresto", "audio/ogg"},
+		{"\xff\xfbresto", "audio/mpeg"}, {"RIFF1234FAKE", "application/octet-stream"},
+		{"\x89PNG", "application/octet-stream"},
+	} {
+		if got := DetectarMIME([]byte(c.data), ""); got != c.mime {
+			t.Errorf("detectado %q, esperado %q", got, c.mime)
+		}
+	}
+}

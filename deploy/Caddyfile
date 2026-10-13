@@ -25,7 +25,8 @@
 		reverse_proxy swagger:8080
 	}
 
-	handle {
+	@backend path /api/* /healthz /readyz /metrics /openapi.yaml
+	handle @backend {
 		reverse_proxy {
 			# Resolución dinámica: Docker devuelve una A por instancia de
 			# `api`, y el refresco hace que escalar en caliente se note sin
@@ -41,4 +42,8 @@
 			header_up X-Forwarded-Proto {scheme}
 		}
 	}
+	handle {
+		reverse_proxy frontend:80
+	}
+
 }

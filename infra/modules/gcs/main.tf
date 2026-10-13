@@ -32,6 +32,16 @@ resource "google_storage_bucket" "b" {
     retention_duration_seconds = 0
   }
 
+  dynamic "cors" {
+    for_each = length(var.frontend_origins) > 0 ? [1] : []
+    content {
+      origin          = var.frontend_origins
+      method          = ["GET", "HEAD", "PUT"]
+      response_header = ["Content-Type", "ETag", "Range", "Content-Range"]
+      max_age_seconds = 3600
+    }
+  }
+
   # Partes de cargas que nunca se completaron. La carga multipart se emula
   # con `compose`, que exige que las partes estén en el mismo bucket que el
   # destino: por eso la regla vive en todos, aunque solo `originals` las use.

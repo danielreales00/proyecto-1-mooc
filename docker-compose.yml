@@ -184,6 +184,11 @@ services:
       DOC_EXPANSION: none
     restart: unless-stopped
 
+  frontend:
+    build: ./frontend
+    image: mooc-frontend
+    restart: unless-stopped
+
   proxy:
     image: caddy:2-alpine
     volumes:
@@ -194,6 +199,8 @@ services:
       api:
         condition: service_healthy
       swagger:
+        condition: service_started
+      frontend:
         condition: service_started
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
@@ -237,6 +244,8 @@ services:
   # convertirse en un permiso de paso.
   clamav:
     image: clamav/clamav:1.4
+    # La imagen oficial no publica variante ARM64.
+    platform: linux/amd64
     environment:
       CLAMAV_NO_FRESHCLAMD: "true"
     volumes:

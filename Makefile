@@ -180,7 +180,7 @@ prueba-gcs: ## Suite del almacén contra Cloud Storage real, firmando como mooc-
 		$(GO_IMAGE) go test -count=1 -v ./internal/adapters/gcs/
 
 REGISTRO := us-central1-docker.pkg.dev/$(GCP_PROYECTO)/mooc
-IMAGENES := api worker worker-media migrate buckets seed
+IMAGENES := api worker worker-media migrate buckets seed frontend
 
 .PHONY: publicar
 publicar: ## Construye las imágenes para linux/amd64 y las sube a Artifact Registry con el SHA
@@ -195,8 +195,11 @@ publicar: ## Construye las imágenes para linux/amd64 y las sube a Artifact Regi
 	@sha=$$(git rev-parse --short=12 HEAD); \
 	for img in $(IMAGENES); do \
 		echo "── $$img:$$sha"; \
-		docker build -q --platform linux/amd64 --target $$img \
-			-t $(REGISTRO)/$$img:$$sha backend >/dev/null || exit 1; \
+		if [ "$$img" = frontend ]; then \
+			docker build -q --platform linux/amd64 -t $(REGISTRO)/$$img:$$sha frontend >/dev/null || exit 1; \
+		else \
+			docker build -q --platform linux/amd64 --target $$img -t $(REGISTRO)/$$img:$$sha backend >/dev/null || exit 1; \
+		fi; \
 		docker push -q $(REGISTRO)/$$img:$$sha \
 			|| { docker logout us-central1-docker.pkg.dev >/dev/null; exit 1; }; \
 	done; \
@@ -419,6 +422,8 @@ ci: ## Corre TODO lo que corre el CI, en local. Úsalo antes de empujar.
 	@$(MAKE) --no-print-directory test
 	@echo "── contrato OpenAPI ─────────────────────────────────"
 	@$(MAKE) --no-print-directory openapi
+	@echo "── cliente de la interfaz ────────────────────────────"
+	@$(MAKE) --no-print-directory frontend-test
 	@echo "── seguridad ────────────────────────────────────────"
 	@$(MAKE) --no-print-directory sec
 	@echo "── contrato contra la API en marcha ─────────────────"
@@ -427,6 +432,8 @@ ci: ## Corre TODO lo que corre el CI, en local. Úsalo antes de empujar.
 	@$(MAKE) --no-print-directory smoke
 	@$(MAKE) --no-print-directory invariantes
 	@$(MAKE) --no-print-directory postman
+	@echo "── navegador de la interfaz ──────────────────────────"
+	@$(MAKE) --no-print-directory frontend-e2e
 	@echo
 	@echo "Todo en verde. Se puede empujar."
 
@@ -468,3 +475,13 @@ jobs: ## Muestra el registro de trabajos (outbox, idempotencia y DLQ)
 audit: ## Muestra los últimos eventos de auditoría
 	$(COMPOSE) exec postgres psql -U $${POSTGRES_USER:-mooc} -d $${POSTGRES_DB:-mooc} \
 		-c "SELECT occurred_at, actor_role, action, entity_type, metadata FROM audit.events ORDER BY id DESC LIMIT 20;"
+
+.PHONY: frontend-test
+frontend-test: ## Pruebas del cliente HTTP de la interfaz en un contenedor
+	docker run --rm -v "$(PWD)/frontend":/src -w /src node:24-alpine npm test
+
+.PHONY: frontend-e2e
+frontend-e2e: ## Recorrido de navegador contra el stack local (crea datos sintéticos)
+	docker build -f frontend/tests/Dockerfile -t mooc-browser frontend/tests
+	docker run --rm --ipc=host --network mooc_default -v "$(PWD)/frontend":/src -w /src \
+		mooc-browser node tests/docker-e2e.mjs

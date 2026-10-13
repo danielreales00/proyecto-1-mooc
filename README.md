@@ -315,7 +315,7 @@ hay que demostrar solo se ve con todo levantado.
 
 ```bash
 make rapido     # ~13 s: formato, arquitectura, vet y pruebas. El bucle corto
-make ci         # ~1 min 35 s: TODO lo que corre el CI. Antes de empujar
+make ci         # Backend y navegador: TODO lo que corre el CI. Antes de empujar
 make demo       # ~1 min: el flujo completo, 33 aserciones
 make smoke      # ~4 s: identidad de punta a punta
 make postman    # ~27 s: la colección, segmentos rápidos
@@ -349,6 +349,15 @@ respondan sin firma.
 `make contrato` comprueba dos cosas contra la API en marcha: que sirva
 exactamente el contrato del repositorio, y que **toda ruta declarada como
 implementada exista de verdad en el router**.
+
+## La interfaz web
+
+`make up` sirve la aplicación en **http://localhost:8090**: catálogo público,
+cuentas, aula, evaluaciones, insignias, estudio docente, medios y administración.
+La interfaz usa la API real y sigue el sistema visual de `DESIGN.md`.
+Guía de ejecución y pruebas en [`frontend/README.md`](frontend/README.md);
+inventario de las 65 rutas disponibles en [`frontend/ENDPOINTS.md`](frontend/ENDPOINTS.md).
+La documentación interactiva sigue en `/docs`.
 
 ## La API
 

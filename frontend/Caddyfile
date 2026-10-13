@@ -1,0 +1,8 @@
+:80 {
+	root * /srv
+	encode gzip
+	header X-Content-Type-Options nosniff
+	header Referrer-Policy strict-origin-when-cross-origin
+	header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: http: data:; media-src 'self' blob: https: http:; connect-src 'self' https: http:; frame-src 'self' https: http:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+	file_server
+}

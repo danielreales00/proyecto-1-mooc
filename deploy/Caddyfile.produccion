@@ -26,10 +26,15 @@
 		reverse_proxy swagger:8080
 	}
 
-	handle {
+	@backend path /api/* /healthz /readyz /metrics /openapi.yaml
+	handle @backend {
 		reverse_proxy api:8080 {
 			header_up X-Forwarded-For {remote_host}
 			header_up X-Forwarded-Proto {scheme}
 		}
 	}
+	handle {
+		reverse_proxy frontend:80
+	}
+
 }

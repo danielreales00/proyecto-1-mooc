@@ -152,6 +152,12 @@ jobs:
       - name: Semilla de datos sintéticos
         run: docker compose run --rm seed
 
+      - name: Cliente HTTP de la interfaz
+        run: make frontend-test
+
+      - name: Navegador de la interfaz (cuenta, autoría, medios, aprendizaje e insignia)
+        run: make frontend-e2e
+
       - name: Smoke de extremo a extremo
         run: make smoke
 

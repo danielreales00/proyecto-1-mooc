@@ -2835,6 +2835,7 @@ components:
     Asset:
       type: object
       properties:
+        declared_sha256: { type: string, description: Checksum esperado para verificar una reanudación. }
         id: { type: string, format: uuid }
         kind: { type: string, enum: [video, audio, image, pdf, slides, file] }
         original_filename: { type: string }
@@ -2868,14 +2869,19 @@ components:
         created_at: { type: string, format: date-time }
 
     MediaSession:
+      description: Acceso temporal al recurso de una inscripción. HLS para video/audio; content_url para otros archivos.
       type: object
       required: [manifest_url, delivery, scope, expires_at]
       properties:
+        content_url:
+          type: string
+          format: uri
+          description: URL firmada del archivo para recursos sin HLS.
         manifest_url:
           type: string
           format: uri
           description: |
-            Manifiesto HLS. Ya viene firmado cuando `delivery` es `signed_url`.
+            Manifiesto HLS o URL firmada de contenido para recursos sin HLS.
         delivery:
           type: string
           enum: [signed_url, signed_cookie]
@@ -2973,6 +2979,8 @@ components:
         title: { type: string }
         type: { $ref: "#/components/schemas/ResourceType" }
         required: { type: boolean }
+        has_asset: { type: boolean }
+        external_url: { type: [string, "null"], format: uri }
         downloadable: { type: boolean }
         content_html: { type: [string, "null"] }
         content_url:

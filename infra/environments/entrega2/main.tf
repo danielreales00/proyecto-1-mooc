@@ -58,6 +58,7 @@ module "gcs" {
   prefijo            = var.project_id
   region             = var.region
   borrar_con_objetos = !var.proteger_borrado
+  frontend_origins   = ["https://${local.nombre_publico}"]
 
   depends_on = [google_project_service.apis]
 }

@@ -85,6 +85,7 @@ func vistaAsset(a Asset) map[string]any {
 		"detected_mime":     a.DetectedMIME,
 		"size_bytes":        a.SizeBytes,
 		"sha256":            a.SHA256,
+		"declared_sha256":   a.DeclaredSHA256,
 		"duration_seconds":  a.DurationSeconds,
 		"scan_result":       a.ScanResult,
 		"status":            a.Status,
@@ -318,12 +319,16 @@ func (a *API) abrirSesion(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, traducir(err))
 		return
 	}
-	httpx.JSON(w, http.StatusCreated, map[string]any{
+	respuesta := map[string]any{
 		"manifest_url": sesion.ManifestURL,
 		"delivery":     sesion.Delivery,
 		"scope":        sesion.Scope,
 		"expires_at":   sesion.ExpiresAt,
-	})
+	}
+	if sesion.ContentURL != "" {
+		respuesta["content_url"] = sesion.ContentURL
+	}
+	httpx.JSON(w, http.StatusCreated, respuesta)
 }
 
 func (a *API) masterDeSesion(w http.ResponseWriter, r *http.Request) {

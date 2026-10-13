@@ -38,3 +38,8 @@ capacity-planning/medios/manifiesto.jsonl
 demo/guion.md
 demo/guion-entrega2.md
 demo/reparto.md
+
+# Herramientas de desarrollo de la interfaz
+frontend/node_modules/
+frontend/test-results/
+frontend/playwright-report/

@@ -34,6 +34,7 @@ const AlcanceAsset = "asset"
 
 // SesionMedia es lo que se devuelve al abrir la reproducción.
 type SesionMedia struct {
+	ContentURL  string
 	ManifestURL string
 	Delivery    string
 	Scope       string
@@ -84,7 +85,18 @@ func (s *Service) AbrirSesion(ctx context.Context, enrollmentID, resourceStableI
 		return SesionMedia{}, err
 	}
 	if !HLSAplicable(asset.Kind) {
-		return SesionMedia{}, ErrNotFound
+		if asset.Status != EstadoListo && asset.Status != EstadoLimpio {
+			return SesionMedia{}, ErrNoListo
+		}
+		u, err := s.almacen.PresignGet(ctx, s.buckets.Originales, asset.OriginalKey, TTLDescarga)
+		if err != nil {
+			return SesionMedia{}, err
+		}
+		if !s.destinoPermitido(u) {
+			return SesionMedia{}, fmt.Errorf("la URL firmada apunta fuera del almacén configurado")
+		}
+		return SesionMedia{ContentURL: u, ManifestURL: u, Delivery: EntregaURLFirmada,
+			Scope: AlcanceAsset, ExpiresAt: time.Now().UTC().Add(TTLDescarga)}, nil
 	}
 	if asset.Status != EstadoListo {
 		return SesionMedia{}, ErrNoListo

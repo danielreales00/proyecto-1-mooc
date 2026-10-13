@@ -234,7 +234,10 @@ func (a *API) content(w http.ResponseWriter, r *http.Request) {
 	for _, c := range recursos {
 		item := map[string]any{
 			"stable_id": c.StableID.String(), "title": c.Title, "type": c.Type,
-			"required": c.Required,
+			"required":     c.Required,
+			"external_url": c.ExternalURL,
+			"downloadable": c.Downloadable,
+			"has_asset":    c.AssetID != nil,
 			"progress": map[string]any{
 				"state":                 c.Progress.State,
 				"dwell_ms_total":        c.Progress.DwellMsTotal,

@@ -52,6 +52,10 @@ services:
   # (ADR-0016, D4). Los certificados viven en un volumen: sin él, cada reinicio
   # pediría uno nuevo y Let's Encrypt limita a cinco por semana para el mismo
   # nombre.
+  frontend:
+    image: ${REGISTRO}/frontend:${VERSION}
+    restart: unless-stopped
+
   proxy:
     image: caddy:2.10-alpine
     environment:
@@ -67,6 +71,8 @@ services:
       api:
         condition: service_healthy
       swagger:
+        condition: service_started
+      frontend:
         condition: service_started
     restart: unless-stopped
 

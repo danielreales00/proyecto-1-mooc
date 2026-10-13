@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#003c33" />
+    <meta
+      name="description"
+      content="Aprende a tu ritmo. Explora cursos, desarrolla habilidades y comparte tus logros."
+    />
+    <title>MOOC · Aprender nos transforma</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/vendor/hls.light.min.js" defer></script>
+    <script src="/vendor/sha256.min.js" defer></script>
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Saltar al contenido</a>
+    <header id="header"></header>
+    <main id="main" tabindex="-1"></main>
+    <footer>
+      <a class="brand" href="#/">mooc<span>✳</span></a>
+      <p>
+        El conocimiento abre posibilidades.<br />Una plataforma para seguir
+        aprendiendo.
+      </p>
+      <a href="#/verify">Verificar una insignia ↗</a
+      ><a href="/docs">Documentación de la API ↗</a
+      ><small>Aprende. Conecta. Avanza.</small>
+    </footer>
+    <div id="notice" role="status" aria-live="polite"></div>
+    <dialog id="modal">
+      <div id="modal-body"></div>
+      <button class="text" id="close-modal">Cerrar</button>
+    </dialog>
+  </body>
+</html>

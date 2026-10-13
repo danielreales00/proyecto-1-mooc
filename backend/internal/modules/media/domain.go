@@ -164,6 +164,28 @@ func MIMEAceptable(kind, mimeReal string) bool {
 // archivo. `http.DetectContentType` no reconoce MP4 ni Matroska, así que se
 // añaden a mano las firmas que el proyecto necesita.
 func DetectarMIME(cabecera []byte, porDefecto string) string {
+	// Firmas completas: no se confía en la extensión ni en el MIME declarado.
+	signatures := []struct{ prefix, mime string }{
+		{"\x89PNG\r\n\x1a\n", "image/png"}, {"\xff\xd8\xff", "image/jpeg"},
+		{"GIF87a", "image/gif"}, {"GIF89a", "image/gif"},
+		{"ID3", "audio/mpeg"}, {"OggS", "audio/ogg"},
+	}
+	for _, signature := range signatures {
+		if strings.HasPrefix(string(cabecera), signature.prefix) {
+			return signature.mime
+		}
+	}
+	if len(cabecera) >= 12 && string(cabecera[:4]) == "RIFF" {
+		switch string(cabecera[8:12]) {
+		case "WEBP":
+			return "image/webp"
+		case "WAVE":
+			return "audio/wav"
+		}
+	}
+	if len(cabecera) >= 2 && cabecera[0] == 0xff && cabecera[1]&0xe0 == 0xe0 && cabecera[1]&0x06 != 0 {
+		return "audio/mpeg"
+	}
 	if len(cabecera) >= 12 {
 		// ISO-BMFF: los bytes 4..8 son "ftyp".
 		if string(cabecera[4:8]) == "ftyp" {
