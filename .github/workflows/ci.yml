@@ -13,7 +13,9 @@ on:
     branches: [main]
 
 env:
-  GO_VERSION: "1.26"
+  # Parche exacto: con solo "1.26", setup-go reutiliza la versión de la caché
+  # del runner aunque tenga vulnerabilidades corregidas (GO-2026-6617).
+  GO_VERSION: "1.26.10"
 
 jobs:
   # --- build y lint ---------------------------------------------------------
@@ -148,6 +150,9 @@ jobs:
           docker compose run --rm migrate
           docker compose exec -T postgres \
             psql -U mooc -d mooc -c "SELECT version, applied_at FROM platform.schema_migrations ORDER BY version;"
+
+      - name: Migraciones simultáneas desde varias réplicas
+        run: make migraciones-concurrentes
 
       - name: Semilla de datos sintéticos
         run: docker compose run --rm seed

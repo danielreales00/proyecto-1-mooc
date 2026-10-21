@@ -1,6 +1,6 @@
 # Interfaz web MOOC
 
-El frontend vive en la rama `feat/complete-frontend`. Sigue `DESIGN.md`:
+El frontend sigue `DESIGN.md`:
 canvas blanco, tipografía Space Grotesk, superficies verde oscuro y piedra,
 acentos coral, botones en píldora y listas separadas por reglas. No contiene
 cursos, progreso, usuarios ni métricas simuladas.

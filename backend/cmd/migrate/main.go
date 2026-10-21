@@ -23,6 +23,10 @@ import (
 	"mooc/backend/migrations"
 )
 
+// lockMigraciones identifica el bloqueo consultivo de PostgreSQL que serializa
+// las migraciones entre réplicas. Es arbitrario; solo tiene que ser fijo.
+const lockMigraciones int64 = 0x6d6f6f63_6d696772 // "moocmigr"
+
 func main() {
 	if err := run(); err != nil {
 		slog.Error("migración fallida", "error", err)
@@ -50,7 +54,25 @@ func run() error {
 	}
 	defer pool.Close()
 
-	if _, err := pool.Exec(ctx, `
+	// Varias réplicas de la API pueden arrancar a la vez y cada una corre
+	// `migrate` (Entrega 3, grupo elástico). Sin exclusión, dos aplicarían la
+	// misma migración y la segunda fallaría, dejando su API sin levantar. El
+	// bloqueo consultivo es de sesión: todo el trabajo va por esta conexión, y
+	// la réplica que espera encuentra después el esquema al día.
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Release()
+	if _, err := conn.Exec(ctx, `SELECT pg_advisory_lock($1)`, lockMigraciones); err != nil {
+		return fmt.Errorf("esperar el bloqueo de migraciones: %w", err)
+	}
+	// Si el proceso muere, PostgreSQL suelta el bloqueo al cerrar la sesión.
+	defer func() {
+		_, _ = conn.Exec(context.Background(), `SELECT pg_advisory_unlock($1)`, lockMigraciones)
+	}()
+
+	if _, err := conn.Exec(ctx, `
 		CREATE SCHEMA IF NOT EXISTS platform;
 		CREATE TABLE IF NOT EXISTS platform.schema_migrations (
 		    version    text        PRIMARY KEY,
@@ -59,7 +81,7 @@ func run() error {
 		return fmt.Errorf("crear tabla de migraciones: %w", err)
 	}
 
-	applied, err := appliedVersions(ctx, pool)
+	applied, err := appliedVersions(ctx, conn)
 	if err != nil {
 		return err
 	}
@@ -81,7 +103,7 @@ func run() error {
 		}
 
 		start := time.Now()
-		if err := applyOne(ctx, pool, version, string(body)); err != nil {
+		if err := applyOne(ctx, conn, version, string(body)); err != nil {
 			return fmt.Errorf("aplicar %s: %w", name, err)
 		}
 		pending++
@@ -98,8 +120,8 @@ func run() error {
 
 // applyOne ejecuta la migración y registra su versión en la misma transacción:
 // o se aplica entera y queda anotada, o no ocurre nada.
-func applyOne(ctx context.Context, pool *pgxpool.Pool, version, body string) error {
-	tx, err := pool.Begin(ctx)
+func applyOne(ctx context.Context, conn *pgxpool.Conn, version, body string) error {
+	tx, err := conn.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -115,8 +137,8 @@ func applyOne(ctx context.Context, pool *pgxpool.Pool, version, body string) err
 	return tx.Commit(ctx)
 }
 
-func appliedVersions(ctx context.Context, pool *pgxpool.Pool) (map[string]bool, error) {
-	rows, err := pool.Query(ctx, `SELECT version FROM platform.schema_migrations`)
+func appliedVersions(ctx context.Context, conn *pgxpool.Conn) (map[string]bool, error) {
+	rows, err := conn.Query(ctx, `SELECT version FROM platform.schema_migrations`)
 	if err != nil {
 		return nil, fmt.Errorf("leer migraciones aplicadas: %w", err)
 	}

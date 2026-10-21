@@ -4,7 +4,7 @@
 # y en Windows; las órdenes se escriben y se ven igual que siempre.
 SHELL := /bin/bash
 COMPOSE := docker compose
-GO_IMAGE := golang:1.26-alpine
+GO_IMAGE := golang:1.26.10-alpine
 
 # Herramientas de seguridad con versión fija, por lo mismo que las imágenes: el
 # CI y la máquina de cada quien deben ejecutar exactamente lo mismo. Subirlas es
@@ -82,6 +82,25 @@ build: ## Reconstruye las imágenes
 .PHONY: migrate
 migrate: ## Aplica las migraciones pendientes
 	$(COMPOSE) run --rm migrate
+
+# Las réplicas del grupo elástico corren `migrate` al arrancar, a la vez. Tres
+# procesos sobre una base vacía: todos deben terminar bien y cada migración
+# quedar anotada una sola vez (bloqueo consultivo en cmd/migrate).
+.PHONY: migraciones-concurrentes
+migraciones-concurrentes: env ## Tres `migrate` simultáneos sobre una base vacía
+	@pg="$(COMPOSE) exec -T postgres psql -U $${POSTGRES_USER:-mooc} -d $${POSTGRES_DB:-mooc} -qtA"; \
+	url=$$(grep '^DATABASE_URL=' .env | cut -d= -f2- | sed 's#/[^/?]*?#/mooc_concurrente?#'); \
+	$$pg -c "DROP DATABASE IF EXISTS mooc_concurrente" -c "CREATE DATABASE mooc_concurrente" || exit 1; \
+	pids=""; for i in 1 2 3; do \
+		$(COMPOSE) run --rm -T -e DATABASE_URL="$$url" migrate >/dev/null 2>&1 & pids="$$pids $$!"; \
+	done; \
+	fallos=0; for p in $$pids; do wait $$p || fallos=$$((fallos+1)); done; \
+	esperadas=$$(ls backend/migrations/*.up.sql | wc -l); \
+	aplicadas=$$($(COMPOSE) exec -T postgres psql -U $${POSTGRES_USER:-mooc} -d mooc_concurrente -qtA \
+		-c "SELECT count(*) FROM platform.schema_migrations"); \
+	$$pg -c "DROP DATABASE mooc_concurrente"; \
+	echo "migrate simultáneos: 3, fallidos: $$fallos, migraciones $$aplicadas de $$esperadas"; \
+	[ "$$fallos" = 0 ] && [ "$$aplicadas" = "$$esperadas" ]
 
 .PHONY: tidy
 tidy: ## Resuelve go.mod y go.sum dentro de un contenedor
@@ -431,6 +450,7 @@ ci: ## Corre TODO lo que corre el CI, en local. Úsalo antes de empujar.
 	@echo "── extremo a extremo ────────────────────────────────"
 	@$(MAKE) --no-print-directory smoke
 	@$(MAKE) --no-print-directory invariantes
+	@$(MAKE) --no-print-directory migraciones-concurrentes
 	@$(MAKE) --no-print-directory postman
 	@echo "── navegador de la interfaz ──────────────────────────"
 	@$(MAKE) --no-print-directory frontend-e2e

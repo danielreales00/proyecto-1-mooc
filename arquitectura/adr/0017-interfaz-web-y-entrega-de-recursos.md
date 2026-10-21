@@ -1,6 +1,6 @@
 # ADR-0017 — Interfaz web sobre la API existente
 
-Estado: aceptado para la rama del frontend.
+Estado: aceptado.
 
 La plataforma necesita interfaces para estudiantes, docentes y administradores.
 El frontend se sirve desde un contenedor Caddy independiente detrás del proxy

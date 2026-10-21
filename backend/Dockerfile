@@ -3,7 +3,7 @@
 # Una sola construcción, tres imágenes (ADR-0001). Los binarios comparten el
 # árbol internal/ completo, así que comparten también las capas de compilación.
 
-FROM golang:1.26-alpine AS builder
+FROM golang:1.26.10-alpine AS builder
 WORKDIR /src
 
 RUN apk add --no-cache git ca-certificates
