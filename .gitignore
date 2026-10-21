@@ -43,3 +43,6 @@ demo/reparto.md
 frontend/node_modules/
 frontend/test-results/
 frontend/playwright-report/
+
+# Metadatos de descarga que Windows deja junto a los archivos en WSL
+*:Zone.Identifier
