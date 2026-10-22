@@ -1,20 +1,22 @@
-# Web Server (ADR-0016, D1): entrada TLS, API y documentación. Es la única
-# máquina con IP pública.
+# Instancia del grupo de API (ADR-0018, D2): Caddy, API, frontend y
+# documentación. No tiene IP pública: el tráfico llega del balanceador por el
+# puerto 80 y el TLS termina allí.
 #
 # Los servicios son los de docker-compose.yml, con tres diferencias: las
 # imágenes vienen de Artifact Registry con el SHA del commit (no se construye
-# en una máquina de 2 GiB), la base es Cloud SQL y Redis vive en el Worker
-# Server. No usa `extends`: la máquina no tiene el repositorio, solo recibe
-# este archivo por los metadatos de la instancia.
+# en una máquina de 2 GiB), la base es Cloud SQL y Redis vive en la máquina de
+# la cola. No usa `extends`: la instancia no tiene el repositorio, solo recibe
+# este archivo por los metadatos de la plantilla.
 #
-# ${REGISTRO}, ${VERSION} y ${DOMINIO} salen del .env que escribe el script de
-# arranque, el mismo que lee la aplicación.
+# ${REGISTRO}, ${VERSION} e ${INSTANCIA} salen del .env que escribe el script
+# de arranque, el mismo que lee la aplicación.
 
 name: mooc
 
 services:
-  # Aplica las migraciones pendientes contra Cloud SQL y termina. Es idempotente:
-  # en un arranque sin migraciones nuevas no hace nada (ADR-0003).
+  # Aplica las migraciones pendientes contra Cloud SQL y termina. Es idempotente
+  # (ADR-0003), y cuando arrancan varias instancias a la vez un bloqueo
+  # consultivo las serializa: solo una aplica, las demás esperan y no hacen nada.
   migrate:
     image: ${REGISTRO}/migrate:${VERSION}
     env_file: [.env]
@@ -24,7 +26,7 @@ services:
     image: ${REGISTRO}/api:${VERSION}
     env_file: [.env]
     # Solo en el 127.0.0.1 de la máquina: lo lee el agente de operaciones para
-    # llevar /metrics a Cloud Monitoring. La entrada pública es el proxy.
+    # llevar /metrics a Cloud Monitoring. La entrada es el proxy.
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
@@ -48,25 +50,21 @@ services:
       DOC_EXPANSION: none
     restart: unless-stopped
 
-  # TLS termina aquí, con certificado de Let's Encrypt para ${DOMINIO}
-  # (ADR-0016, D4). Los certificados viven en un volumen: sin él, cada reinicio
-  # pediría uno nuevo y Let's Encrypt limita a cinco por semana para el mismo
-  # nombre.
   frontend:
     image: ${REGISTRO}/frontend:${VERSION}
     restart: unless-stopped
 
+  # Entrada HTTP desde el balanceador. Sin certificados: el TLS termina en el
+  # balanceador. INSTANCIA es el nombre de la máquina, que Caddy devuelve en
+  # cada respuesta para demostrar el reparto.
   proxy:
     image: caddy:2.10-alpine
     environment:
-      DOMINIO: ${DOMINIO}
+      INSTANCIA: ${INSTANCIA}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy-data:/data
-      - caddy-config:/config
     ports:
       - "80:80"
-      - "443:443"
     depends_on:
       api:
         condition: service_healthy
@@ -75,7 +73,3 @@ services:
       frontend:
         condition: service_started
     restart: unless-stopped
-
-volumes:
-  caddy-data:
-  caddy-config:

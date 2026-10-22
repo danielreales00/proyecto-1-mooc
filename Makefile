@@ -190,7 +190,7 @@ gcloud: ## gcloud en contenedor: make gcloud ARGS="projects list"
 .PHONY: prueba-gcs
 prueba-gcs: ## Suite del almacén contra Cloud Storage real, firmando como mooc-web
 	@# Usa el ADC del volumen mooc-gcloud. Firmar como mooc-web exige estar en
-	@# firmantes_desarrollo (infra/environments/entrega2/terraform.tfvars).
+	@# firmantes_desarrollo (infra/environments/entrega3/terraform.tfvars).
 	$(EN_GO) -v mooc-gcloud:/root/.config/gcloud:ro \
 		-e GOOGLE_APPLICATION_CREDENTIALS=/root/.config/gcloud/application_default_credentials.json \
 		-e GCS_PRUEBA_BUCKET=$(GCP_PROYECTO)-originals \
@@ -230,28 +230,47 @@ SSH_NUBE := docker run --rm $(TTY) -v mooc-gcloud:/root/.config/gcloud -v mooc-s
 	$(GCLOUD_IMAGE) gcloud compute ssh --zone us-central1-a --tunnel-through-iap --quiet
 
 .PHONY: ssh
-ssh: ## SSH por IAP: make ssh MAQUINA=mooc-worker [CMD="sudo docker ps"]
-	@test -n "$(MAQUINA)" || { echo 'uso: make ssh MAQUINA=<mooc-web|mooc-worker> [CMD="..."]'; exit 1; }
+ssh: ## SSH por IAP: make ssh MAQUINA=mooc-cola [CMD="sudo docker ps"]
+	@# Las instancias de los grupos tienen nombre aleatorio (mooc-api-xxxx):
+	@# make instancias las lista.
+	@test -n "$(MAQUINA)" || { echo 'uso: make ssh MAQUINA=<mooc-cola|mooc-api-xxxx|mooc-worker-xxxx> [CMD="..."]'; exit 1; }
 	@$(SSH_NUBE) $(MAQUINA) $(if $(CMD),--command '$(CMD)')
 
 # --- Verificación contra la nube (A4) ---------------------------------------
-# Nombre público del Web Server: `make tf ENTORNO=entrega2 ARGS="output nombre_publico"`.
+# Nombre público del balanceador: `make tf ENTORNO=entrega3 ARGS="output nombre_publico"`.
+# PENDIENTE: se fija tras el primer apply de entrega3; hasta entonces es el
+# del Web Server de la Entrega 2, que ya no existe.
 NUBE_HOST := 35-184-146-250.sslip.io
-VERSION_IMAGENES := $(shell sed -n 's/^version_imagenes *= *"\(.*\)"/\1/p' infra/environments/entrega2/terraform.tfvars)
+VERSION_IMAGENES := $(shell sed -n 's/^version_imagenes *= *"\(.*\)"/\1/p' infra/environments/entrega3/terraform.tfvars)
 NUBE_RED  := mooc-nube
 GCLOUD    := docker run --rm -v mooc-gcloud:/root/.config/gcloud $(GCLOUD_IMAGE) gcloud
 
+# La primera instancia del grupo de API: cualquiera sirve para llegar a la base.
+INSTANCIA_API = $(GCLOUD) compute instance-groups managed list-instances mooc-api \
+	--project $(GCP_PROYECTO) --zone us-central1-a --format='value(name)' --limit 1
+
+.PHONY: instancias
+instancias: ## Instancias de los dos grupos y la cola, con papel, versión y estado
+	@$(GCLOUD) compute instances list --project $(GCP_PROYECTO) \
+		--filter='labels.rol:(web worker cola)' \
+		--format='table(name, labels.rol, labels.version, status, networkInterfaces[0].networkIP)'
+
+.PHONY: hornear-imagen
+hornear-imagen: ## Imagen base de las plantillas: Docker, agente e imágenes ya descargadas
+	@$(EN_NUBE) $(GCLOUD_IMAGE) bash /repo/scripts/hornear-imagen.sh \
+		$(GCP_PROYECTO) us-central1-a $(REGISTRO) $(VERSION_IMAGENES)
+
 .PHONY: tunel-mailpit
-tunel-mailpit: ## Túnel SSH por IAP al Mailpit del Worker Server (contenedor mooc-tunel)
+tunel-mailpit: ## Túnel SSH por IAP al Mailpit de la máquina de la cola (contenedor mooc-tunel)
 	@docker network inspect $(NUBE_RED) >/dev/null 2>&1 || docker network create $(NUBE_RED) >/dev/null
 	@docker rm -f mooc-tunel >/dev/null 2>&1 || true
-	@# Mailpit solo escucha en el 127.0.0.1 del Worker Server. El túnel lo trae
+	@# La interfaz de Mailpit solo escucha en el 127.0.0.1 de mooc-cola. El túnel la trae
 	@# a mooc-tunel:8025 dentro de la red $(NUBE_RED); no se abre ningún puerto.
 	@# También en 127.0.0.1:8027 de esta máquina (8026 es el Mailpit local): Postman de escritorio lo lee
 	@# con mailpit_url=http://localhost:8027.
 	@docker run -d --name mooc-tunel --network $(NUBE_RED) -p 127.0.0.1:8027:8025 \
 		-v mooc-gcloud:/root/.config/gcloud -v mooc-ssh:/root/.ssh $(GCLOUD_IMAGE) \
-		gcloud compute ssh mooc-worker --zone us-central1-a --tunnel-through-iap --quiet \
+		gcloud compute ssh mooc-cola --zone us-central1-a --tunnel-through-iap --quiet \
 		-- -N -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes \
 		-L 0.0.0.0:8025:127.0.0.1:8025 >/dev/null
 	@for i in $$(seq 1 30); do \
@@ -260,20 +279,20 @@ tunel-mailpit: ## Túnel SSH por IAP al Mailpit del Worker Server (contenedor mo
 		sleep 2; done; echo "el túnel no respondió"; docker logs mooc-tunel | tail -5; exit 1
 
 .PHONY: psql-nube
-psql-nube: ## psql interactivo contra Cloud SQL, a través del Web Server
-	@# La base solo tiene IP privada: se entra desde la máquina que la usa. La
+psql-nube: ## psql interactivo contra Cloud SQL, a través de una instancia de API
+	@# La base solo tiene IP privada: se entra desde una máquina que la usa. La
 	@# URL con la clave la lee allí mismo, del .env, y no pasa por aquí.
-	@$(SSH_NUBE) mooc-web -- -t 'cd /opt/mooc && sudo docker run --rm -it postgres:17-alpine \
+	@$(SSH_NUBE) "$$($(INSTANCIA_API))" -- -t 'cd /opt/mooc && sudo docker run --rm -it postgres:17-alpine \
 		psql "$$(sudo grep ^DATABASE_URL= .env | cut -d= -f2-)"'
 
 .PHONY: semilla-nube
 semilla-nube: ## Cuentas sintéticas en Cloud SQL, con la contraseña de Secret Manager
-	@# Corre en el Web Server, que es quien llega a la IP privada de la base. La
+	@# Corre en una instancia de API, que es quien llega a la IP privada de la base. La
 	@# contraseña la lee la propia máquina con su identidad: no pasa por aquí.
 	@# El .env es de root con 0600: se lee con sudo, no se carga en el shell.
 	@# Sin pasar por `make ssh`: un make recursivo expandiría dos veces los $$.
 	@# CARGA=1 crea además las cuentas de las pruebas de carga (600 y 10).
-	@$(SSH_NUBE) mooc-web --command 'set -e; cd /opt/mooc; \
+	@$(SSH_NUBE) "$$($(INSTANCIA_API))" --command 'set -e; cd /opt/mooc; \
 		img=$$(sudo grep ^REGISTRO= .env | cut -d= -f2)/seed:$$(sudo grep ^VERSION= .env | cut -d= -f2); \
 		sudo docker run --rm --env-file .env -e SEED_FORCE=1 \
 		$(if $(CARGA),-e SEED_CARGA_ESTUDIANTES=600 -e SEED_CARGA_PROFESORES=10) \
@@ -380,6 +399,11 @@ tf: ## terraform de un entorno: make tf ENTORNO=dev ARGS="plan"
 	@test -n "$(ENTORNO)" || { echo 'uso: make tf ENTORNO=<dev|prod> ARGS="plan"'; exit 1; }
 	@test -d infra/environments/$(ENTORNO) \
 		|| { echo "no existe infra/environments/$(ENTORNO)"; exit 1; }
+	@# entrega2 cedió su estado a entrega3 (ADR-0018, D1): aplicarlo ahora
+	@# pelearía con entrega3 por los mismos recursos. Su configuración sigue en
+	@# el tag entrega-2.
+	@test "$(ENTORNO)" != entrega2 \
+		|| { echo "entrega2 está congelado: su estado pasó a entrega3 (ver el tag entrega-2)"; exit 1; }
 	@# Terraform se autentica con las credenciales por defecto de la aplicación,
 	@# las que deja `gcloud auth application-default login` en el mismo volumen.
 	@$(EN_NUBE) -w /repo/infra/environments/$(ENTORNO) \

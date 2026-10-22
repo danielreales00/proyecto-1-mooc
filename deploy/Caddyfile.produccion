@@ -1,19 +1,32 @@
-# Proxy de entrada del Web Server (ADR-0016, D4). Mismo reparto que el
-# Caddyfile local, con dos diferencias: escucha en 80/443 con el nombre
-# público y obtiene el certificado de Let's Encrypt él solo.
+# Proxy de cada instancia del grupo de API (ADR-0018, D3). Mismo reparto que el
+# Caddyfile local; escucha en el 80 sin TLS, porque el TLS termina en el
+# balanceador y el salto hasta aquí no sale de la VPC.
 #
-# No hay balanceador delante: la IP que llega es la del cliente, y Caddy
-# SOBRESCRIBE X-Forwarded-For en vez de añadirle. Por eso TRUSTED_PROXY_HOPS=0.
+# X-Forwarded-For: el balanceador añade «<cliente>, <ip del balanceador>» a lo
+# que trajera la petición. Caddy confía en los rangos de Google y lo pasa tal
+# cual a la API, que toma la IP real a un salto de la derecha
+# (TRUSTED_PROXY_HOPS=1). Si Caddy lo sobrescribiera, como en la Entrega 2,
+# todos los usuarios compartirían la IP de un proxy de Google y el límite de
+# tasa por IP los sumaría.
 
 {
 	admin off
+	auto_https off
+
+	servers {
+		trusted_proxies static 130.211.0.0/22 35.191.0.0/16
+	}
 }
 
-{$DOMINIO} {
+:80 {
 	log {
 		output stdout
 		format json
 	}
+
+	# Qué instancia atendió: la evidencia de que el balanceador reparte. Es el
+	# nombre de la máquina, que no revela nada que no diga ya la consola.
+	header X-Instancia {$INSTANCIA}
 
 	# /metrics no sale a Internet: cuenta cuánto tráfico hay, por ruta y por
 	# estado, y cómo va la cola. El agente de operaciones la lee dentro de la
@@ -26,15 +39,14 @@
 		reverse_proxy swagger:8080
 	}
 
-	@backend path /api/* /healthz /readyz /metrics /openapi.yaml
+	@backend path /api/* /healthz /readyz /openapi.yaml
 	handle @backend {
 		reverse_proxy api:8080 {
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-For {http.request.header.X-Forwarded-For}
+			header_up X-Forwarded-Proto https
 		}
 	}
 	handle {
 		reverse_proxy frontend:80
 	}
-
 }
