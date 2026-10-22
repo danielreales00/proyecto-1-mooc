@@ -457,6 +457,27 @@ ci: ## Corre TODO lo que corre el CI, en local. Úsalo antes de empujar.
 	@echo
 	@echo "Todo en verde. Se puede empujar."
 
+.PHONY: calidad
+calidad: env ## Análisis de SonarQube, umbrales y exportación en docs/entrega3/calidad (ADR-0018)
+	@$(COMPOSE) --profile calidad up -d sonarqube
+	@echo "── cobertura de Go ──────────────────────────────────"
+	@$(EN_GO) $(GO_IMAGE) go test -coverprofile=coverage.out ./... >/dev/null
+	@echo "── cobertura de la interfaz ─────────────────────────"
+	@# lcov escribe las rutas relativas a frontend/; el scanner las quiere
+	@# relativas a la raíz del repositorio.
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(PWD)/frontend":/src -w /src node:24-alpine sh -c "\
+		node --test --experimental-test-coverage --test-reporter=lcov \
+			--test-reporter-destination=lcov.info tests/api.test.mjs && \
+		sed -i 's#^SF:#SF:frontend/#' lcov.info"
+	@echo "── análisis ─────────────────────────────────────────"
+	@token=$$($(HERRAMIENTAS) python3 scripts/calidad.py preparar) && \
+		$(COMPOSE) --profile calidad run --rm -e SONAR_TOKEN="$$token" sonar-scanner >/dev/null
+	@echo "── umbrales ─────────────────────────────────────────"
+	@$(COMPOSE) run --rm --user "$$(id -u):$$(id -g)" \
+		-e COMMIT="$$(git rev-parse HEAD)$$(git diff --quiet HEAD || echo '-sucio')" \
+		herramientas python3 scripts/calidad.py verificar docs/entrega3/calidad
+	@source .env; echo "  SonarQube  http://localhost:$${SONAR_PORT:-9002}  (admin / admin)"
+
 .PHONY: obs
 obs: ## Levanta Prometheus y Grafana (perfil observability)
 	$(COMPOSE) --profile observability up -d
