@@ -10,6 +10,10 @@ presupuesto_usd    = 50
 # persona del equipo que trabaje en el adaptador añade aquí su cuenta.
 firmantes_desarrollo = ["user:santiago.chica1997@gmail.com"]
 
+# Integrantes que operan el proyecto con su cuenta, sin claves descargadas
+# (ADR-0015, D3). Quien creó el proyecto ya es propietario y no va aquí.
+integrantes = ["user:mjpatinoo@gmail.com"]
+
 # Red. Rangos propios, sin solaparse con los 10.128.0.0/9 de la red default.
 cidr_subred       = "10.10.0.0/24"
 cidr_servicios    = "10.20.0.0/20"
