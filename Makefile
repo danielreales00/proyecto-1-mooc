@@ -238,9 +238,9 @@ ssh: ## SSH por IAP: make ssh MAQUINA=mooc-cola [CMD="sudo docker ps"]
 
 # --- Verificación contra la nube (A4) ---------------------------------------
 # Nombre público del balanceador: `make tf ENTORNO=entrega3 ARGS="output nombre_publico"`.
-# PENDIENTE: se fija tras el primer apply de entrega3; hasta entonces es el
-# del Web Server de la Entrega 2, que ya no existe.
-NUBE_HOST := 35-184-146-250.sslip.io
+# Se fijó tras el primer apply de entrega3; la IP del balanceador se conserva
+# entre sesiones.
+NUBE_HOST := 34-160-11-22.sslip.io
 VERSION_IMAGENES := $(shell sed -n 's/^version_imagenes *= *"\(.*\)"/\1/p' infra/environments/entrega3/terraform.tfvars)
 NUBE_RED  := mooc-nube
 GCLOUD    := docker run --rm -v mooc-gcloud:/root/.config/gcloud $(GCLOUD_IMAGE) gcloud
