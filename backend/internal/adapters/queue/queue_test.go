@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/hibiken/asynq"
+
 	"mooc/backend/internal/platform/jobs"
 )
 
@@ -58,5 +60,24 @@ func TestParseQueues(t *testing.T) {
 				t.Fatalf("ParseQueues(%q) = %v, se esperaba %v", c.spec, got, c.want)
 			}
 		})
+	}
+}
+
+// El reaper no debe volver a encolar lo que asynq todavía va a ejecutar, y sí
+// lo que agotó sus reintentos: es lo que pide el reencolado desde la DLQ.
+func TestSigueViva(t *testing.T) {
+	casos := map[asynq.TaskState]bool{
+		asynq.TaskStatePending:     true,
+		asynq.TaskStateActive:      true,
+		asynq.TaskStateScheduled:   true,
+		asynq.TaskStateRetry:       true,
+		asynq.TaskStateAggregating: true,
+		asynq.TaskStateArchived:    false,
+		asynq.TaskStateCompleted:   false,
+	}
+	for estado, want := range casos {
+		if got := sigueViva(estado); got != want {
+			t.Errorf("sigueViva(%v) = %v, quiero %v", estado, got, want)
+		}
 	}
 }

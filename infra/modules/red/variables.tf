@@ -17,20 +17,22 @@ variable "cidr_servicios" {
   type        = string
 }
 
-variable "ip_interna_web" {
-  type = string
-}
-
-variable "ip_interna_worker" {
-  type = string
+variable "ip_interna_cola" {
+  description = "Dirección fija de la máquina de la cola (Redis y Mailpit)."
+  type        = string
 }
 
 variable "cuenta_web" {
-  description = "Correo de la cuenta de servicio del Web Server."
+  description = "Correo de la cuenta de servicio del grupo de API."
   type        = string
 }
 
 variable "cuenta_worker" {
-  description = "Correo de la cuenta de servicio del Worker Server."
+  description = "Correo de la cuenta de servicio del grupo de workers."
+  type        = string
+}
+
+variable "cuenta_cola" {
+  description = "Correo de la cuenta de servicio de la máquina de la cola."
   type        = string
 }

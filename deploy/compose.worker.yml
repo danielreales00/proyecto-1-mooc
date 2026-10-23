@@ -1,64 +1,39 @@
-# Worker Server (ADR-0016, D1): la cola y quien la consume. Sin IP pública;
-# sale a Internet por Cloud NAT.
+# Instancia del grupo de workers (ADR-0019, D2): consumidores de la cola
+# compartida. Sin IP pública; sale a Internet por Cloud NAT. La cola no vive
+# aquí: está en su propia máquina, que el autoscaler no puede retirar.
 #
 # Los servicios son los de docker-compose.yml con imágenes de Artifact Registry
-# y la base en Cloud SQL. No usa `extends`: la máquina no tiene el repositorio,
-# solo recibe este archivo por los metadatos de la instancia.
+# y la base en Cloud SQL. No usa `extends`: la instancia no tiene el
+# repositorio, solo recibe este archivo por los metadatos de la plantilla.
+#
+# La concurrencia por instancia es la de la Entrega 2. Lo que crece con la
+# demanda es el número de instancias, no los procesos dentro de cada una.
 
 name: mooc
 
 services:
-  # Un solo Redis para cola, sesiones, caché y límites de tasa (ADR-0016, D2).
-  # Se publica solo en la IP privada: el firewall deja entrar el 6379 desde el
-  # Web Server y nada más.
-  redis:
-    image: redis:7.4-alpine
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes:
-      - redis-data:/data
-    ports:
-      - "${IP_PRIVADA}:6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-    restart: unless-stopped
-
-  # Correo de la entrega: se queda aquí y nada sale a Internet. La interfaz
-  # se publica solo en el 127.0.0.1 de la máquina, que no es alcanzable desde
-  # fuera; la colección de Postman la lee por un túnel SSH a través de IAP
-  # (make tunel-mailpit).
-  mailpit:
-    image: axllent/mailpit:v1.27
-    ports:
-      - "127.0.0.1:8025:8025"
-    healthcheck:
-      test: ["CMD", "/mailpit", "readyz"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-    restart: unless-stopped
-
   worker:
     image: ${REGISTRO}/worker:${VERSION}
     env_file: [.env]
     environment:
       WORKER_QUEUES: critical=6,default=3
-    # /metrics para el agente de operaciones, solo en el 127.0.0.1.
+      # Por debajo del stop_grace_period: lo que no termine se corta a los 45 s
+      # y vuelve a la cola antes de que Docker mate el proceso.
+      WORKER_SHUTDOWN_TIMEOUT: 50s
+    # /healthz para la autorreparación del grupo, que llega desde los rangos de
+    # verificación de Google (el firewall no deja entrar nada más). /metrics,
+    # en el mismo puerto, lo lee el agente de operaciones.
     ports:
-      - "127.0.0.1:8081:8081"
-    depends_on:
-      redis:
-        condition: service_healthy
-      mailpit:
-        condition: service_healthy
+      - "8081:8081"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8081/healthz"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
+    # Correos e insignias duran segundos: un minuto basta para terminarlos al
+    # retirar la instancia.
+    stop_grace_period: 60s
     restart: unless-stopped
 
   # Firmas incluidas en la imagen y freshclam apagado, igual que en local: el
@@ -86,11 +61,13 @@ services:
     environment:
       WORKER_QUEUES: bulk=1
       WORKER_CONCURRENCY: 1
+      # El trabajo en curso tiene 252 s para terminar (nueve décimas de esto);
+      # si no, se corta, queda reclamable y asynq lo reintenta en otra
+      # instancia. Por debajo de los 300 s del stop_grace_period.
+      WORKER_SHUTDOWN_TIMEOUT: 280s
     ports:
       - "127.0.0.1:8082:8081"
     depends_on:
-      redis:
-        condition: service_healthy
       clamav:
         condition: service_healthy
     healthcheck:
@@ -99,7 +76,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    # La transcodificación más larga de la Entrega 2 duró 196 s. Al retirar la
+    # instancia, el trabajo en curso tiene este margen para terminar
+    # (ADR-0019, D6); WORKER_SHUTDOWN_TIMEOUT va por debajo de él.
+    stop_grace_period: 300s
     restart: unless-stopped
-
-volumes:
-  redis-data:

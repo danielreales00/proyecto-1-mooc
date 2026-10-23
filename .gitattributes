@@ -1,0 +1,7 @@
+# Lo que corre en Linux —las máquinas de GCE y los contenedores— va siempre con
+# LF, también en un clon de Windows con core.autocrlf=true. Terraform lee
+# deploy/ del disco de quien aplica y lo entrega tal cual a las máquinas: con
+# CRLF, bash falla («bash\r») y ClamAV rechaza su configuración.
+deploy/**   text eol=lf
+scripts/**  text eol=lf
+*.sh        text eol=lf

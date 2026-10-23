@@ -29,6 +29,8 @@ coverage.out
 # Terraform: proveedores descargados y planes locales. El lock sí se versiona.
 .terraform/
 *.tfplan
+# Correos de personas y cuenta de facturación; se versiona el .example.
+infra/environments/*/privado.auto.tfvars
 
 # Archivos de las pruebas de carga: se regeneran con make medios-carga.
 capacity-planning/medios/*.mp4

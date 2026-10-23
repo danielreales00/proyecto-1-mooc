@@ -1,0 +1,46 @@
+# Máquina de la cola (ADR-0019, D2): el Redis compartido y Mailpit, fuera de los
+# dos grupos elásticos. Sin IP pública; sale a Internet por Cloud NAT.
+#
+# No usa `extends`: la máquina no tiene el repositorio, solo recibe este
+# archivo por los metadatos de la instancia. ${IP_PRIVADA} sale del .env que
+# escribe el script de arranque.
+
+name: mooc
+
+services:
+  # Un solo Redis para cola, sesiones, caché y límites de tasa (ADR-0016, D2).
+  # Se publica solo en la IP privada: el firewall deja entrar el 6379 desde las
+  # cuentas de los dos grupos y nada más. AOF: los trabajos aceptados
+  # sobreviven a un reinicio de la máquina.
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    ports:
+      - "${IP_PRIVADA}:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # Correo de la entrega: se queda aquí y nada sale a Internet. SMTP en la IP
+  # privada, para los workers; la interfaz solo en el 127.0.0.1, que la
+  # colección de Postman lee por un túnel SSH a través de IAP
+  # (make tunel-mailpit).
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "${IP_PRIVADA}:1025:1025"
+      - "127.0.0.1:8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  redis-data:

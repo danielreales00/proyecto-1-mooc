@@ -14,7 +14,7 @@ description: |-
 
   **Aviso sobre SEG-7:** los heartbeats exigen 10 s de separación, a propósito. Con el Collection Runner hace falta `--delay-request 11000`, o ejecutar esas peticiones a mano. El equivalente automático es `make demo`.
 variables:
-  base_url: https://35-184-146-250.sslip.io
+  base_url: https://34-160-11-22.sslip.io
   mailpit_url: http://localhost:8027
   demo_password: ""
   nuevo_email: ""

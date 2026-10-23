@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -28,7 +29,8 @@ type Payload struct {
 }
 
 type Publisher struct {
-	client *asynq.Client
+	client    *asynq.Client
+	inspector *asynq.Inspector
 }
 
 // NewPublisher abre el cliente de la cola.
@@ -38,7 +40,8 @@ type Publisher struct {
 // hablarían cifrado y la cola no conectaría, que es un fallo raro de
 // diagnosticar —todo parece bien hasta que ningún trabajo se ejecuta—.
 func NewPublisher(addr, password string, db int, useTLS bool) *Publisher {
-	return &Publisher{client: asynq.NewClient(OpcionesRedis(addr, password, db, useTLS))}
+	opt := OpcionesRedis(addr, password, db, useTLS)
+	return &Publisher{client: asynq.NewClient(opt), inspector: asynq.NewInspector(opt)}
 }
 
 // OpcionesRedis construye la configuración que comparten el cliente y el
@@ -60,22 +63,77 @@ func hostDe(addr string) string {
 	return addr
 }
 
-func (p *Publisher) Close() error { return p.client.Close() }
+func (p *Publisher) Close() error {
+	return errors.Join(p.inspector.Close(), p.client.Close())
+}
 
+// Publish deja el trabajo en la cola. Si ya estaba esperando o en curso, no
+// hace nada: para quien publica, el trabajo está en la cola igual.
 func (p *Publisher) Publish(ctx context.Context, j jobs.Job, traceID string) error {
+	_, err := p.Republicar(ctx, j, traceID)
+	return err
+}
+
+// Republicar es Publish diciendo si el trabajo entró de verdad en la cola.
+// Devuelve false cuando ya estaba en Redis, esperando o en curso.
+//
+// El ID de la tarea en asynq es la job_key, así que la cola no admite dos
+// copias vivas del mismo trabajo. Sin eso, el reaper republicaba cada 30 s lo
+// que seguía esperando turno en `bulk`: en la Entrega 2 fueron 2.554 entregas
+// duplicadas, y en la Entrega 3 inflarían la señal de escalado de los workers.
+//
+// Una tarea terminada no deja rastro (asynq la borra al completarla), pero una
+// archivada sí: es la que agotó sus reintentos. Esa se borra y se vuelve a
+// encolar, que es lo que pide el reencolado administrativo desde la DLQ.
+func (p *Publisher) Republicar(ctx context.Context, j jobs.Job, traceID string) (bool, error) {
 	body, err := json.Marshal(Payload{JobKey: j.Key, TraceID: traceID, Data: j.Payload})
 	if err != nil {
-		return fmt.Errorf("serializar tarea %s: %w", j.Key, err)
+		return false, fmt.Errorf("serializar tarea %s: %w", j.Key, err)
 	}
-	_, err = p.client.EnqueueContext(ctx, asynq.NewTask(j.Type, body),
-		asynq.Queue(j.Queue),
-		asynq.MaxRetry(jobs.MaxRetry),
-		asynq.Timeout(30*time.Minute),
-	)
+	encolar := func() error {
+		_, err := p.client.EnqueueContext(ctx, asynq.NewTask(j.Type, body),
+			asynq.TaskID(j.Key),
+			asynq.Queue(j.Queue),
+			asynq.MaxRetry(jobs.MaxRetry),
+			asynq.Timeout(30*time.Minute),
+		)
+		return err
+	}
+
+	err = encolar()
+	if errors.Is(err, asynq.ErrTaskIDConflict) {
+		info, ierr := p.inspector.GetTaskInfo(j.Queue, j.Key)
+		switch {
+		case errors.Is(ierr, asynq.ErrTaskNotFound):
+			// Terminó entre los dos pasos: ya no hay conflicto.
+			err = encolar()
+		case ierr != nil:
+			return false, fmt.Errorf("consultar %s en la cola: %w", j.Key, ierr)
+		case sigueViva(info.State):
+			return false, nil
+		default:
+			if derr := p.inspector.DeleteTask(j.Queue, j.Key); derr != nil &&
+				!errors.Is(derr, asynq.ErrTaskNotFound) {
+				return false, fmt.Errorf("retirar %s archivada: %w", j.Key, derr)
+			}
+			err = encolar()
+		}
+	}
 	if err != nil {
-		return fmt.Errorf("encolar %s: %w", j.Key, err)
+		return false, fmt.Errorf("encolar %s: %w", j.Key, err)
 	}
-	return nil
+	return true, nil
+}
+
+// sigueViva dice si una tarea con ese estado acabará ejecutándose sin que
+// nadie la vuelva a publicar.
+func sigueViva(s asynq.TaskState) bool {
+	switch s {
+	case asynq.TaskStatePending, asynq.TaskStateActive, asynq.TaskStateScheduled,
+		asynq.TaskStateRetry, asynq.TaskStateAggregating:
+		return true
+	}
+	return false
 }
 
 // ParseQueues traduce "critical=6,default=3,bulk=1" al mapa de pesos de asynq.

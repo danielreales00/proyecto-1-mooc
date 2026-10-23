@@ -6,16 +6,8 @@ output "subred_id" {
   value = google_compute_subnetwork.principal.id
 }
 
-output "ip_externa_web" {
-  value = google_compute_address.web_externa.address
-}
-
-output "ip_interna_web" {
-  value = google_compute_address.web_interna.address
-}
-
-output "ip_interna_worker" {
-  value = google_compute_address.worker_interna.address
+output "ip_interna_cola" {
+  value = google_compute_address.cola_interna.address
 }
 
 # Cloud SQL no puede crearse antes de que exista el peering. Exponerlo como

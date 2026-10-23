@@ -16,7 +16,9 @@ Equipo de 4 personas, 4–5 entregas en 13 semanas.
 | `arquitectura/adr/` | Decisiones de arquitectura. Una decisión por archivo, numeradas. |
 | `arquitectura/disenos/` | Modelo de datos, API, trabajos asíncronos, máquinas de estado, ruta a GCP. |
 | `arquitectura/guia-de-informes.md` | Convenciones de escritura de los informes de arquitectura. Valen para todas las entregas. |
-| `arquitectura/despliegue-gcp.md` | **Plan ejecutable del despliegue en GCP.** Fases, comprobaciones y qué hace el usuario a mano. |
+| `arquitectura/despliegue-gcp.md` | Plan ejecutable del despliegue de la Entrega 2 (dos máquinas). Línea base. |
+| `arquitectura/alcance-entrega-3.md` | Alcance de la Entrega 3: arquitectura elástica, frontend en la nube, calidad. |
+| `arquitectura/despliegue-gcp-entrega3.md` | **Plan ejecutable del despliegue elástico**: grupos, balanceador, cola, autoscalers. |
 | `capacity-planning/pruebas_de_carga_entrega2.md` | **Definición e informe de los dos escenarios de carga.** Ruta fijada por el enunciado. |
 | `docs/entrega2/` | Documento de arquitectura entregable. Ruta fijada por el enunciado. |
 | `arquitectura/pendientes.md` | Notas de trabajo. No es entregable. |
@@ -130,6 +132,14 @@ Las órdenes de Go comparten tres volúmenes de caché —compilación, módulos
 binarios de las herramientas—. Sin la de compilación cada contenedor recompila
 el árbol entero: es la diferencia entre `make ci` en minuto y medio y en doce.
 Un script nuevo que compile Go usa `$(EN_GO)`, no un `docker run` propio.
+
+**La Entrega 3 es la arquitectura elástica** (`adr/0019`): dos grupos de
+instancias (API y workers) de 1 a 3, cada uno con su autoscaler, un balanceador
+HTTPS delante de la API y Redis en su propia máquina. El entorno de Terraform
+es `infra/environments/entrega3`, que heredó el estado de `entrega2`; este
+último está congelado y `make tf` lo rechaza. Los archivos de `deploy/` y
+`scripts/` van siempre con LF (`.gitattributes`): Terraform los lee del disco y
+los entrega a las máquinas tal cual.
 
 En entregas siguientes: frontend y despliegue en **GCP**. Las decisiones de hoy
 se toman sin amarrarse al proveedor; el mapeo previsto está en

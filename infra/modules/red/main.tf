@@ -1,6 +1,6 @@
 # Red privada del entorno: una VPC, una subred, el acceso privado a servicios
-# que necesita Cloud SQL, la salida a Internet del Worker Server y las reglas
-# que dejan al Web Server como único punto público (ADR-0016, D1).
+# que necesita Cloud SQL, la salida a Internet de las máquinas y las reglas
+# que dejan al balanceador como único punto público (ADR-0019, D3).
 
 resource "google_compute_network" "vpc" {
   name                    = var.nombre
@@ -38,38 +38,21 @@ resource "google_service_networking_connection" "servicios" {
   reserved_peering_ranges = [google_compute_global_address.servicios.name]
 }
 
-# --- Direcciones fijas ------------------------------------------------------
+# --- Dirección fija de la cola ----------------------------------------------
+# REDIS_ADDR y SMTP_ADDR de las plantillas apuntan aquí. Las instancias de los
+# grupos nacen y mueren con direcciones efímeras; la cola no puede.
 
-# Externa y estática: una efímera cambia al reiniciar la máquina y deja el
-# nombre público y el certificado apuntando a otro sitio (ADR-0016, D4).
-resource "google_compute_address" "web_externa" {
-  name         = "${var.nombre}-web"
-  region       = var.region
-  address_type = "EXTERNAL"
-}
-
-# Internas y fijas: REDIS_ADDR del Web Server apunta a la del Worker Server, y
-# no puede cambiar porque se recree la máquina.
-resource "google_compute_address" "web_interna" {
-  name         = "${var.nombre}-web-interna"
+resource "google_compute_address" "cola_interna" {
+  name         = "${var.nombre}-cola-interna"
   region       = var.region
   subnetwork   = google_compute_subnetwork.principal.id
   address_type = "INTERNAL"
-  address      = var.ip_interna_web
-}
-
-resource "google_compute_address" "worker_interna" {
-  name         = "${var.nombre}-worker-interna"
-  region       = var.region
-  subnetwork   = google_compute_subnetwork.principal.id
-  address_type = "INTERNAL"
-  address      = var.ip_interna_worker
+  address      = var.ip_interna_cola
 }
 
 # --- Salida a Internet ------------------------------------------------------
-# El Worker Server no tiene IP externa y necesita salir: imágenes de Docker
-# Hub, firmas de ClamAV, paquetes del sistema. El Web Server tiene IP propia y
-# el NAT no lo toca.
+# Ninguna máquina de la aplicación tiene IP externa, y todas necesitan salir:
+# imágenes de Docker Hub, paquetes del sistema, el repositorio del agente.
 
 resource "google_compute_router" "salida" {
   name    = "${var.nombre}-router"
@@ -97,27 +80,55 @@ resource "google_compute_router_nat" "salida" {
 
 # --- Firewall ---------------------------------------------------------------
 # Las reglas apuntan a cuentas de servicio y no a etiquetas: una etiqueta la
-# puede poner cualquiera que edite la máquina, la cuenta de servicio no.
+# puede poner cualquiera que edite la máquina, la cuenta de servicio no. Cada
+# instancia de un grupo hereda la cuenta de su plantilla, así que las reglas
+# valen para las que el autoscaler cree mañana.
 #
 # Cloud SQL no aparece: vive en la red del productor, al otro lado del
 # peering, y las reglas de entrada de esta VPC no la gobiernan. Lo que la
 # protege es no tener IP pública.
 
-resource "google_compute_firewall" "web_publico" {
-  name      = "${var.nombre}-web-publico"
+locals {
+  # Rangos desde los que llegan el balanceador y las verificaciones de salud de
+  # Google. Ninguna otra dirección de Internet alcanza las instancias.
+  rangos_google = ["130.211.0.0/22", "35.191.0.0/16"]
+}
+
+# El tráfico del balanceador y sus verificaciones entran por el 80 de Caddy. El
+# TLS termina en el balanceador; dentro de la VPC el salto es HTTP.
+resource "google_compute_firewall" "lb_api" {
+  name      = "${var.nombre}-lb-api"
   network   = google_compute_network.vpc.id
   direction = "INGRESS"
   priority  = 1000
 
   allow {
     protocol = "tcp"
-    ports    = ["80", "443"]
+    ports    = ["80"]
   }
 
-  source_ranges           = ["0.0.0.0/0"]
+  source_ranges           = local.rangos_google
   target_service_accounts = [var.cuenta_web]
 }
 
+# Autorreparación del grupo de workers: el /healthz del worker es lo único que
+# se publica, y solo para estos rangos.
+resource "google_compute_firewall" "salud_worker" {
+  name      = "${var.nombre}-salud-worker"
+  network   = google_compute_network.vpc.id
+  direction = "INGRESS"
+  priority  = 1000
+
+  allow {
+    protocol = "tcp"
+    ports    = ["8081"]
+  }
+
+  source_ranges           = local.rangos_google
+  target_service_accounts = [var.cuenta_worker]
+}
+
+# Redis: cola, sesiones, caché y límites. Lo usan las dos capas.
 resource "google_compute_firewall" "redis_interno" {
   name      = "${var.nombre}-redis-interno"
   network   = google_compute_network.vpc.id
@@ -129,8 +140,24 @@ resource "google_compute_firewall" "redis_interno" {
     ports    = ["6379"]
   }
 
-  source_service_accounts = [var.cuenta_web]
-  target_service_accounts = [var.cuenta_worker]
+  source_service_accounts = [var.cuenta_web, var.cuenta_worker]
+  target_service_accounts = [var.cuenta_cola]
+}
+
+# SMTP de Mailpit. Lo envía el worker; la API solo lo tiene configurado.
+resource "google_compute_firewall" "smtp_interno" {
+  name      = "${var.nombre}-smtp-interno"
+  network   = google_compute_network.vpc.id
+  direction = "INGRESS"
+  priority  = 1000
+
+  allow {
+    protocol = "tcp"
+    ports    = ["1025"]
+  }
+
+  source_service_accounts = [var.cuenta_web, var.cuenta_worker]
+  target_service_accounts = [var.cuenta_cola]
 }
 
 # Administración: SSH solo a través del túnel de IAP, que autentica con la
@@ -148,7 +175,7 @@ resource "google_compute_firewall" "ssh_iap" {
 
   # Rango fijo desde el que IAP reenvía las conexiones.
   source_ranges           = ["35.235.240.0/20"]
-  target_service_accounts = [var.cuenta_web, var.cuenta_worker]
+  target_service_accounts = [var.cuenta_web, var.cuenta_worker, var.cuenta_cola]
 }
 
 # La VPC ya deniega por defecto toda entrada no permitida. Esta regla lo hace

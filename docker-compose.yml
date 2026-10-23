@@ -232,6 +232,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    # Por encima de WORKER_SHUTDOWN_TIMEOUT (8 s): el trabajo cortado tiene que
+    # quedar anotado antes de que Docker mate el proceso. No se deja el valor por
+    # defecto de Docker, que no es el mismo en todas las máquinas (en una de
+    # Windows del equipo mataba a los 3 s).
+    stop_grace_period: 15s
     restart: unless-stopped
 
   # Antivirus (ADR-0011). La imagen trae la base de firmas, así que arranca en
@@ -290,6 +295,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    # Ver el de worker: por encima de WORKER_SHUTDOWN_TIMEOUT.
+    stop_grace_period: 15s
     restart: unless-stopped
 
   # Perfil `observability`: no se levantan con `make up` a secas, para que el
