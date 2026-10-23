@@ -137,9 +137,11 @@ los trabajos **en curso** porque el enunciado advierte que una cola sin
 pendientes puede tener trabajos en ejecución: con solo pendientes, el grupo
 encogería mientras una instancia todavía transcodifica.
 
-Dependencia con el *reaper* (punto 4 del alcance): si republica trabajos que
-ya esperan, infla esta señal y el grupo crece por trabajos que no existen. Se
-corrige en el código, no aquí.
+Dependencia con el *reaper* (punto 4 del alcance): si republicara trabajos
+que ya esperan, inflaría esta señal y el grupo crecería por trabajos que no
+existen. Corregido en el código: cada tarea lleva su `job_key` como ID de
+asynq, la cola no admite dos copias vivas del mismo trabajo y el *reaper* solo
+republica lo que de verdad falta en Redis (`queue.Publisher.Republicar`).
 
 Parámetros comunes a los dos autoscalers:
 
@@ -164,12 +166,22 @@ Al reducir, GCE ejecuta el `shutdown-script` de la plantilla
 (`deploy/apagado-worker.sh`), que hace `docker compose stop`. Compose respeta el
 `stop_grace_period` de cada servicio: **300 s para `worker-media`**, porque la
 transcodificación más larga de la Entrega 2 duró 196 s, y 60 s para `worker`.
-El `ShutdownTimeout` de asynq en `cmd/worker` va por debajo de esos 300 s; lo
-fija el frente de backend.
 
-Si el trabajo no termina dentro del margen, asynq lo devuelve a la cola y otra
-instancia lo repite. La idempotencia del worker (ADR-0008) evita derivados
-duplicados. La recuperación se demuestra con un retiro controlado durante una
+Dentro del contenedor, `WORKER_SHUTDOWN_TIMEOUT` va por debajo: **280 s en
+`worker-media` y 50 s en `worker`** (`deploy/compose.worker.yml`). Al recibir
+la señal, el worker deja de tomar trabajos y espera a los que están en curso.
+A las nueve décimas del plazo (252 s y 45 s) cancela los que no terminaron:
+el runner marca la fila `failed`, que se puede volver a reclamar, y asynq lo
+programa como reintento con la misma `job_key`, que otra instancia toma en
+segundos. Cuesta uno de los tres reintentos.
+
+Cortarlos antes del plazo es deliberado. Si asynq llegara a su plazo con el
+trabajo en marcha, lo devolvería a la cola con la fila aún en `running`: el
+worker que lo recibiera lo descartaría como entrega duplicada y solo el
+*reaper* lo rescataría, cinco minutos después.
+
+La idempotencia del worker (ADR-0008) evita derivados duplicados. La
+recuperación se demuestra con un retiro controlado durante una
 transcodificación.
 
 ### D7 — Arranque: script primero, imagen horneada para medir
@@ -214,10 +226,13 @@ el doble del peor arranque horneado, y aún por encima del arranque por script.
   las dos reglas de reenvío, que cobran por hora aunque no haya tráfico. La IP
   y el certificado se quedan: la URL pública no cambia entre sesiones.
 - `autoescalado = false` fija cada grupo en una instancia, sin autoscaler. Es
-  solo para la puesta en marcha; **no se activa con más de una instancia por
-  grupo hasta repartir los pools de conexiones** (punto 3 del alcance): con los
-  valores de la Entrega 2, tres instancias de cada grupo pedirían 135
-  conexiones contra las ~47 de `db-g1-small`.
+  solo para la puesta en marcha. Con los pools de la Entrega 2, tres
+  instancias de cada grupo pedirían 135 conexiones contra las ~47 de
+  `db-g1-small`. Se repartieron para el máximo (punto 3 del alcance): **8 por
+  API y 3 por proceso worker**, 3 × 8 + 3 × 2 × 3 = 42, y las 5 restantes para
+  el `migrate` de una API que arranca y una consola. Con una sola instancia la
+  API tiene menos pool que en la línea base (25), y el informe lo declara como
+  diferencia de la comparación.
 - Un tablero de Cloud Monitoring (`tablero.tf`) muestra en una pantalla las
   instancias de cada grupo, la señal de workers, las peticiones y la latencia
   del balanceador y la CPU de cada grupo: la línea de tiempo de 3A y 3B.

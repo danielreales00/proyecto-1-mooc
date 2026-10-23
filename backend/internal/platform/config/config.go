@@ -85,6 +85,9 @@ type Config struct {
 	ResetTokenTTL     time.Duration
 	WorkerConcurrency int
 	WorkerQueues      string
+	// Lo que el worker espera a los trabajos en curso al apagarse. Va por
+	// debajo del stop_grace_period del contenedor (ADR-0019, D6).
+	WorkerShutdownTimeout time.Duration
 }
 
 type Buckets struct {
@@ -157,6 +160,9 @@ func Load() (Config, error) {
 		ResetTokenTTL:     optDuration("RESET_TOKEN_TTL", time.Hour),
 		WorkerConcurrency: optInt("WORKER_CONCURRENCY", 20),
 		WorkerQueues:      opt("WORKER_QUEUES", "critical=6,default=3,bulk=1"),
+		// 8 s es el valor por defecto de asynq y cabe en los 10 s que da
+		// `docker compose stop`. En la nube lo sube compose.worker.yml.
+		WorkerShutdownTimeout: optDuration("WORKER_SHUTDOWN_TIMEOUT", 8*time.Second),
 	}
 
 	if c.ObjectStore == "gcs" {

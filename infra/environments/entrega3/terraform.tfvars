@@ -60,16 +60,23 @@ disco_cola_gb = 20
 # corrida de carga.
 version_imagenes = "86b31a8f89a0"
 
-# PENDIENTE (frente de backend, punto 3 del alcance): con tres instancias por
-# grupo estos pools piden 3 × 25 + 3 × 2 × 10 = 135 conexiones contra las ~47 de
-# db-g1-small. No se activa el autoescalado hasta fijar el reparto aquí.
+# Pools por proceso, repartidos para el máximo de los dos grupos contra las 50
+# conexiones de db-g1-small (3 reservadas al superusuario, quedan 47):
 #
-# Pools por proceso contra las 50 conexiones de db-g1-small (3 reservadas).
-# La API empezó en 10: en el escenario 1 la latencia se disparó con el pool
-# lleno y la CPU a la mitad (capacity-planning/, §9.1). Se mide el antes y el
-# después por separado.
-db_max_conns     = 10
-db_max_conns_api = 25
+#   3 API × 8 + 3 workers × 2 procesos (worker y worker-media) × 3 = 42
+#
+# Las 5 restantes cubren el migrate de una API que arranca (pool de pgx por
+# defecto, 4 como mucho, y unos segundos) y una consola de psql-nube.
+#
+# Es menos de lo que tenía cada proceso en la Entrega 2 (API 25, workers 10),
+# donde una sola API con pool 10 se saturó antes que con 25 (capacity-planning,
+# §6.4). Con una instancia la API tiene ahora 8; con tres, 24 entre todas, casi
+# las 25 de la línea base. Es una diferencia declarada de la comparación, no un
+# detalle: en el escenario 1 con una sola instancia se espera más espera por el
+# pool que en la Entrega 2. Los workers pierden poco: sus trabajos tocan la base
+# al reclamar, latir y cerrar, y worker-media procesa de uno en uno.
+db_max_conns     = 3
+db_max_conns_api = 8
 
 # Multiplica los límites POR IP (login_ip, register, verify_email) durante las
 # pruebas de carga: el generador es una sola IP. 1 fuera de las pruebas. Es

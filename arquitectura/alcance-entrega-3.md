@@ -60,18 +60,19 @@ de la Entrega 2.
    procesos simultáneos en `make ci` y en el CI.
 2. **CI en verde.** Hecho: Go 1.26.10 fijado. El CI estaba en rojo desde el
    commit del frontend por GO-2026-6617.
-3. **Reserva de conexiones a la base.** `db-g1-small` admite unas 50 conexiones.
-   Con tres APIs a 25 y tres workers a 20 se pedirían 135. Hay que repartir
-   los pools para el máximo de instancias, o subir `max_connections`, y
-   documentarlo.
-4. **Reaper.** Republica trabajos que siguen esperando en Redis. En la Entrega 2
-   produjo 2.554 duplicados. Ahora además inflaría la señal de escalado de los
-   workers: el grupo crecería por trabajos que no existen.
-5. **Retiro seguro de workers.** Al apagarse, el worker espera 8 s (el valor por
-   defecto de asynq) y devuelve el trabajo a la cola. Una transcodificación
-   larga dura 196 s. Hay que fijar el tiempo de gracia del worker y del
-   contenedor, y demostrar que el trabajo cortado se recupera sin derivados
-   duplicados.
+3. **Reserva de conexiones a la base.** Hecho: 8 por API y 3 por proceso
+   worker, 42 de las ~47 de `db-g1-small` con los dos grupos en 3
+   (`terraform.tfvars`, ADR-0019 D8). Con una sola API el pool es menor que el
+   de la línea base, y el informe lo declara.
+4. **Reaper.** Hecho: la tarea lleva la `job_key` como ID de asynq y el
+   *reaper* no republica lo que sigue esperando en Redis. En la Entrega 2
+   produjo 2.554 duplicados, y ahora además inflaría la señal de escalado de
+   los workers.
+5. **Retiro seguro de workers.** Hecho en el código: `WORKER_SHUTDOWN_TIMEOUT`
+   de 280 s en `worker-media` y 50 s en `worker`, bajo el
+   `stop_grace_period` del contenedor; lo que no termina se corta antes del
+   plazo y otra instancia lo reintenta (ADR-0019, D6). Falta la demostración
+   en la nube, con el margen real del `shutdown-script` de GCE (D9).
 6. **Identificar la instancia que respondió.** Una cabecera con el nombre de la
    máquina, que Caddy puede añadir sin tocar Go, para demostrar el reparto del
    balanceador.

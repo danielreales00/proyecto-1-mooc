@@ -55,15 +55,15 @@ Cada fila sale del enunciado y dice en qué paso se obtiene la evidencia.
 
 Este plan no los resuelve. Solo dice qué sesión espera a cada uno.
 
-| # | Prerrequisito | Dueño | Por qué lo necesita este plan | Bloquea |
-| --- | --- | --- | --- | --- |
-| P1 | Pools de conexiones repartidos para 3 + 3 (alcance, punto 3) | Backend | Con los valores actuales, 3 + 3 piden 135 conexiones contra unas 47 de `db-g1-small`: la tercera instancia falla | Sesión C |
-| P2 | Reaper corregido (alcance, punto 4) | Backend | Republica trabajos que ya esperan e infla `cola_bulk_trabajos`: el grupo de workers crece por trabajos que no existen y no encoge | Ciclo de workers, C4 |
-| P3 | Retiro seguro de workers (alcance, punto 5) | Backend | Al encoger el grupo, la transcodificación en curso se corta a los 8 s | Ciclo de workers, C4 |
+| # | Prerrequisito | Dueño | Por qué lo necesita este plan | Bloquea | Estado |
+| --- | --- | --- | --- | --- | --- |
+| P1 | Pools de conexiones repartidos para 3 + 3 (alcance, punto 3) | Backend | Con los valores de la Entrega 2, 3 + 3 piden 135 conexiones contra unas 47 de `db-g1-small`: la tercera instancia falla | Sesión C | Cerrado: `db_max_conns_api = 8`, `db_max_conns = 3`, 3 × 8 + 3 × 2 × 3 = 42 |
+| P2 | Reaper corregido (alcance, punto 4) | Backend | Republicaba trabajos que ya esperan e inflaba `cola_bulk_trabajos`: el grupo de workers crecería por trabajos que no existen y no encogería | Ciclo de workers, C4 | Cerrado: `job_key` como ID de la tarea en asynq |
+| P3 | Retiro seguro de workers (alcance, punto 5) | Backend | Al encoger el grupo, la transcodificación en curso se cortaba a los 8 s | Ciclo de workers, C4 | Cerrado en el código: 280 s en `worker-media`. En C4, comprobar en el puerto serie que GCE da ese margen al `shutdown-script` (fase 0, comprobación 2) |
 
-La propuesta para P1 que el frente de backend está evaluando es
-`db_max_conns_api = 8` y `db_max_conns = 3`: 3 × 8 + 3 × 2 × 3 = 42. El valor
-final lo decide ese frente y llega a `terraform.tfvars`.
+Las imágenes con P2 y P3 salen de un commit posterior a `86b31a8f89a0`: antes
+de la Sesión C, `make publicar`, `version_imagenes` y `make hornear-imagen`
+(Sesión B, paso 1).
 
 ## Reglas de operación
 

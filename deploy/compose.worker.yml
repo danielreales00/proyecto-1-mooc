@@ -17,6 +17,9 @@ services:
     env_file: [.env]
     environment:
       WORKER_QUEUES: critical=6,default=3
+      # Por debajo del stop_grace_period: lo que no termine se corta a los 45 s
+      # y vuelve a la cola antes de que Docker mate el proceso.
+      WORKER_SHUTDOWN_TIMEOUT: 50s
     # /healthz para la autorreparación del grupo, que llega desde los rangos de
     # verificación de Google (el firewall no deja entrar nada más). /metrics,
     # en el mismo puerto, lo lee el agente de operaciones.
@@ -58,6 +61,10 @@ services:
     environment:
       WORKER_QUEUES: bulk=1
       WORKER_CONCURRENCY: 1
+      # El trabajo en curso tiene 252 s para terminar (nueve décimas de esto);
+      # si no, se corta, queda reclamable y asynq lo reintenta en otra
+      # instancia. Por debajo de los 300 s del stop_grace_period.
+      WORKER_SHUTDOWN_TIMEOUT: 280s
     ports:
       - "127.0.0.1:8082:8081"
     depends_on:
@@ -71,6 +78,6 @@ services:
       start_period: 10s
     # La transcodificación más larga de la Entrega 2 duró 196 s. Al retirar la
     # instancia, el trabajo en curso tiene este margen para terminar
-    # (ADR-0019, D6); el ShutdownTimeout de asynq va por debajo de él.
+    # (ADR-0019, D6); WORKER_SHUTDOWN_TIMEOUT va por debajo de él.
     stop_grace_period: 300s
     restart: unless-stopped

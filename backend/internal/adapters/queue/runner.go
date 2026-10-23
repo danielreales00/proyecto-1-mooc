@@ -3,7 +3,9 @@ package queue
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/hibiken/asynq"
@@ -22,6 +24,10 @@ type Handler func(ctx context.Context, data map[string]any) error
 type Runner struct {
 	db  *pgxpool.Pool
 	log *slog.Logger
+
+	// activos cuenta los trabajos que aún no registraron su final, para que
+	// el worker no salga antes de anotarlo (ver Esperar).
+	activos sync.WaitGroup
 }
 
 func NewRunner(db *pgxpool.Pool, log *slog.Logger) *Runner {
@@ -30,6 +36,9 @@ func NewRunner(db *pgxpool.Pool, log *slog.Logger) *Runner {
 
 func (r *Runner) Wrap(jobType string, h Handler) asynq.HandlerFunc {
 	return func(ctx context.Context, t *asynq.Task) error {
+		r.activos.Add(1)
+		defer r.activos.Done()
+
 		var p Payload
 		if err := json.Unmarshal(t.Payload(), &p); err != nil {
 			// Un payload ilegible no mejora con reintentos.
@@ -59,6 +68,15 @@ func (r *Runner) Wrap(jobType string, h Handler) asynq.HandlerFunc {
 			_ = jobs.Fail(context.WithoutCancel(ctx), r.db, p.JobKey, err.Error())
 			metrics.JobsProcessed.WithLabelValues(jobType, "error").Inc()
 			metrics.JobDuration.WithLabelValues(jobType).Observe(time.Since(start).Seconds())
+			if errors.Is(ctx.Err(), context.Canceled) {
+				// Lo cortó el apagado del worker (o una cancelación de asynq),
+				// no un fallo suyo: queda reclamable y asynq lo reintenta en
+				// otra instancia (ADR-0019, D6). El vencimiento del Timeout de
+				// la tarea es DeadlineExceeded y sí cuenta como fallo.
+				log.Warn("trabajo interrumpido; vuelve a la cola",
+					"error", err, "duration_ms", time.Since(start).Milliseconds())
+				return err
+			}
 			log.Error("trabajo fallido", "error", err, "duration_ms", time.Since(start).Milliseconds())
 			return err
 		}
@@ -70,6 +88,22 @@ func (r *Runner) Wrap(jobType string, h Handler) asynq.HandlerFunc {
 		metrics.JobDuration.WithLabelValues(jobType).Observe(time.Since(start).Seconds())
 		log.Info("trabajo completado", "duration_ms", time.Since(start).Milliseconds())
 		return nil
+	}
+}
+
+// Esperar bloquea hasta que todos los trabajos en curso hayan registrado su
+// final, o hasta max. Devuelve false si se agotó el tiempo.
+func (r *Runner) Esperar(max time.Duration) bool {
+	listo := make(chan struct{})
+	go func() {
+		r.activos.Wait()
+		close(listo)
+	}()
+	select {
+	case <-listo:
+		return true
+	case <-time.After(max):
+		return false
 	}
 }
 

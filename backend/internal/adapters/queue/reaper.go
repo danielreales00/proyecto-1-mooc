@@ -26,7 +26,8 @@ import (
 //  2. 'running' sin heartbeat reciente: el worker que la tenía murió a medias.
 //
 // Republicar es seguro porque el reclamo atómico impide la doble ejecución
-// (ADR-0008).
+// (ADR-0008). Y no duplica la entrega: un trabajo 'queued' que sigue en Redis
+// esperando turno no se vuelve a encolar (ver Publisher.Republicar).
 type Reaper struct {
 	db        *pgxpool.Pool
 	publisher *Publisher
@@ -96,10 +97,16 @@ func (r *Reaper) Run(ctx context.Context) (int, error) {
 			r.log.Error("no se pudo devolver el trabajo a la cola", "job_key", h.key, "error", err)
 			continue
 		}
-		if err := r.publisher.Publish(ctx, jobs.Job{
+		encolado, err := r.publisher.Republicar(ctx, jobs.Job{
 			Key: h.key, Type: h.tipo, Queue: h.cola, Payload: h.payload,
-		}, ""); err != nil {
+		}, "")
+		if err != nil {
 			r.log.Error("no se pudo republicar el trabajo", "job_key", h.key, "error", err)
+			continue
+		}
+		if !encolado {
+			// Sigue en Redis esperando turno, o asynq ya lo está recuperando:
+			// no es un huérfano.
 			continue
 		}
 		recuperados++
