@@ -49,7 +49,7 @@ disco_maquinas_gb = 30
 
 # Qué imágenes corren: el SHA que imprimió `make publicar`. Se registra en cada
 # corrida de carga.
-version_imagenes = "ef646a192a82"
+version_imagenes = "86b31a8f89a0"
 
 # Pools por proceso contra las 50 conexiones de db-g1-small (3 reservadas).
 # La API empezó en 10: en el escenario 1 la latencia se disparó con el pool
