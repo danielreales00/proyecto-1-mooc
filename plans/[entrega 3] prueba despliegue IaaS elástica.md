@@ -197,7 +197,8 @@ un fallo de las instancias.
 
 | Síntoma | Primer lugar donde mirar |
 | --- | --- |
-| La instancia de API se recrea en bucle | `retraso_autorreparacion_s` y el diario de arranque: `/healthz` no responde antes de 600 s |
+| La instancia de API se recrea en bucle | `retraso_autorreparacion_s` y el diario de arranque: `/healthz` no responde antes de 300 s |
+| `apply` termina con `Failed to save state` | La subida del estado a GCS falló (DNS de Docker en WSL): queda `errored.tfstate`. **No repetir el `apply`** con el estado viejo; subir ese archivo con `state push`, o importar lo creado, antes de seguir |
 | Un reinicio acaba en `repair.recreateInstance` | La verificación de vida del grupo (`vida`, 12 s × 10 fallidas): si se endurece, un reinicio normal cuenta como muerte |
 | `postman-nube` falla con 422 en el registro | La cuenta no lee el secreto `seed-password` y la contraseña queda vacía: falta el permiso `integrantes_semilla` |
 | `/readyz` falla y el balanceador no tiene backends sanos | Conexión a Cloud SQL (secreto `database-url`), a Redis en 10.10.0.30:6379 o a los buckets |
@@ -226,16 +227,21 @@ del apagado salen vacías.
 
 Antes de la Sesión C, y otra vez cada vez que cambie `version_imagenes`.
 
-1. Encender como en A1.
-2. `make hornear-imagen`. Poner el valor impreso en `imagen_grupos` y `apply`:
-   los grupos reemplazan su instancia con la plantilla nueva.
+1. `make hornear-imagen` con todo apagado: solo enciende la máquina temporal
+   del horno (~8 min) y la borra al terminar.
+2. Poner el valor impreso en `imagen_grupos` y encender como en A1: las
+   instancias nacen ya con la imagen horneada. Es la primera medida, desde el
+   `creationTimestamp`.
 3. **E1, E3 y E4.** Recrear la instancia de cada grupo tres veces seguidas con
    `make gcloud ARGS="compute instance-groups managed recreate-instances <grupo> --instances=<instancia> --zone us-central1-a"`.
-   Para cada una:
-   - API: tiempo desde `creationTimestamp` hasta que el balanceador la ve sana;
-   - worker: tiempo hasta que `worker` y `worker-media` responden en `/healthz`;
-   - API: el diario de `migrate` dice que tomó el bloqueo y no había nada que
-     aplicar.
+   **La recreación es en sitio:** la instancia conserva nombre, `id` y
+   `creationTimestamp`. El inicio se toma del fin de la operación `update` de la
+   instancia en `compute operations list`. Para cada una:
+   - tiempo desde ese inicio hasta `mooc: <rol> levantado en N s` en el diario
+     de arranque (todos los contenedores sanos);
+   - API: el diario de `migrate` dice `esquema al día` y no aplicó nada.
+   - En la API, la operación `update` empieza ~90 s después de pedirla: el
+     balanceador drena las conexiones antes. No cuenta en el arranque.
 4. Llevar los tiempos a `inicializacion_api_s`, `inicializacion_workers_s` y
    `retraso_autorreparacion_s`, con margen sobre el peor medido. Anotar fecha,
    versión y los tres valores de cada grupo.
@@ -356,3 +362,4 @@ vacías.
 | --- | --- | --- | --- | --- | --- |
 | 2026-10-23 | A, tramo 1 | Michael | 04:30–06:03 UTC (~1,5) | Encendido, certificado `ACTIVE`, E1 y E12. Apagado al cerrar el día | [`sesion-a`](../docs/entrega3/evidencias/elastica/2026-10-23-sesion-a.md) |
 | 2026-10-23 | A, tramo 2 | Michael | 13:55–15:34 UTC (~1,7) | E2 tras corregir la verificación de vida, `postman-nube` en 0, video en `ready`. Sesión A cerrada, ~0,6 USD | [`sesion-a`](../docs/entrega3/evidencias/elastica/2026-10-23-sesion-a.md), [`postman-nube`](../docs/entrega3/evidencias/elastica/2026-10-23-postman-nube.log) |
+| 2026-10-23 | B | Michael | 17:27–17:35 horno, 17:35–18:41 UTC (~1,2) | Imagen `mooc-base-86b31a8f89a0`; arranque horneado 53–80 s (API) y 70–100 s (workers); periodos 120 / 150 s y autorreparación a 300 s. Un `apply` interrumpido obligó a liberar el bloqueo e importar las reglas. ~0,4 USD | [`sesion-b`](../docs/entrega3/evidencias/elastica/2026-10-23-sesion-b.md) |
