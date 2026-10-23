@@ -44,7 +44,7 @@ resource "google_monitoring_dashboard" "escalado" {
             title = "Instancias por grupo"
             xyChart = {
               dataSets = [{
-                plotType = "STEP"
+                plotType = "LINE"
                 timeSeriesQuery = {
                   timeSeriesFilter = {
                     filter = "metric.type=\"compute.googleapis.com/instance_group/size\" resource.type=\"instance_group\""
