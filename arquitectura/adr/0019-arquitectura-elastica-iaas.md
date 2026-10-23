@@ -101,8 +101,8 @@ Caddy sigue en cada instancia, ahora en el 80 y sin TLS. Dos cambios:
 | Verificación | Endpoint | Para qué | Intervalo / timeout / umbrales |
 | --- | --- | --- | --- |
 | Preparación (balanceador) | `GET /readyz` por el 80 | Comprueba Postgres, Redis y objetos. Una instancia que falla sale del reparto | 5 s / 5 s / 2 sanas, 3 fallidas |
-| Vida API (autorreparación) | `GET /healthz` por el 80 | Solo que Caddy y la API responden | 10 s / 5 s / 2 sanas, 3 fallidas |
-| Vida workers (autorreparación) | `GET /healthz` por el 8081 | Que el proceso worker responde | 10 s / 5 s / 2 sanas, 3 fallidas |
+| Vida API (autorreparación) | `GET /healthz` por el 80 | Solo que Caddy y la API responden | 12 s / 5 s / 2 sanas, 10 fallidas (~2 min) |
+| Vida workers (autorreparación) | `GET /healthz` por el 8081 | Que el proceso worker responde | 12 s / 5 s / 2 sanas, 10 fallidas (~2 min) |
 
 Separarlas es deliberado. Si cae Redis, `/readyz` falla en todas las instancias
 a la vez: el balanceador las saca del reparto, pero recrearlas no arreglaría
@@ -110,6 +110,15 @@ nada y solo añadiría un bucle de reemplazos. La autorreparación usa la vida,
 que solo falla cuando el proceso de esa instancia dejó de contestar. Esto es
 justo lo que el enunciado pide distinguir: **exclusión del balanceador** frente
 a **reparación o reemplazo por el grupo**.
+
+La vida es más tolerante que la preparación, como recomienda Google para la
+autorreparación. Con 3 fallos a 10 s, como estaba al principio, un reinicio de
+la VM tardaba más que los ~30 s de margen y el grupo la recreaba con disco
+nuevo: pasó en la Sesión A de la prueba del despliegue (A4). Con 10 fallos a
+12 s (Google no acepta más de 10) el grupo espera ~2 min, más de lo que tarda un reinicio de la VM. Una instancia que
+de verdad dejó de responder se recrea igual, solo ~2 min más tarde. El
+balanceador sigue sacándola del reparto en ~15 s, así que la tolerancia no se
+paga en errores para el usuario.
 
 Al retirar una instancia, el balanceador deja de mandarle peticiones nuevas y
 da 30 s a las que están en curso (`connection_draining_timeout_sec`).

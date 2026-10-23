@@ -128,3 +128,25 @@ resource "google_project_iam_member" "integrantes" {
   role    = each.value.rol
   member  = each.value.miembro
 }
+
+# Los integrantes leen la contraseña de las cuentas sintéticas: `make
+# postman-nube` la pide con la cuenta de quien la ejecuta. Solo ese secreto;
+# database-url y smtp-password siguen siendo de las cuentas de servicio.
+#
+# Va en la política del proyecto con una condición sobre el nombre del secreto,
+# y no en la del secreto: cambiar esta última exige
+# secretmanager.secrets.setIamPolicy, que los integrantes no tienen, mientras
+# que la del proyecto la cambian con projectIamAdmin. El efecto es el mismo.
+resource "google_project_iam_member" "integrantes_semilla" {
+  for_each = toset(var.integrantes)
+
+  project = var.project_id
+  role    = "roles/secretmanager.secretAccessor"
+  member  = each.value
+
+  condition {
+    title       = "solo-seed-password"
+    description = "Solo la contraseña de las cuentas sintéticas."
+    expression  = "resource.name.startsWith(\"projects/${data.google_project.este.number}/secrets/seed-password\")"
+  }
+}

@@ -70,12 +70,17 @@ resource "google_compute_instance_template" "plantilla" {
 # Vida, no preparación: si cae Redis o la base, /readyz falla en todas las
 # instancias a la vez y recrearlas no arregla nada. La autorreparación solo
 # reemplaza una instancia cuyo proceso dejó de contestar.
+# Más tolerante que la verificación del balanceador, como recomienda Google:
+# el balanceador saca la instancia del reparto en ~15 s, pero el grupo solo la
+# recrea tras ~2 min sin responder (10 fallos a 12 s; Google no acepta más de
+# 10). Con 3 fallos a 10 s, un reinicio de la VM
+# bastaba para que el grupo la recreara con disco nuevo (Sesión A, A4).
 resource "google_compute_health_check" "vida" {
   name                = "${var.nombre}-vida"
-  check_interval_sec  = 10
+  check_interval_sec  = 12
   timeout_sec         = 5
   healthy_threshold   = 2
-  unhealthy_threshold = 3
+  unhealthy_threshold = 10
 
   http_health_check {
     port         = var.salud_vida.puerto
