@@ -102,12 +102,12 @@ func ClaveOriginal(assetID uuid.UUID, nombre string) string {
 }
 
 // PartesNecesarias calcula cuántas partes hacen falta.
-func PartesNecesarias(tamaño, tamañoDeParte int64) int {
-	if tamaño <= 0 {
+func PartesNecesarias(total, porParte int64) int {
+	if total <= 0 {
 		return 1
 	}
-	n := tamaño / tamañoDeParte
-	if tamaño%tamañoDeParte != 0 {
+	n := total / porParte
+	if total%porParte != 0 {
 		n++
 	}
 	return int(n)
@@ -115,13 +115,19 @@ func PartesNecesarias(tamaño, tamañoDeParte int64) int {
 
 // ---------------------------------------------------------------- MIME -----
 
+// MIME que aparecen en varias reglas.
+const (
+	mimeMPEG = "audio/mpeg"
+	mimeGIF  = "image/gif"
+)
+
 // mimesPermitidos es la lista blanca por tipo de recurso. Se compara contra el
 // MIME REAL detectado por el servidor, nunca contra la extensión ni contra lo
 // que declare el cliente.
 var mimesPermitidos = map[string][]string{
 	TipoVideo:  {"video/mp4", "video/quicktime", "video/x-matroska", "video/webm"},
-	TipoAudio:  {"audio/mpeg", "audio/mp4", "audio/ogg", "audio/wav", "audio/x-wav"},
-	TipoImagen: {"image/jpeg", "image/png", "image/gif", "image/webp"},
+	TipoAudio:  {mimeMPEG, "audio/mp4", "audio/ogg", "audio/wav", "audio/x-wav"},
+	TipoImagen: {"image/jpeg", "image/png", mimeGIF, "image/webp"},
 	TipoPDF:    {"application/pdf"},
 	TipoSlides: {
 		"application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -165,52 +171,84 @@ func MIMEAceptable(kind, mimeReal string) bool {
 // añaden a mano las firmas que el proyecto necesita.
 func DetectarMIME(cabecera []byte, porDefecto string) string {
 	// Firmas completas: no se confía en la extensión ni en el MIME declarado.
+	// El orden importa: la trama MPEG sin ID3 es la comprobación más laxa y va
+	// después de las firmas exactas.
+	for _, detectar := range []func([]byte) string{
+		firmaPorPrefijo, firmaRIFF, firmaTramaMPEG, firmaISOBMFF, firmaMatroska, firmaPDF,
+	} {
+		if mime := detectar(cabecera); mime != "" {
+			return mime
+		}
+	}
+	if porDefecto != "" {
+		return porDefecto
+	}
+	return "application/octet-stream"
+}
+
+func firmaPorPrefijo(cabecera []byte) string {
 	signatures := []struct{ prefix, mime string }{
 		{"\x89PNG\r\n\x1a\n", "image/png"}, {"\xff\xd8\xff", "image/jpeg"},
-		{"GIF87a", "image/gif"}, {"GIF89a", "image/gif"},
-		{"ID3", "audio/mpeg"}, {"OggS", "audio/ogg"},
+		{"GIF87a", mimeGIF}, {"GIF89a", mimeGIF},
+		{"ID3", mimeMPEG}, {"OggS", "audio/ogg"},
 	}
 	for _, signature := range signatures {
 		if strings.HasPrefix(string(cabecera), signature.prefix) {
 			return signature.mime
 		}
 	}
-	if len(cabecera) >= 12 && string(cabecera[:4]) == "RIFF" {
-		switch string(cabecera[8:12]) {
-		case "WEBP":
-			return "image/webp"
-		case "WAVE":
-			return "audio/wav"
-		}
+	return ""
+}
+
+func firmaRIFF(cabecera []byte) string {
+	if len(cabecera) < 12 || string(cabecera[:4]) != "RIFF" {
+		return ""
 	}
+	switch string(cabecera[8:12]) {
+	case "WEBP":
+		return "image/webp"
+	case "WAVE":
+		return "audio/wav"
+	}
+	return ""
+}
+
+func firmaTramaMPEG(cabecera []byte) string {
 	if len(cabecera) >= 2 && cabecera[0] == 0xff && cabecera[1]&0xe0 == 0xe0 && cabecera[1]&0x06 != 0 {
-		return "audio/mpeg"
+		return mimeMPEG
 	}
-	if len(cabecera) >= 12 {
-		// ISO-BMFF: los bytes 4..8 son "ftyp".
-		if string(cabecera[4:8]) == "ftyp" {
-			marca := string(cabecera[8:12])
-			switch {
-			case strings.HasPrefix(marca, "qt"):
-				return "video/quicktime"
-			case strings.HasPrefix(marca, "M4A"):
-				return "audio/mp4"
-			default:
-				return "video/mp4"
-			}
-		}
+	return ""
+}
+
+// firmaISOBMFF reconoce MP4, QuickTime y M4A: los bytes 4..8 son "ftyp".
+func firmaISOBMFF(cabecera []byte) string {
+	if len(cabecera) < 12 || string(cabecera[4:8]) != "ftyp" {
+		return ""
 	}
+	marca := string(cabecera[8:12])
+	switch {
+	case strings.HasPrefix(marca, "qt"):
+		return "video/quicktime"
+	case strings.HasPrefix(marca, "M4A"):
+		return "audio/mp4"
+	default:
+		return "video/mp4"
+	}
+}
+
+func firmaMatroska(cabecera []byte) string {
 	if len(cabecera) >= 4 && cabecera[0] == 0x1A && cabecera[1] == 0x45 &&
 		cabecera[2] == 0xDF && cabecera[3] == 0xA3 {
 		return "video/x-matroska"
 	}
+	return ""
+}
+
+func firmaPDF(cabecera []byte) string {
 	if len(cabecera) >= 4 && string(cabecera[:4]) == "%PDF" {
 		return "application/pdf"
 	}
-	if porDefecto != "" {
-		return porDefecto
-	}
-	return "application/octet-stream"
+	return ""
 }
 
 // ---------------------------------------------------------- validación -----

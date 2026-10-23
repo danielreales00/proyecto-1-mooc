@@ -270,17 +270,13 @@ func (s *LearningStore) UpsertProgress(ctx context.Context, db dbx.DB, p learnin
 
 // InsertEvent guarda la evidencia cruda, aceptada o no. Las rechazadas también
 // se conservan: son la prueba de CA-05.
-func (s *LearningStore) InsertEvent(ctx context.Context, db dbx.DB, enrollmentID, stableID uuid.UUID,
-	kind string, pos *float64, clientTS any, aceptada bool, motivo string) error {
-	var ts *time.Time
-	if t, ok := clientTS.(*time.Time); ok {
-		ts = t
-	}
+func (s *LearningStore) InsertEvent(ctx context.Context, db dbx.DB, enrollmentID uuid.UUID,
+	ev learning.Evidence, aceptada bool, motivo string) error {
 	_, err := db.Exec(ctx, `
 		INSERT INTO progress.progress_events
 		    (enrollment_id, resource_stable_id, kind, position_seconds, client_ts, accepted, reject_reason)
 		VALUES ($1,$2,$3,$4,$5,$6,nullif($7,''))`,
-		enrollmentID, stableID, kind, pos, ts, aceptada, motivo)
+		enrollmentID, ev.ResourceStableID, ev.Kind, ev.PositionSeconds, ev.ClientTS, aceptada, motivo)
 	return err
 }
 

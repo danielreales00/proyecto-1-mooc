@@ -47,130 +47,162 @@ func Probar(t *testing.T, a objectstore.Almacen, c Config) {
 			t.Fatal(err)
 		}
 	})
-
 	t.Run("carga por partes reanudable", func(t *testing.T) {
-		key := base + "video.bin"
-		datos := make([]byte, c.TamParte*(c.Partes-1)+c.TamParte/3)
-		_, _ = rand.Read(datos)
-		trozo := func(n int) []byte {
-			ini := (n - 1) * c.TamParte
-			return datos[ini:min(ini+c.TamParte, len(datos))]
-		}
-
-		id, err := a.CrearMultipart(ctx, c.Bucket, key, "video/mp4")
-		if err != nil {
-			t.Fatal(err)
-		}
-		etags := map[int]string{}
-
-		// Primera sesión: se sube todo menos la última parte y el cliente
-		// se «cae».
-		for n := 1; n < c.Partes; n++ {
-			etags[n] = subirParte(ctx, t, a, c.Bucket, key, id, n, trozo(n))
-		}
-
-		// Reanudar: el almacén dice qué tiene.
-		hay, err := a.PartesSubidas(ctx, c.Bucket, key, id)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(hay) != c.Partes-1 {
-			t.Fatalf("PartesSubidas: %d partes, se esperaban %d", len(hay), c.Partes-1)
-		}
-		for i, p := range hay {
-			if p.Numero != i+1 {
-				t.Fatalf("PartesSubidas no viene ordenado: posición %d tiene la parte %d", i, p.Numero)
-			}
-			if strings.Trim(p.ETag, `"`) != etags[p.Numero] {
-				t.Fatalf("parte %d: ETag %q en el almacén, %q al subirla", p.Numero, p.ETag, etags[p.Numero])
-			}
-			if p.Bytes != int64(len(trozo(p.Numero))) {
-				t.Fatalf("parte %d: %d bytes, se subieron %d", p.Numero, p.Bytes, len(trozo(p.Numero)))
-			}
-		}
-
-		// Segunda sesión: solo lo que falta, con una URL firmada de nuevo.
-		etags[c.Partes] = subirParte(ctx, t, a, c.Bucket, key, id, c.Partes, trozo(c.Partes))
-
-		partes := make([]objectstore.Parte, 0, c.Partes)
-		for n := c.Partes; n >= 1; n-- { // desordenadas a propósito
-			partes = append(partes, objectstore.Parte{Numero: n, ETag: etags[n]})
-		}
-
-		// Un ETag que no corresponde no cierra la carga.
-		malas := append([]objectstore.Parte(nil), partes...)
-		malas[0].ETag = strings.Repeat("0", 32)
-		if err := a.CompletarMultipart(ctx, c.Bucket, key, id, malas); err == nil {
-			t.Fatal("CompletarMultipart aceptó un ETag que no corresponde")
-		}
-
-		if err := a.CompletarMultipart(ctx, c.Bucket, key, id, partes); err != nil {
-			t.Fatal(err)
-		}
-		defer func() { _ = c.Borrar(ctx, c.Bucket, key) }()
-
-		tam, err := a.Info(ctx, c.Bucket, key)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if tam != int64(len(datos)) {
-			t.Fatalf("Info: %d bytes, se subieron %d", tam, len(datos))
-		}
-		igual(t, "Abrir", leer(t, a, c.Bucket, key), datos)
-
-		u, err := a.PresignGet(ctx, c.Bucket, key, 5*time.Minute)
-		if err != nil {
-			t.Fatal(err)
-		}
-		igual(t, "PresignGet", descargar(ctx, t, u), datos)
-
-		if _, err := a.PartesSubidas(ctx, c.Bucket, key, id); err == nil {
-			t.Fatal("la carga sigue abierta después de completarla")
-		}
+		probarCargaReanudable(ctx, t, a, c, base+"video.bin")
 	})
-
 	t.Run("abortar descarta las partes", func(t *testing.T) {
-		key := base + "abortado.bin"
-		id, err := a.CrearMultipart(ctx, c.Bucket, key, "video/mp4")
-		if err != nil {
-			t.Fatal(err)
-		}
-		subirParte(ctx, t, a, c.Bucket, key, id, 1, make([]byte, c.TamParte))
-		if err := a.AbortarMultipart(ctx, c.Bucket, key, id); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := a.PartesSubidas(ctx, c.Bucket, key, id); err == nil {
-			t.Fatal("la carga sigue abierta después de abortarla")
-		}
-		if _, err := a.Info(ctx, c.Bucket, key); err == nil {
-			t.Fatal("abortar dejó un objeto final")
-		}
+		probarAbortar(ctx, t, a, c, base+"abortado.bin")
 	})
-
 	t.Run("subir y mover a cuarentena", func(t *testing.T) {
-		key := base + "sospechoso.bin"
-		datos := []byte("X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR")
-		if err := a.Subir(ctx, c.Bucket, key, "application/octet-stream", datos); err != nil {
-			t.Fatal(err)
-		}
-		if err := a.Mover(ctx, c.Bucket, key, c.Cuarentena, key); err != nil {
-			t.Fatal(err)
-		}
-		defer func() { _ = c.Borrar(ctx, c.Cuarentena, key) }()
-		if _, err := a.Info(ctx, c.Bucket, key); err == nil {
-			t.Fatal("Mover dejó el original")
-		}
-		igual(t, "Abrir tras Mover", leer(t, a, c.Cuarentena, key), datos)
+		probarCuarentena(ctx, t, a, c, base+"sospechoso.bin")
 	})
+}
+
+// carga es una carga multipart abierta, vista desde el cliente.
+type carga struct {
+	a           objectstore.Almacen
+	bucket, key string
+	id          string
+}
+
+func probarCargaReanudable(ctx context.Context, t *testing.T, a objectstore.Almacen, c Config, key string) {
+	datos := make([]byte, c.TamParte*(c.Partes-1)+c.TamParte/3)
+	_, _ = rand.Read(datos)
+	trozo := func(n int) []byte {
+		ini := (n - 1) * c.TamParte
+		return datos[ini:min(ini+c.TamParte, len(datos))]
+	}
+
+	id, err := a.CrearMultipart(ctx, c.Bucket, key, "video/mp4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cg := carga{a: a, bucket: c.Bucket, key: key, id: id}
+	etags := map[int]string{}
+
+	// Primera sesión: se sube todo menos la última parte y el cliente
+	// se «cae».
+	for n := 1; n < c.Partes; n++ {
+		etags[n] = cg.subirParte(ctx, t, n, trozo(n))
+	}
+
+	// Reanudar: el almacén dice qué tiene.
+	verificarPartesSubidas(ctx, t, cg, c.Partes-1, etags, trozo)
+
+	// Segunda sesión: solo lo que falta, con una URL firmada de nuevo.
+	etags[c.Partes] = cg.subirParte(ctx, t, c.Partes, trozo(c.Partes))
+
+	completar(ctx, t, cg, c.Partes, etags)
+	defer func() { _ = c.Borrar(ctx, c.Bucket, key) }()
+
+	verificarObjeto(ctx, t, cg, datos)
+}
+
+func verificarPartesSubidas(ctx context.Context, t *testing.T, cg carga, esperadas int,
+	etags map[int]string, trozo func(int) []byte) {
+
+	t.Helper()
+	hay, err := cg.a.PartesSubidas(ctx, cg.bucket, cg.key, cg.id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hay) != esperadas {
+		t.Fatalf("PartesSubidas: %d partes, se esperaban %d", len(hay), esperadas)
+	}
+	for i, p := range hay {
+		if p.Numero != i+1 {
+			t.Fatalf("PartesSubidas no viene ordenado: posición %d tiene la parte %d", i, p.Numero)
+		}
+		if strings.Trim(p.ETag, `"`) != etags[p.Numero] {
+			t.Fatalf("parte %d: ETag %q en el almacén, %q al subirla", p.Numero, p.ETag, etags[p.Numero])
+		}
+		if p.Bytes != int64(len(trozo(p.Numero))) {
+			t.Fatalf("parte %d: %d bytes, se subieron %d", p.Numero, p.Bytes, len(trozo(p.Numero)))
+		}
+	}
+}
+
+// completar cierra la carga, después de comprobar que un ETag que no
+// corresponde no la cierra.
+func completar(ctx context.Context, t *testing.T, cg carga, total int, etags map[int]string) {
+	t.Helper()
+	partes := make([]objectstore.Parte, 0, total)
+	for n := total; n >= 1; n-- { // desordenadas a propósito
+		partes = append(partes, objectstore.Parte{Numero: n, ETag: etags[n]})
+	}
+
+	malas := append([]objectstore.Parte(nil), partes...)
+	malas[0].ETag = strings.Repeat("0", 32)
+	if err := cg.a.CompletarMultipart(ctx, cg.bucket, cg.key, cg.id, malas); err == nil {
+		t.Fatal("CompletarMultipart aceptó un ETag que no corresponde")
+	}
+	if err := cg.a.CompletarMultipart(ctx, cg.bucket, cg.key, cg.id, partes); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// verificarObjeto lee el objeto final por el adaptador y por URL firmada, y
+// comprueba que la carga ya no está abierta.
+func verificarObjeto(ctx context.Context, t *testing.T, cg carga, datos []byte) {
+	t.Helper()
+	tam, err := cg.a.Info(ctx, cg.bucket, cg.key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tam != int64(len(datos)) {
+		t.Fatalf("Info: %d bytes, se subieron %d", tam, len(datos))
+	}
+	igual(t, "Abrir", leer(t, cg.a, cg.bucket, cg.key), datos)
+
+	u, err := cg.a.PresignGet(ctx, cg.bucket, cg.key, 5*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	igual(t, "PresignGet", descargar(ctx, t, u), datos)
+
+	if _, err := cg.a.PartesSubidas(ctx, cg.bucket, cg.key, cg.id); err == nil {
+		t.Fatal("la carga sigue abierta después de completarla")
+	}
+}
+
+func probarAbortar(ctx context.Context, t *testing.T, a objectstore.Almacen, c Config, key string) {
+	id, err := a.CrearMultipart(ctx, c.Bucket, key, "video/mp4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cg := carga{a: a, bucket: c.Bucket, key: key, id: id}
+	cg.subirParte(ctx, t, 1, make([]byte, c.TamParte))
+	if err := a.AbortarMultipart(ctx, c.Bucket, key, id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.PartesSubidas(ctx, c.Bucket, key, id); err == nil {
+		t.Fatal("la carga sigue abierta después de abortarla")
+	}
+	if _, err := a.Info(ctx, c.Bucket, key); err == nil {
+		t.Fatal("abortar dejó un objeto final")
+	}
+}
+
+func probarCuarentena(ctx context.Context, t *testing.T, a objectstore.Almacen, c Config, key string) {
+	datos := []byte("X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR")
+	if err := a.Subir(ctx, c.Bucket, key, "application/octet-stream", datos); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Mover(ctx, c.Bucket, key, c.Cuarentena, key); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Borrar(ctx, c.Cuarentena, key) }()
+	if _, err := a.Info(ctx, c.Bucket, key); err == nil {
+		t.Fatal("Mover dejó el original")
+	}
+	igual(t, "Abrir tras Mover", leer(t, a, c.Cuarentena, key), datos)
 }
 
 // subirParte hace lo que el cliente: PUT de los bytes a la URL firmada. Devuelve
 // el ETag sin comillas, como lo guarda la colección de Postman.
-func subirParte(ctx context.Context, t *testing.T, a objectstore.Almacen,
-	bucket, key, id string, n int, datos []byte) string {
-
+func (cg carga) subirParte(ctx context.Context, t *testing.T, n int, datos []byte) string {
 	t.Helper()
-	u, err := a.PresignPart(ctx, bucket, key, id, n, 10*time.Minute)
+	u, err := cg.a.PresignPart(ctx, cg.bucket, cg.key, cg.id, n, 10*time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}

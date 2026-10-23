@@ -22,6 +22,9 @@ type Limitador struct {
 	PorCuenta func(ratelimit.Regla) httpx.Middleware
 }
 
+// msgSinSesion es el detalle del 401 cuando la petición no trae sesión válida.
+const msgSinSesion = "Se requiere una sesión activa."
+
 func NewAPI(svc *Service) *API { return &API{svc: svc} }
 
 // Routes registra los endpoints públicos y los autenticados. El ruteo por
@@ -165,7 +168,7 @@ func (a *API) login(w http.ResponseWriter, r *http.Request) {
 func (a *API) logout(w http.ResponseWriter, r *http.Request) {
 	p, ok := httpx.PrincipalFrom(r.Context())
 	if !ok {
-		httpx.Fail(w, r, problem.Unauthorized("Se requiere una sesión activa."))
+		httpx.Fail(w, r, problem.Unauthorized(msgSinSesion))
 		return
 	}
 	err := a.svc.Logout(r.Context(), p.SessionToken, p.SessionID, p.UserID, p.Role, requestContext(r))
@@ -179,7 +182,7 @@ func (a *API) logout(w http.ResponseWriter, r *http.Request) {
 func (a *API) me(w http.ResponseWriter, r *http.Request) {
 	p, ok := httpx.PrincipalFrom(r.Context())
 	if !ok {
-		httpx.Fail(w, r, problem.Unauthorized("Se requiere una sesión activa."))
+		httpx.Fail(w, r, problem.Unauthorized(msgSinSesion))
 		return
 	}
 	user, err := a.svc.UserByID(r.Context(), p.UserID)
@@ -269,7 +272,7 @@ func RequireRole(roles ...string) httpx.Middleware {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			p, ok := httpx.PrincipalFrom(r.Context())
 			if !ok {
-				problem.Write(w, r, problem.Unauthorized("Se requiere una sesión activa."))
+				problem.Write(w, r, problem.Unauthorized(msgSinSesion))
 				return
 			}
 			if !permitidos[p.Role] {

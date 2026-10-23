@@ -468,7 +468,7 @@ func TestLogoutRevocaLaSesionDeInmediato(t *testing.T) {
 	if w := b.hacer(t, "GET", "/api/v1/me", "", token); w.Code != http.StatusUnauthorized {
 		t.Fatalf("tras cerrar sesión: código = %d, se esperaba 401", w.Code)
 	}
-	if _, quedó := b.sessions.porToken[token]; quedó {
+	if _, sigue := b.sessions.porToken[token]; sigue {
 		t.Error("la sesión sigue en el almacén tras cerrarla")
 	}
 }

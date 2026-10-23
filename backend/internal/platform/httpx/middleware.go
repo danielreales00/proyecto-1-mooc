@@ -56,17 +56,20 @@ func Chain(h http.Handler, mw ...Middleware) http.Handler {
 	return h
 }
 
+// cabeceraRequestID lleva el identificador de la petición en los dos sentidos.
+const cabeceraRequestID = "X-Request-Id"
+
 // RequestID asigna un identificador a cada petición y lo devuelve en la
 // cabecera. Cuando entre OpenTelemetry, este será el trace_id (ADR-0009).
 func RequestID() Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			id := r.Header.Get("X-Request-Id")
+			id := r.Header.Get(cabeceraRequestID)
 			if id == "" {
 				id = ids.New().String()
-				r.Header.Set("X-Request-Id", id)
+				r.Header.Set(cabeceraRequestID, id)
 			}
-			w.Header().Set("X-Request-Id", id)
+			w.Header().Set(cabeceraRequestID, id)
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxRequestID, id)))
 		})
 	}
@@ -136,14 +139,14 @@ func AccessLog(log *slog.Logger) Middleware {
 				attrs = append(attrs, "user_id", p.UserID.String(), "role", p.Role)
 			}
 
+			nivel := slog.LevelInfo
 			switch {
 			case sw.status >= 500:
-				log.Error("petición", attrs...)
+				nivel = slog.LevelError
 			case sw.status >= 400:
-				log.Warn("petición", attrs...)
-			default:
-				log.Info("petición", attrs...)
+				nivel = slog.LevelWarn
 			}
+			log.Log(r.Context(), nivel, "petición", attrs...)
 		})
 	}
 }

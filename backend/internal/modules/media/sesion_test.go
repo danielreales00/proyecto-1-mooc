@@ -38,12 +38,15 @@ func (s sessionObjects) PresignGet(context.Context, string, string, time.Duratio
 	*s.calls++
 	return s.url, nil
 }
+
+type casoSesion struct {
+	name, status, url string
+	denied            bool
+	wantError         bool
+}
+
 func TestSesionArchivoRespetaInscripcionEstadoYDestino(t *testing.T) {
-	for _, c := range []struct {
-		name, status, url string
-		denied            bool
-		wantError         bool
-	}{
+	for _, c := range []casoSesion{
 		{"PDF limpio", EstadoLimpio, "https://objects.example/private?signature=x", false, false},
 		{"imagen lista", EstadoListo, "https://objects.example/private?signature=x", false, false},
 		{"sin inscripción", EstadoListo, "https://objects.example/private", true, true},
@@ -53,28 +56,43 @@ func TestSesionArchivoRespetaInscripcionEstadoYDestino(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			count := 0
-			id := uuid.New()
-			var denied error
-			if c.denied {
-				denied = ErrProhibido
-			}
-			s := &Service{store: sessionStore{asset: Asset{ID: id, Kind: TipoPDF, Status: c.status, OriginalKey: "private"}}, almacen: sessionObjects{url: c.url, calls: &count}, inscripciones: sessionEnrollment{asset: id, err: denied}, repro: sessionPlayback{}, hostPermitido: "objects.example", buckets: Buckets{Originales: "originals"}}
+			s := servicioDeSesion(c, &count)
 			result, err := s.AbrirSesion(context.Background(), uuid.New(), uuid.New(), Actor{})
-			if (err != nil) != c.wantError {
-				t.Fatalf("error=%v", err)
-			}
-			if c.denied && !errors.Is(err, ErrProhibido) {
-				t.Fatal("debe conservar rechazo de inscripción")
-			}
-			if c.denied || c.status == EstadoInfectado || c.status == EstadoEscaneando {
-				if count != 0 {
-					t.Fatal("no se debe firmar contenido no autorizado")
-				}
-			}
-			if !c.wantError && (result.ContentURL != c.url || result.ManifestURL != c.url || result.Delivery != EntregaURLFirmada) {
-				t.Fatalf("sesión incorrecta: %+v", result)
-			}
+			verificarSesion(t, c, result, err, count)
 		})
+	}
+}
+
+func servicioDeSesion(c casoSesion, count *int) *Service {
+	id := uuid.New()
+	var denied error
+	if c.denied {
+		denied = ErrProhibido
+	}
+	return &Service{
+		store:         sessionStore{asset: Asset{ID: id, Kind: TipoPDF, Status: c.status, OriginalKey: "private"}},
+		almacen:       sessionObjects{url: c.url, calls: count},
+		inscripciones: sessionEnrollment{asset: id, err: denied},
+		repro:         sessionPlayback{},
+		hostPermitido: "objects.example",
+		buckets:       Buckets{Originales: "originals"},
+	}
+}
+
+func verificarSesion(t *testing.T, c casoSesion, result SesionMedia, err error, count int) {
+	t.Helper()
+	if (err != nil) != c.wantError {
+		t.Fatalf("error=%v", err)
+	}
+	if c.denied && !errors.Is(err, ErrProhibido) {
+		t.Fatal("debe conservar rechazo de inscripción")
+	}
+	noAutorizado := c.denied || c.status == EstadoInfectado || c.status == EstadoEscaneando
+	if noAutorizado && count != 0 {
+		t.Fatal("no se debe firmar contenido no autorizado")
+	}
+	if !c.wantError && (result.ContentURL != c.url || result.ManifestURL != c.url || result.Delivery != EntregaURLFirmada) {
+		t.Fatalf("sesión incorrecta: %+v", result)
 	}
 }
 
