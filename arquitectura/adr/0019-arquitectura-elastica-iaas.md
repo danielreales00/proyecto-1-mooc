@@ -146,9 +146,10 @@ Parámetros comunes a los dos autoscalers:
 - **Límites:** mínimo 1, máximo 3. Al llegar a 3 el grupo no crece más; en la
   API sube la latencia y en los workers crece la espera en cola, y las dos cosas
   se registran.
-- **Periodo de inicialización** (`cooldown_period`): el arranque medido. 180 s
-  en la API y 240 s en workers con el arranque por script; se reemplazan por
-  los medidos con la imagen horneada (D7).
+- **Periodo de inicialización** (`cooldown_period`): el arranque medido. Con el
+  arranque por script eran 180 s en la API y 240 s en workers. Con la imagen
+  horneada (D7) son **120 s y 150 s**: el peor caso medido, 80 s y 100 s, con
+  ~50 % de margen.
 - **Reducción:** `scale_in_control` retira como mucho una instancia cada 600 s.
   Además GCE estabiliza la reducción con el máximo de los últimos diez
   minutos, así que una bajada breve no retira nada.
@@ -195,6 +196,17 @@ las imágenes (`mooc-base-<sha>`), y las instancias llevan la etiqueta
 El arranque registra en el diario cuánto tardó en dejar todos los contenedores
 sanos. La aplicación está lista cuando la API pasa `/readyz` en el balanceador
 o cuando el worker toma su primer trabajo.
+
+Medido el 2026-10-23 con `mooc-base-86b31a8f89a0`, desde la máquina en marcha
+hasta todos los contenedores sanos:
+
+| | Arranque por script | Imagen horneada |
+| --- | --- | --- |
+| API | 92–121 s de script, ~150–180 s en total | 53–80 s |
+| Workers | 114 s de script, ~180 s en total | 70–100 s |
+
+La autorreparación espera 300 s (`retraso_autorreparacion_s`, antes 600):
+el doble del peor arranque horneado, y aún por encima del arranque por script.
 
 ### D8 — Operación y costo
 

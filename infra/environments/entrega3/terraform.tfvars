@@ -53,7 +53,7 @@ disco_maquinas_gb = 30
 # Imagen de las plantillas. Debian limpio mientras se pone en marcha; antes de
 # la primera corrida medida, la familia horneada (make hornear-imagen), y ya no
 # cambia entre corridas: el arranque es parte de lo que se mide (ADR-0019, D7).
-imagen_grupos = "debian-cloud/debian-12"
+imagen_grupos = "projects/mooc-509602/global/images/mooc-base-86b31a8f89a0"
 
 # La cola: Redis y Mailpit. e2-small (2 vCPU compartidas, 2 GiB) basta para el
 # volumen de la Entrega 2, que no pasó de 412 comandos por segundo.
@@ -103,13 +103,16 @@ objetivo_balanceador_api = 0.8
 trabajos_por_worker = 2
 
 # Periodos de inicialización: lo que tarda una instancia nueva en atender o en
-# consumir con el arranque por script. Se reemplazan por los medidos con la
-# imagen horneada.
-inicializacion_api_s     = 180
-inicializacion_workers_s = 240
+# consumir. Medidos con la imagen horneada mooc-base-86b31a8f89a0 (Sesión B,
+# 2026-10-23): de la máquina en marcha a todos los contenedores sanos, el peor
+# caso fue 80 s en la API y 100 s en los workers. Margen de ~50 %.
+inicializacion_api_s     = 120
+inicializacion_workers_s = 150
 
 # Como mucho una instancia retirada cada diez minutos en cada grupo.
 ventana_reduccion_s = 600
 
-# La autorreparación no juzga una instancia hasta que pudo arrancar entera.
-retraso_autorreparacion_s = 600
+# La autorreparación no juzga una instancia hasta que pudo arrancar entera: el
+# doble del peor arranque horneado, y por encima de los ~180 s del arranque por
+# script si alguna vez se vuelve a Debian limpio.
+retraso_autorreparacion_s = 300
