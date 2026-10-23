@@ -3,16 +3,12 @@
 project_id         = "mooc-509602"
 region             = "us-central1"
 zona               = "us-central1-a"
-cuenta_facturacion = "01D669-827C63-9BFAA3"
 presupuesto_usd    = 50
 
-# Quién puede firmar como mooc-web desde su máquina (make prueba-gcs). Cada
-# persona del equipo que trabaje en el adaptador añade aquí su cuenta.
-firmantes_desarrollo = ["user:santiago.chica1997@gmail.com"]
-
-# Integrantes que operan el proyecto con su cuenta, sin claves descargadas
-# (ADR-0015, D3). Quien creó el proyecto ya es propietario y no va aquí.
-integrantes = ["user:mjpatinoo@gmail.com"]
+# cuenta_facturacion, firmantes_desarrollo e integrantes van en
+# privado.auto.tfvars, que no se versiona: son datos de personas y de
+# facturación. Terraform lo carga solo; la plantilla es
+# privado.auto.tfvars.example.
 
 # Red. Rangos propios, sin solaparse con los 10.128.0.0/9 de la red default.
 cidr_subred    = "10.10.0.0/24"

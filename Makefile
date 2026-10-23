@@ -190,7 +190,7 @@ gcloud: ## gcloud en contenedor: make gcloud ARGS="projects list"
 .PHONY: prueba-gcs
 prueba-gcs: ## Suite del almacén contra Cloud Storage real, firmando como mooc-web
 	@# Usa el ADC del volumen mooc-gcloud. Firmar como mooc-web exige estar en
-	@# firmantes_desarrollo (infra/environments/entrega3/terraform.tfvars).
+	@# firmantes_desarrollo (infra/environments/entrega3/privado.auto.tfvars).
 	$(EN_GO) -v mooc-gcloud:/root/.config/gcloud:ro \
 		-e GOOGLE_APPLICATION_CREDENTIALS=/root/.config/gcloud/application_default_credentials.json \
 		-e GCS_PRUEBA_BUCKET=$(GCP_PROYECTO)-originals \
