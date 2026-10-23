@@ -354,5 +354,5 @@ vacías.
 
 | Fecha | Sesión | Quién | Horas encendido | Resultado | Evidencia |
 | --- | --- | --- | --- | --- | --- |
-| 2026-10-23 | A, tramo 1 | mjpatinoo | 04:30–06:03 UTC (~1,5) | Encendido, certificado `ACTIVE`, E1 y E12. Apagado al cerrar el día | [`sesion-a`](../docs/entrega3/evidencias/elastica/2026-10-23-sesion-a.md) |
-| 2026-10-23 | A, tramo 2 | mjpatinoo | 13:55–15:34 UTC (~1,7) | E2 tras corregir la verificación de vida, `postman-nube` en 0, video en `ready`. Sesión A cerrada, ~0,6 USD | [`sesion-a`](../docs/entrega3/evidencias/elastica/2026-10-23-sesion-a.md), [`postman-nube`](../docs/entrega3/evidencias/elastica/2026-10-23-postman-nube.log) |
+| 2026-10-23 | A, tramo 1 | Michael | 04:30–06:03 UTC (~1,5) | Encendido, certificado `ACTIVE`, E1 y E12. Apagado al cerrar el día | [`sesion-a`](../docs/entrega3/evidencias/elastica/2026-10-23-sesion-a.md) |
+| 2026-10-23 | A, tramo 2 | Michael | 13:55–15:34 UTC (~1,7) | E2 tras corregir la verificación de vida, `postman-nube` en 0, video en `ready`. Sesión A cerrada, ~0,6 USD | [`sesion-a`](../docs/entrega3/evidencias/elastica/2026-10-23-sesion-a.md), [`postman-nube`](../docs/entrega3/evidencias/elastica/2026-10-23-postman-nube.log) |
