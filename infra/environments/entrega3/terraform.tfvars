@@ -49,7 +49,7 @@ disco_maquinas_gb = 30
 # Imagen de las plantillas. Debian limpio mientras se pone en marcha; antes de
 # la primera corrida medida, la familia horneada (make hornear-imagen), y ya no
 # cambia entre corridas: el arranque es parte de lo que se mide (ADR-0019, D7).
-imagen_grupos = "projects/mooc-509602/global/images/mooc-base-86b31a8f89a0"
+imagen_grupos = "projects/mooc-509602/global/images/mooc-base-692f30dedcb3"
 
 # La cola: Redis y Mailpit. e2-small (2 vCPU compartidas, 2 GiB) basta para el
 # volumen de la Entrega 2, que no pasó de 412 comandos por segundo.
@@ -58,7 +58,7 @@ disco_cola_gb = 20
 
 # Qué imágenes corren: el SHA que imprimió `make publicar`. Se registra en cada
 # corrida de carga.
-version_imagenes = "86b31a8f89a0"
+version_imagenes = "692f30dedcb3"
 
 # Pools por proceso, repartidos para el máximo de los dos grupos contra las 50
 # conexiones de db-g1-small (3 reservadas al superusuario, quedan 47):
