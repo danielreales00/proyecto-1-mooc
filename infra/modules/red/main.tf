@@ -1,6 +1,6 @@
 # Red privada del entorno: una VPC, una subred, el acceso privado a servicios
 # que necesita Cloud SQL, la salida a Internet de las máquinas y las reglas
-# que dejan al balanceador como único punto público (ADR-0018, D3).
+# que dejan al balanceador como único punto público (ADR-0019, D3).
 
 resource "google_compute_network" "vpc" {
   name                    = var.nombre

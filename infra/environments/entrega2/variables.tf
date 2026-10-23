@@ -23,6 +23,12 @@ variable "presupuesto_usd" {
   type        = number
 }
 
+variable "integrantes" {
+  description = "Personas del equipo (user:correo) que operan el proyecto con su propia cuenta: Terraform, consola, SSH por IAP y facturación."
+  type        = list(string)
+  default     = []
+}
+
 variable "firmantes_desarrollo" {
   description = "Personas (user:correo) que firman URL como mooc-web desde su máquina, para probar el adaptador de GCS."
   type        = list(string)

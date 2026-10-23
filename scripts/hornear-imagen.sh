@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Hornea la imagen base de las plantillas (ADR-0018, D7): Debian 12 con Docker,
+# Hornea la imagen base de las plantillas (ADR-0019, D7): Debian 12 con Docker,
 # el agente de operaciones y todas las imágenes de contenedor ya descargadas.
 # Una instancia creada por el autoscaler solo escribe su configuración y
 # levanta: no instala paquetes ni depende de Docker Hub en mitad de una prueba.

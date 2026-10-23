@@ -1,5 +1,5 @@
 # Los dos grupos elásticos y lo que cada instancia recibe al arrancar
-# (ADR-0018, D2). Aquí vive la configuración sin secretos de cada papel; los
+# (ADR-0019, D2). Aquí vive la configuración sin secretos de cada papel; los
 # secretos los lee la propia instancia de Secret Manager (deploy/arranque.sh).
 
 locals {
@@ -111,7 +111,7 @@ module "workers" {
 
   # Trabajos de `bulk` pendientes más en curso, publicados por la cola. Con
   # una asignación de N por instancia, el autoscaler pide ceil(trabajos / N)
-  # instancias, entre 1 y 3 (ADR-0018, D5).
+  # instancias, entre 1 y 3 (ADR-0019, D5).
   metrica = {
     nombre        = "custom.googleapis.com/mooc/cola_bulk_trabajos"
     filtro        = "resource.type = \"global\""

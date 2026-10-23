@@ -1,4 +1,4 @@
-# Un grupo elástico de máquinas (ADR-0018, D2 y D5): plantilla, grupo
+# Un grupo elástico de máquinas (ADR-0019, D2 y D5): plantilla, grupo
 # administrado zonal, verificación de vida para la autorreparación y
 # autoscaler. El entorno lo usa dos veces, para la API y para los workers, con
 # señales de escalado distintas.
@@ -47,7 +47,7 @@ resource "google_compute_instance_template" "plantilla" {
 
   # El script de apagado solo si el papel lo tiene. Al retirar la instancia,
   # GCE lo ejecuta antes de apagarla: detiene los contenedores con el tiempo
-  # de gracia de cada uno (ADR-0018, D6).
+  # de gracia de cada uno (ADR-0019, D6).
   metadata = merge(var.archivos, {
     mooc-rol       = var.rol
     mooc-env       = var.env

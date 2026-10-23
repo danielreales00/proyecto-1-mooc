@@ -27,7 +27,7 @@ se construye alrededor de eso.
 | Frontend funcional | Hecho y probado en local (ADR-0017) | Desplegarlo, probar los permisos negativos, matriz de recorridos con evidencia en la nube |
 | Integridad y operación | Base de la Entrega 2 | Migraciones serializadas (hecho), retiro seguro de workers, reaper, reserva de conexiones |
 | Pruebas comparativas | Guiones y línea base de la Entrega 2 | Escenarios 1 y 2 por el balanceador, escenario 3A y 3B, tabla comparativa |
-| Calidad del código | No empezado | SonarQube Cloud en GitHub Actions, umbrales, reporte del commit final |
+| Calidad del código | Análisis en el CI y en local (ADR-0018) | Reporte del commit final |
 | Documentación y deuda | No empezado | `docs/entrega3/arquitectura.md`, `deuda-tecnica.md`, verificación del frontend |
 | Sustentación | No empezado | Video y tag `entrega-3` |
 
@@ -41,7 +41,7 @@ se construye alrededor de eso.
 | Cola | VM dedicada `e2-small` con Redis 7.4 en contenedor y AOF. Mailpit va con ella | Fuera de los dos grupos. Unos 0,45 USD al día frente a 1,2 de Memorystore. Queda como punto único de falla documentado |
 | Base y objetos | Cloud SQL `db-g1-small` y los cuatro buckets, sin cambios | Mismas condiciones que la línea base |
 | Migraciones | `migrate` sigue en el arranque de cada API, serializado con un bloqueo consultivo | Hecho en `cmd/migrate`, probado con `make migraciones-concurrentes` |
-| Calidad | SonarQube Cloud desde GitHub Actions | Gratis para repositorios públicos y el reporte queda enlazable |
+| Calidad | SonarQube Community como servicio efímero del CI y con `make calidad` en local (ADR-0018) | La misma versión del analizador en local y en el pipeline, sin cuentas ni secretos externos |
 
 ### Señales de escalado propuestas
 

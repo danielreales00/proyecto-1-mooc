@@ -1,4 +1,4 @@
-# Máquina de la cola (ADR-0018, D2): el Redis compartido y Mailpit, fuera de los
+# Máquina de la cola (ADR-0019, D2): el Redis compartido y Mailpit, fuera de los
 # dos grupos elásticos. Sin IP pública; sale a Internet por Cloud NAT.
 #
 # No usa `extends`: la máquina no tiene el repositorio, solo recibe este

@@ -10,6 +10,10 @@ presupuesto_usd    = 50
 # persona del equipo que trabaje en el adaptador añade aquí su cuenta.
 firmantes_desarrollo = ["user:santiago.chica1997@gmail.com"]
 
+# Integrantes que operan el proyecto con su cuenta, sin claves descargadas
+# (ADR-0015, D3). Quien creó el proyecto ya es propietario y no va aquí.
+integrantes = ["user:mjpatinoo@gmail.com"]
+
 # Red. Rangos propios, sin solaparse con los 10.128.0.0/9 de la red default.
 cidr_subred       = "10.10.0.0/24"
 cidr_servicios    = "10.20.0.0/20"
@@ -45,7 +49,7 @@ disco_maquinas_gb = 30
 
 # Qué imágenes corren: el SHA que imprimió `make publicar`. Se registra en cada
 # corrida de carga.
-version_imagenes = "ef646a192a82"
+version_imagenes = "86b31a8f89a0"
 
 # Pools por proceso contra las 50 conexiones de db-g1-small (3 reservadas).
 # La API empezó en 10: en el escenario 1 la latencia se disparó con el pool

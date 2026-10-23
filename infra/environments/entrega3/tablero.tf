@@ -1,4 +1,4 @@
-# Tablero del ciclo de escalado (ADR-0018, D8): en una sola pantalla, la
+# Tablero del ciclo de escalado (ADR-0019, D8): en una sola pantalla, la
 # demanda, la señal de cada autoscaler, las instancias de cada grupo y su
 # efecto en latencia. Es la línea de tiempo que piden los escenarios 3A y 3B, y
 # lo que se muestra en el video.

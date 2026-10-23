@@ -1,4 +1,4 @@
-# Instancia del grupo de API (ADR-0018, D2): Caddy, API, frontend y
+# Instancia del grupo de API (ADR-0019, D2): Caddy, API, frontend y
 # documentación. No tiene IP pública: el tráfico llega del balanceador por el
 # puerto 80 y el TLS termina allí.
 #

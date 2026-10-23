@@ -1,4 +1,4 @@
-# La cola compartida, fuera de los grupos (ADR-0018, D2).
+# La cola compartida, fuera de los grupos (ADR-0019, D2).
 module "cola" {
   source = "../../modules/cola"
 

@@ -3,7 +3,7 @@
 # sitio donde guarda su propio estado. El bucket tiene versionado, así que un
 # estado corrupto se recupera de la versión anterior.
 #
-# El prefijo entrega3 nace como copia del estado de entrega2 (ADR-0018, D1):
+# El prefijo entrega3 nace como copia del estado de entrega2 (ADR-0019, D1):
 # la base, los buckets, los secretos y el registro pasan a este entorno sin
 # recrearse. Desde esa copia, entrega2 queda congelado y `make tf` lo rechaza.
 terraform {

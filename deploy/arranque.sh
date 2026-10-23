@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Script de arranque de todas las máquinas de la aplicación (ADR-0016, D7, y
-# ADR-0018, D7). Lo ejecuta el agente de GCE como root en cada arranque;
+# ADR-0019, D7). Lo ejecuta el agente de GCE como root en cada arranque;
 # Terraform lo entrega por los metadatos de la plantilla, o de la instancia en
 # el caso de la cola, junto con la composición y la configuración.
 #

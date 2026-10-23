@@ -1,4 +1,4 @@
-# Proxy de cada instancia del grupo de API (ADR-0018, D3). Mismo reparto que el
+# Proxy de cada instancia del grupo de API (ADR-0019, D3). Mismo reparto que el
 # Caddyfile local; escucha en el 80 sin TLS, porque el TLS termina en el
 # balanceador y el salto hasta aquí no sale de la VPC.
 #

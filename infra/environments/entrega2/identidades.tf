@@ -83,3 +83,33 @@ resource "google_storage_bucket_iam_member" "maquinas" {
   role   = each.value.rol
   member = "serviceAccount:${local.cuentas[each.value.maquina]}"
 }
+
+# Integrantes del equipo. Cada uno entra con su usuario de Google
+# (`make gcloud ARGS="auth login"`), nunca con una clave de cuenta de servicio.
+#
+# - editor: crear y cambiar recursos, y leer el estado de Terraform del bucket.
+# - projectIamAdmin: Terraform también crea permisos (este archivo), y editor
+#   no puede modificar la política IAM del proyecto. En la práctica equivale a
+#   propietario: puede concederse cualquier otro rol.
+# - billing.projectManager: vincular el proyecto a otra cuenta de facturación.
+# - iap.tunnelResourceAccessor y compute.osAdminLogin: `make ssh` por IAP con
+#   OS Login, igual que quien creó el proyecto.
+locals {
+  roles_integrantes = {
+    for par in setproduct(var.integrantes, [
+      "roles/editor",
+      "roles/resourcemanager.projectIamAdmin",
+      "roles/billing.projectManager",
+      "roles/iap.tunnelResourceAccessor",
+      "roles/compute.osAdminLogin",
+    ]) : "${par[0]}/${par[1]}" => { miembro = par[0], rol = par[1] }
+  }
+}
+
+resource "google_project_iam_member" "integrantes" {
+  for_each = local.roles_integrantes
+
+  project = var.project_id
+  role    = each.value.rol
+  member  = each.value.miembro
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Script de apagado de las instancias de workers (ADR-0018, D6). GCE lo ejecuta
+# Script de apagado de las instancias de workers (ADR-0019, D6). GCE lo ejecuta
 # como root cuando el autoscaler retira la instancia, antes de apagarla.
 #
 # `docker compose stop` respeta el stop_grace_period de cada servicio: el

@@ -87,6 +87,7 @@ make scale       3 instancias de API y 3 de worker
 make test        Pruebas unitarias con detector de carreras
 make cover       Pruebas con informe de cobertura
 make sec         govulncheck, gosec y búsqueda de credenciales
+make calidad     SonarQube, umbrales de calidad y exportación del reporte
 make openapi     Valida el contrato con redocly
 make contrato    Comprueba que el contrato y la API no se hayan separado
 make logs        Sigue los logs de api y worker
@@ -396,6 +397,17 @@ El desglose completo módulo a módulo está en
 El detalle de lo que falta de plataforma y evidencia, en
 [`arquitectura/pendientes.md`](arquitectura/pendientes.md).
 
+## Entrega 3 — aplicación elástica IaaS
+
+Entrega en curso. El alcance está en
+[`arquitectura/alcance-entrega-3.md`](arquitectura/alcance-entrega-3.md).
+
+| Documento | Qué contiene |
+| --- | --- |
+| [`docs/entrega3/deuda-tecnica.md`](docs/entrega3/deuda-tecnica.md) | Primer diagnóstico de calidad, línea base de deuda técnica, inventario priorizado y plan de tratamiento |
+| [`docs/entrega3/calidad/`](docs/entrega3/calidad/) | Exportación del análisis de SonarQube: medidas, hallazgos y resumen |
+| [`arquitectura/adr/0018`](arquitectura/adr/0018-analisis-de-calidad-con-sonarqube-en-el-ci.md) | Cómo se ejecuta SonarQube en el CI y en local |
+
 ## Entrega 2 — despliegue básico en la nube
 
 Entrega en curso. La plataforma se despliega en Google Cloud sobre **dos
@@ -444,6 +456,7 @@ resultados de carga en
 demo/             guion del video
 arquitectura/     enunciado, requisitos, ADRs, diseños, pendientes
 docs/entrega2/    documento de arquitectura de la Entrega 2
+docs/entrega3/    deuda técnica y reporte de calidad de la Entrega 3
 capacity-planning/ escenarios de carga e informe de capacidad
 backend/
   cmd/            api · worker · migrate · seed

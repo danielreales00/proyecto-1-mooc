@@ -28,8 +28,9 @@ Un ADR **Propuesto** no se implementa: está esperando que el equipo lo discuta.
 | [0013](0013-integridad-del-quiz.md) | Integridad del quiz: snapshot y clave exclusiva del servidor | Aceptado | `RF-08`, `CA-04`, `CE-05` |
 | [0014](0014-markdown-extendido-canonico.md) | Markdown extendido canónico | Aceptado | `RF-04`, `CE-03` |
 | [0015](0015-terraform-y-provision-de-gcp.md) | Terraform y provisión de GCP | **Parcialmente aceptado**, corregido por el 0016 | `RT-01`, `RT-06`, `CE-01` |
-| [0016](0016-despliegue-iaas-en-dos-maquinas.md) | Despliegue IaaS en dos máquinas para la Entrega 2 | Aceptado, corregido por el 0018 | `RT-01`, `RT-06`, `CE-01` |
-| [0018](0018-arquitectura-elastica-iaas.md) | Arquitectura elástica IaaS para la Entrega 3 | Propuesto | `RT-01`, `RT-06`, `CE-01` |
+| [0016](0016-despliegue-iaas-en-dos-maquinas.md) | Despliegue IaaS en dos máquinas para la Entrega 2 | Aceptado, corregido por el 0019 | `RT-01`, `RT-06`, `CE-01` |
+| [0018](0018-analisis-de-calidad-con-sonarqube-en-el-ci.md) | Análisis de calidad con SonarQube Community en el CI | Aceptado | Calidad y deuda técnica (Entrega 3) |
+| [0019](0019-arquitectura-elastica-iaas.md) | Arquitectura elástica IaaS para la Entrega 3 | Propuesto | `RT-01`, `RT-06`, `CE-01` |
 
 ## Decisiones aún no tomadas
 

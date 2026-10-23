@@ -3,7 +3,7 @@
 Esto es el plan de trabajo del despliegue elástico, no un diseño.
 
 - **Qué exige la entrega:** [`alcance-entrega-3.md`](alcance-entrega-3.md)
-- **Qué se decidió y por qué:** [`adr/0018`](adr/0018-arquitectura-elastica-iaas.md),
+- **Qué se decidió y por qué:** [`adr/0019`](adr/0019-arquitectura-elastica-iaas.md),
   que corrige el [`adr/0016`](adr/0016-despliegue-iaas-en-dos-maquinas.md)
 - **El plan de la Entrega 2**, para la línea base: [`despliegue-gcp.md`](despliegue-gcp.md)
 
@@ -46,7 +46,7 @@ Internet ─443─► Balanceador externo global (certificado gestionado, <ip>.s
 
 ## Fase 0 — Verificaciones previas
 
-Tres comprobaciones que el ADR-0018 (D9) deja abiertas. Se hacen al principio
+Tres comprobaciones que el ADR-0019 (D9) deja abiertas. Se hacen al principio
 porque cambian la configuración si fallan.
 
 1. **Métrica de grupo en el autoscaler.** Con la cola encendida, comprobar que

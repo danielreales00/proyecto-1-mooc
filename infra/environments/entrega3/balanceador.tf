@@ -1,4 +1,4 @@
-# La entrada pública de la API y del frontend (ADR-0018, D3).
+# La entrada pública de la API y del frontend (ADR-0019, D3).
 module "balanceador" {
   source = "../../modules/balanceador"
 

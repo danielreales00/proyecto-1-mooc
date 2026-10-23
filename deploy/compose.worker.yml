@@ -1,4 +1,4 @@
-# Instancia del grupo de workers (ADR-0018, D2): consumidores de la cola
+# Instancia del grupo de workers (ADR-0019, D2): consumidores de la cola
 # compartida. Sin IP pública; sale a Internet por Cloud NAT. La cola no vive
 # aquí: está en su propia máquina, que el autoscaler no puede retirar.
 #
@@ -71,6 +71,6 @@ services:
       start_period: 10s
     # La transcodificación más larga de la Entrega 2 duró 196 s. Al retirar la
     # instancia, el trabajo en curso tiene este margen para terminar
-    # (ADR-0018, D6); el ShutdownTimeout de asynq va por debajo de él.
+    # (ADR-0019, D6); el ShutdownTimeout de asynq va por debajo de él.
     stop_grace_period: 300s
     restart: unless-stopped

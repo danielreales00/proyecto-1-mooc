@@ -1,4 +1,4 @@
-# ADR-0018 — Arquitectura elástica IaaS para la Entrega 3
+# ADR-0019 — Arquitectura elástica IaaS para la Entrega 3
 
 - **Estado:** Propuesto — 2026-10-21. Pasa a Aceptado cuando se hayan comprobado
   las tres verificaciones previas (D9) y el primer ciclo de escalado de cada

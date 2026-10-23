@@ -133,7 +133,7 @@ binarios de las herramientas—. Sin la de compilación cada contenedor recompil
 el árbol entero: es la diferencia entre `make ci` en minuto y medio y en doce.
 Un script nuevo que compile Go usa `$(EN_GO)`, no un `docker run` propio.
 
-**La Entrega 3 es la arquitectura elástica** (`adr/0018`): dos grupos de
+**La Entrega 3 es la arquitectura elástica** (`adr/0019`): dos grupos de
 instancias (API y workers) de 1 a 3, cada uno con su autoscaler, un balanceador
 HTTPS delante de la API y Redis en su propia máquina. El entorno de Terraform
 es `infra/environments/entrega3`, que heredó el estado de `entrega2`; este

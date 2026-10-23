@@ -324,8 +324,40 @@ services:
     depends_on: [prometheus]
     restart: unless-stopped
 
+  # Perfil `calidad`: el análisis de SonarQube de `make calidad` (ADR-0018). El
+  # CI levanta la misma imagen como servicio, así que el reporte local y el del
+  # pipeline salen de la misma versión del analizador y de las mismas reglas.
+  sonarqube:
+    image: sonarqube:26.10.0.133078-community
+    profiles: ["calidad"]
+    environment:
+      # Elasticsearch exige vm.max_map_count ≥ 262144 en la máquina, que en
+      # Docker Desktop y WSL no siempre se puede tocar. Para un servidor de un
+      # solo usuario la comprobación sobra.
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
+    ports:
+      # Solo en 127.0.0.1: el servidor conserva la contraseña de fábrica.
+      - "127.0.0.1:${SONAR_PORT:-9002}:9000"
+    volumes:
+      - sonarqube-data:/opt/sonarqube/data
+    restart: unless-stopped
+
+  sonar-scanner:
+    image: sonarsource/sonar-scanner-cli:12.2.0.4256_8.1.0
+    profiles: ["calidad"]
+    environment:
+      SONAR_HOST_URL: http://sonarqube:9000
+      # La imagen trabaja en /tmp. calidad.py lee report-task.txt de aquí,
+      # el mismo sitio donde lo deja el scanner del CI.
+      SCANNER_WORKDIR_PATH: /usr/src/.scannerwork
+    volumes:
+      - .:/usr/src
+    working_dir: /usr/src
+    restart: "no"
+
 volumes:
   postgres-data:
   redis-data:
   minio-data-bitnami:
   grafana-data:
+  sonarqube-data:

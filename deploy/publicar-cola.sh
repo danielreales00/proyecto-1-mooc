@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Publicador de la señal de escalado de los workers (ADR-0018, D5). Corre en la
+# Publicador de la señal de escalado de los workers (ADR-0019, D5). Corre en la
 # máquina de la cola cada 30 s, con un temporizador de systemd que instala
 # deploy/arranque.sh.
 #

@@ -1,4 +1,4 @@
-# La cola compartida, fuera de los dos grupos elásticos (ADR-0018, D2). El
+# La cola compartida, fuera de los dos grupos elásticos (ADR-0019, D2). El
 # enunciado lo exige: su disponibilidad no puede depender de una máquina que el
 # autoscaling pueda retirar. Es una máquina suelta, con dirección interna fija,
 # que ningún grupo gestiona.

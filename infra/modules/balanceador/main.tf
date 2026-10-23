@@ -1,4 +1,4 @@
-# Balanceador de aplicaciones externo global (ADR-0018, D3): la única entrada
+# Balanceador de aplicaciones externo global (ADR-0019, D3): la única entrada
 # pública. Termina TLS con un certificado gestionado por Google para
 # <ip>.sslip.io, reparte entre las instancias del grupo de API y deja de
 # enviarles tráfico cuando no pasan la verificación de preparación.

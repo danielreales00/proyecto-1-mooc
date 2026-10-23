@@ -1,4 +1,4 @@
-# Entorno de la Entrega 3 (ADR-0018): red, datos, secretos y registro, heredados
+# Entorno de la Entrega 3 (ADR-0019): red, datos, secretos y registro, heredados
 # del estado de entrega2 sin recrearse. La cola, los grupos y el balanceador
 # están en cola.tf, grupos.tf y balanceador.tf.
 

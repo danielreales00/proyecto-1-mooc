@@ -46,3 +46,8 @@ frontend/playwright-report/
 
 # Metadatos de descarga que Windows deja junto a los archivos en WSL
 *:Zone.Identifier
+
+# Análisis de calidad (make calidad): directorio de trabajo del scanner y
+# cobertura de la interfaz. La exportación en docs/entrega3/calidad sí se versiona.
+.scannerwork/
+frontend/lcov.info
