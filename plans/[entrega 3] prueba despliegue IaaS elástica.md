@@ -143,12 +143,10 @@ Se puede hacer ya: no depende de P1 a P3.
 1. En `terraform.tfvars`: `cloudsql_encendida = true`,
    `entorno_encendido = true`. `autoescalado` sigue en `false`.
 2. Avisar al equipo (regla 1). `make tf ENTORNO=entrega3 ARGS=apply`.
-3. `make tf ENTORNO=entrega3 ARGS="output url_publica"`. En el primer `apply`
-   no coincide con `NUBE_HOST` del `Makefile`: `35-184-146-250.sslip.io` es
-   el del Web Server de la Entrega 2 (comentario `PENDIENTE` en
-   `Makefile:241`). Copiar el nombre nuevo a `NUBE_HOST` y al `base_url` de la
-   colección de Postman, y versionar ese cambio: la IP del balanceador se
-   conserva entre sesiones.
+3. `make tf ENTORNO=entrega3 ARGS="output url_publica"` tiene que coincidir con
+   `NUBE_HOST` del `Makefile` (`34-160-11-22.sslip.io`, versionado en la
+   Sesión A junto con el `base_url` de Postman). La IP del balanceador está
+   reservada y se conserva entre sesiones; si cambiara, se actualizan los dos.
 4. Anotar la hora de encendido.
 
 ### A2. Mientras se aprovisiona el certificado (15 a 60 minutos)
@@ -200,6 +198,8 @@ un fallo de las instancias.
 | Síntoma | Primer lugar donde mirar |
 | --- | --- |
 | La instancia de API se recrea en bucle | `retraso_autorreparacion_s` y el diario de arranque: `/healthz` no responde antes de 600 s |
+| Un reinicio acaba en `repair.recreateInstance` | La verificación de vida del grupo (`vida`, 12 s × 10 fallidas): si se endurece, un reinicio normal cuenta como muerte |
+| `postman-nube` falla con 422 en el registro | La cuenta no lee el secreto `seed-password` y la contraseña queda vacía: falta el permiso `integrantes_semilla` |
 | `/readyz` falla y el balanceador no tiene backends sanos | Conexión a Cloud SQL (secreto `database-url`), a Redis en 10.10.0.30:6379 o a los buckets |
 | El certificado sigue en `PROVISIONING` pasada una hora | Que el nombre `<ip>.sslip.io` resuelva a la IP del balanceador y que la regla del 80 exista |
 | La cola no publica la métrica | Cuenta `mooc-cola` sin `monitoring.metricWriter`, o el temporizador de systemd |
@@ -263,9 +263,11 @@ de workers (C4): si siguen abiertos, se hace C3 y C4 queda para otra sesión.
 
 Guardar la salida de:
 
-- `make gcloud ARGS="compute autoscalers list"`
-- `make gcloud ARGS="compute autoscalers describe mooc-api --zone us-central1-a"`
-- `make gcloud ARGS="compute autoscalers describe mooc-worker --zone us-central1-a"`
+- `make gcloud ARGS="compute instance-groups managed describe mooc-api --zone us-central1-a"`
+- `make gcloud ARGS="compute instance-groups managed describe mooc-worker --zone us-central1-a"`
+
+`gcloud` no tiene un grupo `compute autoscalers`: la política efectiva sale en
+la sección `autoscaler` del `describe` de cada grupo.
 - `make gcloud ARGS="compute backend-services describe <servicio> --global"`
 - `make gcloud ARGS="compute health-checks list"`
 
@@ -352,4 +354,5 @@ vacías.
 
 | Fecha | Sesión | Quién | Horas encendido | Resultado | Evidencia |
 | --- | --- | --- | --- | --- | --- |
-| | | | | | |
+| 2026-10-23 | A, tramo 1 | mjpatinoo | 04:30–06:03 UTC (~1,5) | Encendido, certificado `ACTIVE`, E1 y E12. Apagado al cerrar el día | [`sesion-a`](../docs/entrega3/evidencias/elastica/2026-10-23-sesion-a.md) |
+| 2026-10-23 | A, tramo 2 | mjpatinoo | 13:55–15:34 UTC (~1,7) | E2 tras corregir la verificación de vida, `postman-nube` en 0, video en `ready`. Sesión A cerrada, ~0,6 USD | [`sesion-a`](../docs/entrega3/evidencias/elastica/2026-10-23-sesion-a.md), [`postman-nube`](../docs/entrega3/evidencias/elastica/2026-10-23-postman-nube.log) |
