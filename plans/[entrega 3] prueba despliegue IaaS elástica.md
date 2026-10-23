@@ -21,7 +21,7 @@ coincide con el runbook, manda el runbook y se corrige este archivo.
   están sin ejecutar.
 - `terraform.tfvars` está todo apagado: `entorno_encendido`,
   `cloudsql_encendida`, `autoescalado` y `generador_encendido` en `false`.
-- `version_imagenes = "ef646a192a82"` e `imagen_grupos = "debian-cloud/debian-12"`
+- `version_imagenes = "86b31a8f89a0"` (las de `main`, con el frontend) e `imagen_grupos = "debian-cloud/debian-12"`
   (sin imagen horneada).
 - `inicializacion_api_s = 180` e `inicializacion_workers_s = 240` son
   provisionales hasta medir el arranque con la imagen horneada.
@@ -135,7 +135,7 @@ Se puede hacer ya: no depende de P1 a P3.
    - **No puede** tocar `module.cloudsql`, `module.secretos`,
      `module.registry` ni el presupuesto, ni recrear ningún bucket. Si aparece,
      se para.
-5. Confirmar que la imagen `ef646a192a82` existe en Artifact Registry. Si se
+5. Confirmar que las imágenes `86b31a8f89a0` existen en Artifact Registry. Si se
    despliega otro commit, `make publicar` y actualizar `version_imagenes`.
 
 ### A1. Encendido
@@ -143,8 +143,12 @@ Se puede hacer ya: no depende de P1 a P3.
 1. En `terraform.tfvars`: `cloudsql_encendida = true`,
    `entorno_encendido = true`. `autoescalado` sigue en `false`.
 2. Avisar al equipo (regla 1). `make tf ENTORNO=entrega3 ARGS=apply`.
-3. `make tf ENTORNO=entrega3 ARGS="output url_publica"`. Debe coincidir con
-   `NUBE_HOST` del `Makefile` (`35-184-146-250.sslip.io`); si no, corregirlo.
+3. `make tf ENTORNO=entrega3 ARGS="output url_publica"`. En el primer `apply`
+   no coincide con `NUBE_HOST` del `Makefile`: `35-184-146-250.sslip.io` es
+   el del Web Server de la Entrega 2 (comentario `PENDIENTE` en
+   `Makefile:241`). Copiar el nombre nuevo a `NUBE_HOST` y al `base_url` de la
+   colección de Postman, y versionar ese cambio: la IP del balanceador se
+   conserva entre sesiones.
 4. Anotar la hora de encendido.
 
 ### A2. Mientras se aprovisiona el certificado (15 a 60 minutos)
@@ -253,7 +257,7 @@ de workers (C4): si siguen abiertos, se hace C3 y C4 queda para otra sesión.
 1. Encender como en A1, con `autoescalado = true`, y `apply`.
 2. Si el `apply` falla porque el autoscaler no acepta el filtro
    `resource.type = "global"`, es la fase 0, comprobación 1: parar y revisar el
-   ADR-0018 (D9).
+   ADR-0019 (D9).
 
 ### C2. Políticas efectivas (E6)
 
@@ -288,7 +292,7 @@ fallidas).
 5. **Exclusión y reparación (E14, E15).** En una de las dos, detener la API:
    `make ssh MAQUINA=<api> CMD="cd /opt/mooc && sudo docker compose stop api"`.
    - Anotar cuándo `get-health` la marca `UNHEALTHY` y cuándo deja de aparecer
-     en el conteo de `X-Instancia`: ~15 s según el ADR-0018.
+     en el conteo de `X-Instancia`: ~15 s según el ADR-0019.
    - Anotar cuándo el grupo la recrea por `/healthz` (autorreparación): ocurre
      después y por otra verificación. La diferencia entre las dos horas es la
      evidencia de E15.

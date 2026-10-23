@@ -23,6 +23,12 @@ variable "presupuesto_usd" {
   type        = number
 }
 
+variable "integrantes" {
+  description = "Personas del equipo (user:correo) que operan el proyecto con su propia cuenta: Terraform, consola, SSH por IAP y facturación."
+  type        = list(string)
+  default     = []
+}
+
 variable "firmantes_desarrollo" {
   description = "Personas (user:correo) que firman URL como mooc-web desde su máquina, para probar el adaptador de GCS."
   type        = list(string)
@@ -108,7 +114,7 @@ variable "db_max_conns" {
 }
 
 variable "nombre_publico" {
-  description = "Dominio propio. Vacío usa <ip del balanceador>.sslip.io (ADR-0018, D3)."
+  description = "Dominio propio. Vacío usa <ip del balanceador>.sslip.io (ADR-0019, D3)."
   type        = string
   default     = ""
 }
@@ -140,7 +146,7 @@ variable "entorno_encendido" {
   type        = bool
 }
 
-# --- Escalado (ADR-0018, D4 y D5) ---------------------------------------------
+# --- Escalado (ADR-0019, D4 y D5) ---------------------------------------------
 
 variable "autoescalado" {
   description = "false fija cada grupo en una instancia, sin autoscaler: solo para la puesta en marcha."

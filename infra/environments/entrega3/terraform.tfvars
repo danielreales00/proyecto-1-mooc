@@ -10,6 +10,10 @@ presupuesto_usd    = 50
 # persona del equipo que trabaje en el adaptador añade aquí su cuenta.
 firmantes_desarrollo = ["user:santiago.chica1997@gmail.com"]
 
+# Integrantes que operan el proyecto con su cuenta, sin claves descargadas
+# (ADR-0015, D3). Quien creó el proyecto ya es propietario y no va aquí.
+integrantes = ["user:mjpatinoo@gmail.com"]
+
 # Red. Rangos propios, sin solaparse con los 10.128.0.0/9 de la red default.
 cidr_subred    = "10.10.0.0/24"
 cidr_servicios = "10.20.0.0/20"
@@ -48,7 +52,7 @@ disco_maquinas_gb = 30
 
 # Imagen de las plantillas. Debian limpio mientras se pone en marcha; antes de
 # la primera corrida medida, la familia horneada (make hornear-imagen), y ya no
-# cambia entre corridas: el arranque es parte de lo que se mide (ADR-0018, D7).
+# cambia entre corridas: el arranque es parte de lo que se mide (ADR-0019, D7).
 imagen_grupos = "debian-cloud/debian-12"
 
 # La cola: Redis y Mailpit. e2-small (2 vCPU compartidas, 2 GiB) basta para el
@@ -58,7 +62,7 @@ disco_cola_gb = 20
 
 # Qué imágenes corren: el SHA que imprimió `make publicar`. Se registra en cada
 # corrida de carga.
-version_imagenes = "ef646a192a82"
+version_imagenes = "86b31a8f89a0"
 
 # PENDIENTE (frente de backend, punto 3 del alcance): con tres instancias por
 # grupo estos pools piden 3 × 25 + 3 × 2 × 10 = 135 conexiones contra las ~47 de
@@ -81,7 +85,7 @@ factor_limite_ip = 100
 generador_encendido = false
 tipo_generador      = "e2-standard-4"
 
-# --- Escalado (ADR-0018, D4 y D5) ---------------------------------------------
+# --- Escalado (ADR-0019, D4 y D5) ---------------------------------------------
 # Puesta en marcha con una instancia fija por grupo; true cuando el balanceador
 # y el arranque estén comprobados y los pools repartidos.
 autoescalado = false
