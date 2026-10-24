@@ -207,26 +207,16 @@ func (s *Service) ReportEvidence(ctx context.Context, id uuid.UUID, ev Evidence,
 		return Resultado{}, err
 	}
 
-	var ref *ResourceRef
-	for i := range recursos {
-		if recursos[i].StableID == ev.ResourceStableID {
-			ref = &recursos[i]
-			break
-		}
-	}
+	ref := buscarRecurso(recursos, ev.ResourceStableID)
 	if ref == nil {
 		metrics.ProgressRejected.WithLabelValues(RejectUnknownResource).Inc()
 		s.registrarEvidencia(ctx, e.ID, ev, false, RejectUnknownResource)
 		return Resultado{Aceptada: false, Motivo: RejectUnknownResource}, nil
 	}
 
-	previo, err := s.store.ProgressOne(ctx, s.store.DB(), e.ID, ev.ResourceStableID)
-	if err != nil && !errors.Is(err, ErrNotFound) {
+	previo, err := s.progresoPrevio(ctx, e.ID, ev.ResourceStableID)
+	if err != nil {
 		return Resultado{}, err
-	}
-	if errors.Is(err, ErrNotFound) {
-		previo = ResourceProgress{EnrollmentID: e.ID, ResourceStableID: ev.ResourceStableID,
-			State: ProgressNotStarted, UpdatedAt: time.Now().UTC()}
 	}
 
 	ahora := time.Now().UTC()
@@ -239,34 +229,14 @@ func (s *Service) ReportEvidence(ctx context.Context, id uuid.UUID, ev Evidence,
 			EstadoRecurso: previo.State, ProgresoPct: e.ProgressPct, Estado: e.State}, nil
 	}
 
-	// Aplicar la evidencia.
-	nuevo := previo
-	nuevo.UpdatedAt = ahora
-	if ev.Kind == EvidenceOpen && nuevo.OpenedAt == nil {
-		nuevo.OpenedAt = &ahora
-	}
-	if nuevo.State == ProgressNotStarted {
-		nuevo.State = ProgressInProgress
-	}
-	nuevo.DwellMsTotal += v.DwellMs
-	if ev.PositionSeconds != nil {
-		nuevo.LastPositionSeconds = *ev.PositionSeconds
-		if *ev.PositionSeconds > nuevo.MaxPositionSeconds {
-			nuevo.MaxPositionSeconds = *ev.PositionSeconds
-		}
-	}
-	if nuevo.State != ProgressCompleted && CriterioCompletado(ref.Type, nuevo, ref.Duration, s.umbrales) {
-		nuevo.State = ProgressCompleted
-		nuevo.CompletedAt = &ahora
-	}
+	nuevo := s.aplicarEvidencia(previo, ev, v.DwellMs, *ref, ahora)
 
 	var res Resultado
 	err = s.store.WithinTx(ctx, func(ctx context.Context, tx dbx.DB) error {
 		if err := s.store.UpsertProgress(ctx, tx, nuevo); err != nil {
 			return err
 		}
-		if err := s.store.InsertEvent(ctx, tx, e.ID, ev.ResourceStableID, ev.Kind,
-			ev.PositionSeconds, ev.ClientTS, true, ""); err != nil {
+		if err := s.store.InsertEvent(ctx, tx, e.ID, ev, true, ""); err != nil {
 			return err
 		}
 		var err error
@@ -279,16 +249,66 @@ func (s *Service) ReportEvidence(ctx context.Context, id uuid.UUID, ev Evidence,
 	res.Aceptada = true
 	res.EstadoRecurso = nuevo.State
 
-	if res.badgeJobKey != "" {
-		if err := s.queue.Publish(ctx, res.badgeJobKey, jobs.TypeBadgeIssue, jobs.QueueCritical,
-			map[string]any{"enrollment_id": res.badgeEnrollment.String()}, a.Trace); err != nil {
-			// No se falla la petición: el trabajo ya está en PostgreSQL y el
-			// reaper lo recuperará.
-			s.log.Warn("no se pudo publicar la emisión de insignia",
-				"job_key", res.badgeJobKey, "error", err)
+	s.publicarInsignia(ctx, res, a.Trace)
+	return res, nil
+}
+
+func buscarRecurso(recursos []ResourceRef, stableID uuid.UUID) *ResourceRef {
+	for i := range recursos {
+		if recursos[i].StableID == stableID {
+			return &recursos[i]
 		}
 	}
-	return res, nil
+	return nil
+}
+
+// progresoPrevio devuelve el avance guardado del recurso o uno sin empezar.
+func (s *Service) progresoPrevio(ctx context.Context, enrollmentID, stableID uuid.UUID) (ResourceProgress, error) {
+	previo, err := s.store.ProgressOne(ctx, s.store.DB(), enrollmentID, stableID)
+	if errors.Is(err, ErrNotFound) {
+		return ResourceProgress{EnrollmentID: enrollmentID, ResourceStableID: stableID,
+			State: ProgressNotStarted, UpdatedAt: time.Now().UTC()}, nil
+	}
+	return previo, err
+}
+
+// aplicarEvidencia suma una evidencia ya validada al avance del recurso y lo
+// da por completado si cumple su criterio (ADR-0012).
+func (s *Service) aplicarEvidencia(previo ResourceProgress, ev Evidence, dwellMs int64,
+	ref ResourceRef, ahora time.Time) ResourceProgress {
+
+	nuevo := previo
+	nuevo.UpdatedAt = ahora
+	if ev.Kind == EvidenceOpen && nuevo.OpenedAt == nil {
+		nuevo.OpenedAt = &ahora
+	}
+	if nuevo.State == ProgressNotStarted {
+		nuevo.State = ProgressInProgress
+	}
+	nuevo.DwellMsTotal += dwellMs
+	if ev.PositionSeconds != nil {
+		nuevo.LastPositionSeconds = *ev.PositionSeconds
+		nuevo.MaxPositionSeconds = max(nuevo.MaxPositionSeconds, *ev.PositionSeconds)
+	}
+	if nuevo.State != ProgressCompleted && CriterioCompletado(ref.Type, nuevo, ref.Duration, s.umbrales) {
+		nuevo.State = ProgressCompleted
+		nuevo.CompletedAt = &ahora
+	}
+	return nuevo
+}
+
+// publicarInsignia publica en la cola la emisión que recalcular dejó
+// registrada. No falla la petición: el trabajo ya está en PostgreSQL y el
+// reaper lo recuperará.
+func (s *Service) publicarInsignia(ctx context.Context, res Resultado, trace string) {
+	if res.badgeJobKey == "" {
+		return
+	}
+	if err := s.queue.Publish(ctx, res.badgeJobKey, jobs.TypeBadgeIssue, jobs.QueueCritical,
+		map[string]any{"enrollment_id": res.badgeEnrollment.String()}, trace); err != nil {
+		s.log.Warn("no se pudo publicar la emisión de insignia",
+			"job_key", res.badgeJobKey, "error", err)
+	}
 }
 
 // recalcular recompone el porcentaje y el estado, y encola la insignia al
@@ -305,17 +325,7 @@ func (s *Service) recalcular(ctx context.Context, tx dbx.DB, e Enrollment,
 		return Resultado{}, err
 	}
 
-	obligatorios, completados := 0, 0
-	for _, r := range recursos {
-		if !r.Required || !r.Visible {
-			continue
-		}
-		obligatorios++
-		if p, ok := avance[r.StableID]; ok && p.State == ProgressCompleted {
-			completados++
-		}
-	}
-	pct := CalcularPorcentaje(obligatorios, completados)
+	pct := CalcularPorcentaje(contarObligatorios(recursos, avance))
 
 	notaOK := true
 	if notaMin > 0 {
@@ -328,15 +338,7 @@ func (s *Service) recalcular(ctx context.Context, tx dbx.DB, e Enrollment,
 	anterior := e.State
 	e.State = EvaluarEstado(e.State, pct, criterioPct, notaOK)
 	e.ProgressPct = pct
-	ahora := time.Now().UTC()
-	if e.State == StateCompleted && e.CompletedAt == nil {
-		e.CompletedAt = &ahora
-	}
-	if e.State == StateApproved && e.ApprovedAt == nil {
-		e.ApprovedAt = &ahora
-		e.CompletedAt = &ahora
-		e.ApprovedVersionID = &versionID
-	}
+	marcarFechas(&e, versionID, time.Now().UTC())
 
 	if err := s.store.UpdateEnrollment(ctx, tx, e); err != nil {
 		return Resultado{}, err
@@ -345,19 +347,8 @@ func (s *Service) recalcular(ctx context.Context, tx dbx.DB, e Enrollment,
 	// Al aprobar se encola la insignia con clave determinista: aunque la
 	// transición se dispare dos veces, la insignia es una sola (ADR-0008).
 	if anterior != StateApproved && e.State == StateApproved {
-		clave := fmt.Sprintf("%s:%s", jobs.TypeBadgeIssue, e.ID)
-		if err := jobs.Record(ctx, tx, jobs.Job{
-			Key: clave, Type: jobs.TypeBadgeIssue, Queue: jobs.QueueCritical,
-			Payload: map[string]any{"enrollment_id": e.ID.String()},
-		}); err != nil {
-			return Resultado{}, err
-		}
-		if err := s.audit.Record(ctx, tx, audit.Event{
-			ActorID: &e.UserID, ActorRole: "student", Action: "enrollment.approved",
-			EntityType: "enrollment", EntityID: &e.ID,
-			IP: a.IP, UserAgent: a.Agent, TraceID: a.Trace,
-			Metadata: map[string]any{"progress_pct": pct},
-		}); err != nil {
+		clave, err := s.registrarAprobacion(ctx, tx, e, pct, a)
+		if err != nil {
 			return Resultado{}, err
 		}
 		// La publicación en la cola va DESPUÉS del commit; la clave viaja de
@@ -369,9 +360,59 @@ func (s *Service) recalcular(ctx context.Context, tx dbx.DB, e Enrollment,
 	return Resultado{ProgresoPct: pct, Estado: e.State}, nil
 }
 
+// contarObligatorios cuenta los recursos obligatorios visibles y cuántos de
+// ellos están completados.
+func contarObligatorios(recursos []ResourceRef, avance map[uuid.UUID]ResourceProgress) (obligatorios, completados int) {
+	for _, r := range recursos {
+		if !r.Required || !r.Visible {
+			continue
+		}
+		obligatorios++
+		if p, ok := avance[r.StableID]; ok && p.State == ProgressCompleted {
+			completados++
+		}
+	}
+	return obligatorios, completados
+}
+
+// marcarFechas fija la primera vez que la inscripción se completa o aprueba.
+func marcarFechas(e *Enrollment, versionID uuid.UUID, ahora time.Time) {
+	if e.State == StateCompleted && e.CompletedAt == nil {
+		e.CompletedAt = &ahora
+	}
+	if e.State == StateApproved && e.ApprovedAt == nil {
+		e.ApprovedAt = &ahora
+		e.CompletedAt = &ahora
+		e.ApprovedVersionID = &versionID
+	}
+}
+
+// registrarAprobacion deja registrada la emisión de la insignia y la
+// auditoría. La clave es determinista: aunque la transición se dispare dos
+// veces, la insignia es una sola (ADR-0008).
+func (s *Service) registrarAprobacion(ctx context.Context, tx dbx.DB, e Enrollment,
+	pct float64, a Actor) (string, error) {
+
+	clave := fmt.Sprintf("%s:%s", jobs.TypeBadgeIssue, e.ID)
+	if err := jobs.Record(ctx, tx, jobs.Job{
+		Key: clave, Type: jobs.TypeBadgeIssue, Queue: jobs.QueueCritical,
+		Payload: map[string]any{"enrollment_id": e.ID.String()},
+	}); err != nil {
+		return "", err
+	}
+	if err := s.audit.Record(ctx, tx, audit.Event{
+		ActorID: &e.UserID, ActorRole: "student", Action: "enrollment.approved",
+		EntityType: "enrollment", EntityID: &e.ID,
+		IP: a.IP, UserAgent: a.Agent, TraceID: a.Trace,
+		Metadata: map[string]any{"progress_pct": pct},
+	}); err != nil {
+		return "", err
+	}
+	return clave, nil
+}
+
 func (s *Service) registrarEvidencia(ctx context.Context, enrollmentID uuid.UUID, ev Evidence, aceptada bool, motivo string) {
-	if err := s.store.InsertEvent(ctx, s.store.DB(), enrollmentID, ev.ResourceStableID,
-		ev.Kind, ev.PositionSeconds, ev.ClientTS, aceptada, motivo); err != nil {
+	if err := s.store.InsertEvent(ctx, s.store.DB(), enrollmentID, ev, aceptada, motivo); err != nil {
 		s.log.Error("no se pudo registrar la evidencia", "error", err)
 	}
 }

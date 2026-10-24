@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"mooc/backend/internal/adapters/postgres"
 	"mooc/backend/internal/modules/identity"
 	"mooc/backend/internal/platform/config"
@@ -84,8 +86,23 @@ func run() error {
 	}
 
 	now := time.Now().UTC()
-	creadas, existentes := 0, 0
+	if err := sembrarDemostracion(ctx, pool, log, hash, now); err != nil {
+		return err
+	}
+	if err := sembrarCarga(ctx, pool, log, hash, now); err != nil {
+		return err
+	}
+	imprimirCuentas(local, clave)
+	return nil
+}
 
+// sembrarDemostracion crea las cuentas de la demostración con su estado.
+// ON CONFLICT DO NOTHING: la semilla es idempotente, igual que los trabajos
+// asíncronos (ADR-0008).
+func sembrarDemostracion(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger,
+	hash string, now time.Time) error {
+
+	creadas, existentes := 0, 0
 	for _, c := range cuentas {
 		verificado := &now
 		estado := identity.StatusActive
@@ -96,8 +113,6 @@ func run() error {
 			estado = identity.StatusSuspended
 		}
 
-		// ON CONFLICT DO NOTHING: la semilla es idempotente, igual que los
-		// trabajos asíncronos (ADR-0008).
 		tag, err := pool.Exec(ctx, `
 			INSERT INTO identity.users
 			    (id, email, email_verified_at, password_hash, full_name, role, status, created_at, updated_at)
@@ -114,13 +129,17 @@ func run() error {
 			existentes++
 		}
 	}
-
 	log.Info("semilla lista", "creadas", creadas, "ya_existían", existentes)
+	return nil
+}
 
-	// Cuentas para las pruebas de carga (capacity-planning/). Se escriben en
-	// la base y no por la API: `register` admite 60 por hora y por IP, y cada
-	// registro cuesta un argon2id de 64 MiB que ensuciaría la máquina antes de
-	// medir. Aquí el hash se calcula una sola vez para todas.
+// sembrarCarga crea las cuentas de las pruebas de carga (capacity-planning/).
+// Se escriben en la base y no por la API: `register` admite 60 por hora y por
+// IP, y cada registro cuesta un argon2id de 64 MiB que ensuciaría la máquina
+// antes de medir. Aquí el hash se calcula una sola vez para todas.
+func sembrarCarga(ctx context.Context, pool *pgxpool.Pool, log *slog.Logger,
+	hash string, now time.Time) error {
+
 	for _, g := range []struct {
 		variable, patron, rol string
 	}{
@@ -146,7 +165,10 @@ func run() error {
 			log.Info("cuentas de carga", "rol", g.rol, "pedidas", n, "creadas", nuevas)
 		}
 	}
+	return nil
+}
 
+func imprimirCuentas(local bool, clave string) {
 	fmt.Println()
 	if local {
 		fmt.Println("Cuentas sintéticas — contraseña única:", clave)
@@ -160,7 +182,6 @@ func run() error {
 		fmt.Printf("  %-26s %-9s %s\n", c.email, c.rol, c.descripc)
 	}
 	fmt.Println()
-	return nil
 }
 
 // claveDeLaSemilla decide la contraseña de las cuentas sintéticas. En local es

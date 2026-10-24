@@ -83,8 +83,10 @@ func (p *Publisher) Publish(ctx context.Context, j jobs.Job, traceID string) err
 // duplicadas, y en la Entrega 3 inflarían la señal de escalado de los workers.
 //
 // Una tarea terminada no deja rastro (asynq la borra al completarla), pero una
-// archivada sí: es la que agotó sus reintentos. Esa se borra y se vuelve a
-// encolar, que es lo que pide el reencolado administrativo desde la DLQ.
+// archivada sí: es la que agotó sus reintentos. Esa vuelve a la cola con
+// RunTask, que conserva su payload original: el reencolado administrativo
+// desde la DLQ publica sin datos y, si se encolara de nuevo, el trabajo
+// correría sin ellos.
 func (p *Publisher) Republicar(ctx context.Context, j jobs.Job, traceID string) (bool, error) {
 	body, err := json.Marshal(Payload{JobKey: j.Key, TraceID: traceID, Data: j.Payload})
 	if err != nil {
@@ -111,10 +113,15 @@ func (p *Publisher) Republicar(ctx context.Context, j jobs.Job, traceID string) 
 			return false, fmt.Errorf("consultar %s en la cola: %w", j.Key, ierr)
 		case sigueViva(info.State):
 			return false, nil
+		case info.State == asynq.TaskStateArchived:
+			if rerr := p.inspector.RunTask(j.Queue, j.Key); rerr != nil {
+				return false, fmt.Errorf("reactivar %s archivada: %w", j.Key, rerr)
+			}
+			return true, nil
 		default:
 			if derr := p.inspector.DeleteTask(j.Queue, j.Key); derr != nil &&
 				!errors.Is(derr, asynq.ErrTaskNotFound) {
-				return false, fmt.Errorf("retirar %s archivada: %w", j.Key, derr)
+				return false, fmt.Errorf("retirar %s terminada: %w", j.Key, derr)
 			}
 			err = encolar()
 		}

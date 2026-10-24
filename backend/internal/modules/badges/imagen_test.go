@@ -78,7 +78,7 @@ func TestClaveImagenEsDeterminista(t *testing.T) {
 	}
 }
 
-func TestURLImagenVacíaSinAlmacen(t *testing.T) {
+func TestURLImagenVaciaSinAlmacen(t *testing.T) {
 	s := NewService(nil, nil, "mooc-badges", "", nil)
 	if u := s.URLImagen(ejemplo()); u != "" {
 		t.Fatalf("sin origen público la URL debe quedar vacía, no %q", u)

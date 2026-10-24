@@ -204,42 +204,59 @@ func (s *AuthoringStore) SetVersionStatus(ctx context.Context, db dbx.DB, versio
 // la salud del quiz ya resueltos: así ValidarPublicacion no necesita tocar la
 // base y puede probarse sin ella.
 func (s *AuthoringStore) Tree(ctx context.Context, db dbx.DB, versionID uuid.UUID) ([]authoring.Module, error) {
+	modulos, err := cargarModulos(ctx, db, versionID)
+	if err != nil || len(modulos) == 0 {
+		return nil, err
+	}
+	indiceUnidad, err := cargarUnidades(ctx, db, versionID, modulos)
+	if err != nil {
+		return nil, err
+	}
+	if err := cargarRecursos(ctx, db, versionID, modulos, indiceUnidad); err != nil {
+		return nil, err
+	}
+	return modulos, nil
+}
+
+func cargarModulos(ctx context.Context, db dbx.DB, versionID uuid.UUID) ([]authoring.Module, error) {
 	rows, err := db.Query(ctx,
 		`SELECT id, course_version_id, stable_id, position, title
 		   FROM authoring.modules WHERE course_version_id=$1 ORDER BY position`, versionID)
 	if err != nil {
 		return nil, traducir(err)
 	}
+	defer rows.Close()
 	var modulos []authoring.Module
-	indiceModulo := map[uuid.UUID]int{}
 	for rows.Next() {
 		var m authoring.Module
 		if err := rows.Scan(&m.ID, &m.CourseVersionID, &m.StableID, &m.Position, &m.Title); err != nil {
-			rows.Close()
 			return nil, err
 		}
-		indiceModulo[m.ID] = len(modulos)
 		modulos = append(modulos, m)
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	if len(modulos) == 0 {
-		return nil, nil
-	}
+	return modulos, rows.Err()
+}
 
-	rows, err = db.Query(ctx,
+// cargarUnidades cuelga cada unidad de su módulo y devuelve, por unidad, su
+// posición en el árbol: [módulo, unidad].
+func cargarUnidades(ctx context.Context, db dbx.DB, versionID uuid.UUID,
+	modulos []authoring.Module) (map[uuid.UUID][2]int, error) {
+
+	indiceModulo := make(map[uuid.UUID]int, len(modulos))
+	for i, m := range modulos {
+		indiceModulo[m.ID] = i
+	}
+	rows, err := db.Query(ctx,
 		`SELECT id, module_id, course_version_id, stable_id, position, title
 		   FROM authoring.units WHERE course_version_id=$1 ORDER BY position`, versionID)
 	if err != nil {
 		return nil, traducir(err)
 	}
+	defer rows.Close()
 	indiceUnidad := map[uuid.UUID][2]int{}
 	for rows.Next() {
 		var u authoring.Unit
 		if err := rows.Scan(&u.ID, &u.ModuleID, &u.CourseVersionID, &u.StableID, &u.Position, &u.Title); err != nil {
-			rows.Close()
 			return nil, err
 		}
 		mi, ok := indiceModulo[u.ModuleID]
@@ -249,12 +266,12 @@ func (s *AuthoringStore) Tree(ctx context.Context, db dbx.DB, versionID uuid.UUI
 		indiceUnidad[u.ID] = [2]int{mi, len(modulos[mi].Units)}
 		modulos[mi].Units = append(modulos[mi].Units, u)
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
+	return indiceUnidad, rows.Err()
+}
 
-	rows, err = db.Query(ctx, `
+// sqlRecursosDelArbol trae cada recurso con el estado de su binario y la salud
+// de su quiz, que es lo que ValidarPublicacion necesita.
+const sqlRecursosDelArbol = `
 		SELECT r.id, r.unit_id, r.course_version_id, r.stable_id, r.position, r.title, r.type,
 		       r.visible, r.required, r.downloadable, r.content_md, r.asset_refs, r.asset_id,
 		       r.external_url, r.updated_at,
@@ -274,9 +291,14 @@ func (s *AuthoringStore) Tree(ctx context.Context, db dbx.DB, versionID uuid.UUI
 		         GROUP BY qq.quiz_id, z.resource_id
 		  ) q ON q.resource_id = r.id
 		 WHERE r.course_version_id=$1
-		 ORDER BY r.position`, versionID)
+		 ORDER BY r.position`
+
+func cargarRecursos(ctx context.Context, db dbx.DB, versionID uuid.UUID,
+	modulos []authoring.Module, indiceUnidad map[uuid.UUID][2]int) error {
+
+	rows, err := db.Query(ctx, sqlRecursosDelArbol, versionID)
 	if err != nil {
-		return nil, traducir(err)
+		return traducir(err)
 	}
 	defer rows.Close()
 	for rows.Next() {
@@ -284,7 +306,7 @@ func (s *AuthoringStore) Tree(ctx context.Context, db dbx.DB, versionID uuid.UUI
 		if err := rows.Scan(&r.ID, &r.UnitID, &r.CourseVersionID, &r.StableID, &r.Position, &r.Title,
 			&r.Type, &r.Visible, &r.Required, &r.Downloadable, &r.ContentMD, &r.AssetRefs, &r.AssetID,
 			&r.ExternalURL, &r.UpdatedAt, &r.AssetStatus, &r.HasQuestions, &r.QuizAllOptionsOK); err != nil {
-			return nil, err
+			return err
 		}
 		idx, ok := indiceUnidad[r.UnitID]
 		if !ok {
@@ -292,7 +314,7 @@ func (s *AuthoringStore) Tree(ctx context.Context, db dbx.DB, versionID uuid.UUI
 		}
 		modulos[idx[0]].Units[idx[1]].Resources = append(modulos[idx[0]].Units[idx[1]].Resources, r)
 	}
-	return modulos, rows.Err()
+	return rows.Err()
 }
 
 func (s *AuthoringStore) InsertModule(ctx context.Context, db dbx.DB, m authoring.Module) error {

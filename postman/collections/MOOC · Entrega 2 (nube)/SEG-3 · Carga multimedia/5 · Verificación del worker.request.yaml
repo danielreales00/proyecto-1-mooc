@@ -13,7 +13,8 @@ scripts:
       // La verificación es asíncrona: 'complete' respondió 202 y el trabajo lo
       // hace un worker aparte. Sondeamos hasta que termine en vez de suponer
       // que ya terminó.
-      if (!pm.collectionVariables.get('intentos_verificacion')) {
+      if (!pm.collectionVariables.get('inicio_verificacion')) {
+        pm.collectionVariables.set('inicio_verificacion', Date.now());
         pm.collectionVariables.set('intentos_verificacion', 0);
       }
     language: text/javascript
@@ -30,12 +31,16 @@ scripts:
       // Se espera al estado final para que la aserción no dependa de
       // cuándo mire.
       const listo = ['ready', 'rejected', 'failed'].includes(cuerpo.status);
-      if (!listo && intentos < 12) {
+      // Plazo por reloj y no por intentos: con --delay-request 300, doce intentos
+      // eran 3 s, y el worker de medios puede tener otros videos en cola delante.
+      const espera = Date.now() - Number(pm.collectionVariables.get('inicio_verificacion'));
+      if (!listo && espera < 90000) {
         console.log('El worker todavía no termina (estado: ' + cuerpo.status +
-                    '). Reintento ' + intentos + ' de 12.');
+                    '). Reintento ' + intentos + ', ' + Math.round(espera / 1000) + ' s de 90.');
         pm.execution.setNextRequest(pm.info.requestName);
       } else {
         pm.collectionVariables.unset('intentos_verificacion');
+        pm.collectionVariables.unset('inicio_verificacion');
         pm.test('el archivo pasó la verificación y se transcodificó', () => {
           pm.expect(cuerpo.status, 'si sigue en uploaded, el worker no corrió: '
             + 'revisa `docker compose logs worker worker-media`').to.eql('ready');

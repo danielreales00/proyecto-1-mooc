@@ -163,42 +163,11 @@ func Calificar(q Quiz, respuestas map[uuid.UUID][]uuid.UUID) (float64, []Questio
 
 	for _, pregunta := range q.Questions {
 		correctas := pregunta.Correctas()
-		elegidas := respuestas[pregunta.StableID]
 		posibles += pregunta.Points
 
-		conjuntoCorrectas := map[uuid.UUID]bool{}
-		for _, id := range correctas {
-			conjuntoCorrectas[id] = true
-		}
-		aciertos, errores := 0, 0
-		vistas := map[uuid.UUID]bool{}
-		for _, id := range elegidas {
-			if vistas[id] {
-				continue // una opción marcada dos veces cuenta una
-			}
-			vistas[id] = true
-			if conjuntoCorrectas[id] {
-				aciertos++
-			} else {
-				errores++
-			}
-		}
-
-		var puntos float64
+		aciertos, errores := contarRespuestas(correctas, respuestas[pregunta.StableID])
 		exacto := aciertos == len(correctas) && errores == 0 && len(correctas) > 0
-		switch {
-		case pregunta.Kind == KindSingle || !q.PartialCredit:
-			// Todo o nada.
-			if exacto {
-				puntos = pregunta.Points
-			}
-		default:
-			// Puntuación parcial: aciertos menos errores, sin bajar de cero.
-			if len(correctas) > 0 {
-				bruto := float64(aciertos-errores) / float64(len(correctas))
-				puntos = math.Max(0, bruto) * pregunta.Points
-			}
-		}
+		puntos := puntosDePregunta(pregunta, q.PartialCredit, exacto, aciertos, errores, len(correctas))
 
 		obtenidos += puntos
 		resultados = append(resultados, QuestionResult{
@@ -216,6 +185,45 @@ func Calificar(q Quiz, respuestas map[uuid.UUID][]uuid.UUID) (float64, []Questio
 	}
 	nota := obtenidos / posibles * 100
 	return math.Round(nota*100) / 100, resultados
+}
+
+// contarRespuestas cuenta las opciones elegidas que son correctas y las que
+// no. Una opción marcada dos veces cuenta una.
+func contarRespuestas(correctas, elegidas []uuid.UUID) (aciertos, errores int) {
+	conjuntoCorrectas := make(map[uuid.UUID]bool, len(correctas))
+	for _, id := range correctas {
+		conjuntoCorrectas[id] = true
+	}
+	vistas := map[uuid.UUID]bool{}
+	for _, id := range elegidas {
+		if vistas[id] {
+			continue
+		}
+		vistas[id] = true
+		if conjuntoCorrectas[id] {
+			aciertos++
+		} else {
+			errores++
+		}
+	}
+	return aciertos, errores
+}
+
+// puntosDePregunta aplica la política de puntuación de una pregunta.
+func puntosDePregunta(p Question, parcial, exacto bool, aciertos, errores, nCorrectas int) float64 {
+	if p.Kind == KindSingle || !parcial {
+		// Todo o nada.
+		if exacto {
+			return p.Points
+		}
+		return 0
+	}
+	// Puntuación parcial: aciertos menos errores, sin bajar de cero.
+	if nCorrectas == 0 {
+		return 0
+	}
+	bruto := float64(aciertos-errores) / float64(nCorrectas)
+	return math.Max(0, bruto) * p.Points
 }
 
 // FiltrarRetroalimentacion decide qué se le devuelve al estudiante según la
@@ -247,11 +255,11 @@ func FiltrarRetroalimentacion(politica string, resultados []QuestionResult,
 }
 
 // IntentosRestantes devuelve cuántos quedan; -1 significa ilimitados.
-func IntentosRestantes(max, usados int) int {
-	if max <= 0 {
+func IntentosRestantes(maximo, usados int) int {
+	if maximo <= 0 {
 		return -1
 	}
-	r := max - usados
+	r := maximo - usados
 	if r < 0 {
 		return 0
 	}

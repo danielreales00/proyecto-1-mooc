@@ -84,9 +84,25 @@ func (a *API) put(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(body.Questions) == 0 {
-		httpx.Fail(w, r, problem.Validation("Un quiz necesita al menos una pregunta."))
+	q, err := quizDesdeCuerpo(body)
+	if err != nil {
+		httpx.Fail(w, r, err)
 		return
+	}
+
+	out, err := a.svc.PutQuiz(r.Context(), rid, q, actor(r))
+	if err != nil {
+		httpx.Fail(w, r, traducir(err))
+		return
+	}
+	httpx.JSON(w, http.StatusOK, vistaAutoria(out))
+}
+
+// quizDesdeCuerpo valida el cuerpo de PUT y construye el quiz, con los
+// valores por defecto de lo que el cliente no envió.
+func quizDesdeCuerpo(body quizBody) (Quiz, error) {
+	if len(body.Questions) == 0 {
+		return Quiz{}, problem.Validation("Un quiz necesita al menos una pregunta.")
 	}
 	q := Quiz{
 		MaxAttempts: body.MaxAttempts, TimeLimitSeconds: body.TimeLimitSeconds,
@@ -100,47 +116,47 @@ func (a *API) put(w http.ResponseWriter, r *http.Request) {
 		q.PassScore = 70
 	}
 	for i, pb := range body.Questions {
-		if len(pb.Options) < 2 {
-			httpx.Fail(w, r, problem.Validation("Cada pregunta necesita al menos dos opciones."))
-			return
+		pregunta, err := preguntaDesdeCuerpo(i, pb)
+		if err != nil {
+			return Quiz{}, err
 		}
-		correctas := 0
-		opts := make([]Option, 0, len(pb.Options))
-		for _, ob := range pb.Options {
-			if ob.IsCorrect {
-				correctas++
-			}
-			opts = append(opts, Option{TextMD: ob.TextMD, IsCorrect: ob.IsCorrect})
-		}
-		if correctas == 0 {
-			p := problem.Validation("Toda pregunta necesita al menos una opción correcta.")
-			p.Errors = append(p.Errors, problem.FieldError{
-				Code: "quiz.invalid", Field: "questions[" + itoa(i) + "]",
-				Detail: "Ninguna opción está marcada como correcta.",
-			})
-			httpx.Fail(w, r, p)
-			return
-		}
-		kind := pb.Kind
-		if kind == "" {
-			kind = KindSingle
-		}
-		puntos := pb.Points
-		if puntos == 0 {
-			puntos = 1
-		}
-		q.Questions = append(q.Questions, Question{
-			StatementMD: pb.StatementMD, Kind: kind, Points: puntos,
-			ExplanationMD: pb.ExplanationMD, Options: opts,
-		})
+		q.Questions = append(q.Questions, pregunta)
 	}
+	return q, nil
+}
 
-	out, err := a.svc.PutQuiz(r.Context(), rid, q, actor(r))
-	if err != nil {
-		httpx.Fail(w, r, traducir(err))
-		return
+func preguntaDesdeCuerpo(i int, pb questionBody) (Question, error) {
+	if len(pb.Options) < 2 {
+		return Question{}, problem.Validation("Cada pregunta necesita al menos dos opciones.")
 	}
-	httpx.JSON(w, http.StatusOK, vistaAutoria(out))
+	correctas := 0
+	opts := make([]Option, 0, len(pb.Options))
+	for _, ob := range pb.Options {
+		if ob.IsCorrect {
+			correctas++
+		}
+		opts = append(opts, Option{TextMD: ob.TextMD, IsCorrect: ob.IsCorrect})
+	}
+	if correctas == 0 {
+		p := problem.Validation("Toda pregunta necesita al menos una opción correcta.")
+		p.Errors = append(p.Errors, problem.FieldError{
+			Code: "quiz.invalid", Field: "questions[" + itoa(i) + "]",
+			Detail: "Ninguna opción está marcada como correcta.",
+		})
+		return Question{}, p
+	}
+	kind := pb.Kind
+	if kind == "" {
+		kind = KindSingle
+	}
+	puntos := pb.Points
+	if puntos == 0 {
+		puntos = 1
+	}
+	return Question{
+		StatementMD: pb.StatementMD, Kind: kind, Points: puntos,
+		ExplanationMD: pb.ExplanationMD, Options: opts,
+	}, nil
 }
 
 func itoa(n int) string {

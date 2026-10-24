@@ -387,61 +387,21 @@ func (s *Service) Verificar(ctx context.Context, data map[string]any) error {
 	if err != nil {
 		return err
 	}
-	if asset.Status == EstadoEscaneando || asset.Status == EstadoLimpio ||
-		asset.Status == EstadoProcesando || asset.Status == EstadoListo ||
-		asset.Status == EstadoRechazado || asset.Status == EstadoInfectado {
+	if yaVerificado(asset.Status) {
 		s.log.Info("el asset ya estaba verificado", "asset_id", id, "status", asset.Status)
 		return nil
 	}
 
-	tamaño, err := s.almacen.Info(ctx, s.buckets.Originales, asset.OriginalKey)
+	bytesReales, err := s.almacen.Info(ctx, s.buckets.Originales, asset.OriginalKey)
 	if err != nil {
 		return err
 	}
-
-	lector, err := s.almacen.Abrir(ctx, s.buckets.Originales, asset.OriginalKey)
+	suma, cabecera, err := s.huella(ctx, asset.OriginalKey)
 	if err != nil {
 		return err
 	}
-	defer lector.Close()
-
-	// Un solo recorrido: se calcula el hash y se guardan los primeros bytes
-	// para identificar el tipo. Leer el archivo dos veces no aporta nada.
-	h := sha256.New()
-	cabecera := make([]byte, 0, 512)
-	buf := make([]byte, 32*1024)
-	for {
-		n, err := lector.Read(buf)
-		if n > 0 {
-			h.Write(buf[:n])
-			if len(cabecera) < 512 {
-				falta := 512 - len(cabecera)
-				if falta > n {
-					falta = n
-				}
-				cabecera = append(cabecera, buf[:falta]...)
-			}
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("leer el objeto: %w", err)
-		}
-	}
-
-	suma := hex.EncodeToString(h.Sum(nil))
 	mime := DetectarMIME(cabecera, "")
-
-	motivo := ""
-	switch {
-	case tamaño != asset.SizeBytes:
-		motivo = fmt.Sprintf("el tamaño real (%d) no coincide con el declarado (%d)", tamaño, asset.SizeBytes)
-	case suma != asset.DeclaredSHA256:
-		motivo = "el checksum real no coincide con el declarado"
-	case !MIMEAceptable(asset.Kind, mime):
-		motivo = fmt.Sprintf("el tipo real (%s) no se admite para un recurso de tipo %s", mime, asset.Kind)
-	}
+	motivo := motivoRechazo(asset, bytesReales, suma, mime)
 
 	asset.SHA256 = &suma
 	asset.DetectedMIME = &mime
@@ -461,7 +421,7 @@ func (s *Service) Verificar(ctx context.Context, data map[string]any) error {
 		// Verificado no es lo mismo que limpio: pasa a `scanning` y es el
 		// antivirus quien decide si sigue adelante (ADR-0011).
 		asset.Status = EstadoEscaneando
-		s.log.Info("asset verificado", "asset_id", id, "mime", mime, "bytes", tamaño)
+		s.log.Info("asset verificado", "asset_id", id, "mime", mime, "bytes", bytesReales)
 	}
 
 	// Lo que se verificó bien pasa al antivirus. El trabajo se registra dentro
@@ -479,7 +439,7 @@ func (s *Service) Verificar(ctx context.Context, data map[string]any) error {
 		if err := s.audit.Record(ctx, tx, audit.Event{
 			ActorID: &asset.OwnerID, ActorRole: "teacher", Action: accion,
 			EntityType: "asset", EntityID: &asset.ID,
-			Metadata: map[string]any{"mime": mime, "bytes": tamaño, "motivo": motivo},
+			Metadata: map[string]any{"mime": mime, "bytes": bytesReales, "motivo": motivo},
 		}); err != nil {
 			return err
 		}
@@ -499,4 +459,57 @@ func (s *Service) Verificar(ctx context.Context, data map[string]any) error {
 			"job_key", claveEscaneo, "error", err)
 	}
 	return nil
+}
+
+// yaVerificado dice si el asset pasó ya por la verificación. Un trabajo
+// repetido lo encuentra así y no hace nada (ADR-0008).
+func yaVerificado(estado string) bool {
+	switch estado {
+	case EstadoEscaneando, EstadoLimpio, EstadoProcesando, EstadoListo,
+		EstadoRechazado, EstadoInfectado:
+		return true
+	}
+	return false
+}
+
+// huella lee el original una sola vez: calcula el SHA-256 y guarda los
+// primeros 512 bytes para identificar el tipo. Leerlo dos veces no aporta nada.
+func (s *Service) huella(ctx context.Context, clave string) (string, []byte, error) {
+	lector, err := s.almacen.Abrir(ctx, s.buckets.Originales, clave)
+	if err != nil {
+		return "", nil, err
+	}
+	defer lector.Close()
+
+	h := sha256.New()
+	cabecera := make([]byte, 0, 512)
+	buf := make([]byte, 32*1024)
+	for {
+		n, err := lector.Read(buf)
+		if n > 0 {
+			h.Write(buf[:n])
+			falta := min(512-len(cabecera), n)
+			cabecera = append(cabecera, buf[:falta]...)
+		}
+		if err == io.EOF {
+			return hex.EncodeToString(h.Sum(nil)), cabecera, nil
+		}
+		if err != nil {
+			return "", nil, fmt.Errorf("leer el objeto: %w", err)
+		}
+	}
+}
+
+// motivoRechazo compara lo leído con lo declarado. Vacío significa que el
+// archivo es lo que el cliente dijo que era.
+func motivoRechazo(asset Asset, bytesReales int64, suma, mime string) string {
+	switch {
+	case bytesReales != asset.SizeBytes:
+		return fmt.Sprintf("el tamaño real (%d) no coincide con el declarado (%d)", bytesReales, asset.SizeBytes)
+	case suma != asset.DeclaredSHA256:
+		return "el checksum real no coincide con el declarado"
+	case !MIMEAceptable(asset.Kind, mime):
+		return fmt.Sprintf("el tipo real (%s) no se admite para un recurso de tipo %s", mime, asset.Kind)
+	}
+	return ""
 }

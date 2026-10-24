@@ -45,7 +45,7 @@ func NewReaper(db *pgxpool.Pool, p *Publisher, log *slog.Logger) *Reaper {
 	return &Reaper{
 		db: db, publisher: p, log: log,
 		EdadMinima:   30 * time.Second,
-		SinHeartbeat: 5 * time.Minute,
+		SinHeartbeat: jobs.LatidoVencido,
 	}
 }
 

@@ -80,8 +80,8 @@ type Store interface {
 	ProgressOf(ctx context.Context, db dbx.DB, enrollmentID uuid.UUID) (map[uuid.UUID]ResourceProgress, error)
 	ProgressOne(ctx context.Context, db dbx.DB, enrollmentID, stableID uuid.UUID) (ResourceProgress, error)
 	UpsertProgress(ctx context.Context, db dbx.DB, p ResourceProgress) error
-	InsertEvent(ctx context.Context, db dbx.DB, enrollmentID, stableID uuid.UUID,
-		kind string, pos *float64, clientTS any, aceptada bool, motivo string) error
+	InsertEvent(ctx context.Context, db dbx.DB, enrollmentID uuid.UUID, ev Evidence,
+		aceptada bool, motivo string) error
 
 	// MinQuizScoreCumplida dice si el estudiante alcanzó la nota mínima en
 	// todos los quizzes obligatorios de la versión.

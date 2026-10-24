@@ -50,61 +50,69 @@ func (s *AssessmentStore) ResourceOwner(ctx context.Context, db dbx.DB, resource
 // UpsertQuiz reemplaza el quiz completo: es un PUT, no un PATCH.
 func (s *AssessmentStore) UpsertQuiz(ctx context.Context, db dbx.DB, q assessment.Quiz) (assessment.Quiz, error) {
 	err := withinTx(ctx, s.pool, func(ctx context.Context, tx dbx.DB) error {
-		var existente uuid.UUID
-		err := tx.QueryRow(ctx, `SELECT id FROM assessment.quizzes WHERE resource_id=$1`, q.ResourceID).Scan(&existente)
-		switch {
-		case errors.Is(err, pgx.ErrNoRows):
-			if _, err := tx.Exec(ctx, `
-				INSERT INTO assessment.quizzes
-				    (id, resource_id, course_version_id, stable_id, max_attempts,
-				     time_limit_seconds, pass_score, feedback_policy, shuffle, partial_credit)
-				VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-				q.ID, q.ResourceID, q.CourseVersionID, q.StableID, q.MaxAttempts,
-				q.TimeLimitSeconds, q.PassScore, q.FeedbackPolicy, q.Shuffle, q.PartialCredit); err != nil {
-				return err
-			}
-		case err != nil:
+		id, err := guardarQuiz(ctx, tx, q)
+		if err != nil {
 			return err
-		default:
-			q.ID = existente
-			if _, err := tx.Exec(ctx, `
-				UPDATE assessment.quizzes
-				   SET max_attempts=$2, time_limit_seconds=$3, pass_score=$4,
-				       feedback_policy=$5, shuffle=$6, partial_credit=$7
-				 WHERE id=$1`,
-				q.ID, q.MaxAttempts, q.TimeLimitSeconds, q.PassScore,
-				q.FeedbackPolicy, q.Shuffle, q.PartialCredit); err != nil {
-				return err
-			}
-			if _, err := tx.Exec(ctx, `DELETE FROM assessment.quiz_questions WHERE quiz_id=$1`, q.ID); err != nil {
-				return err
-			}
 		}
-
-		for _, p := range q.Questions {
-			if _, err := tx.Exec(ctx, `
-				INSERT INTO assessment.quiz_questions
-				    (id, quiz_id, stable_id, position, statement_md, kind, points, explanation_md)
-				VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-				p.ID, q.ID, p.StableID, p.Position, p.StatementMD, p.Kind, p.Points, p.ExplanationMD); err != nil {
-				return err
-			}
-			for _, o := range p.Options {
-				if _, err := tx.Exec(ctx, `
-					INSERT INTO assessment.quiz_options
-					    (id, question_id, stable_id, position, text_md, is_correct)
-					VALUES ($1,$2,$3,$4,$5,$6)`,
-					o.ID, p.ID, o.StableID, o.Position, o.TextMD, o.IsCorrect); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
+		return insertarPreguntas(ctx, tx, id, q.Questions)
 	})
 	if err != nil {
 		return assessment.Quiz{}, err
 	}
 	return s.QuizByResource(ctx, db, q.ResourceID)
+}
+
+// guardarQuiz crea la cabecera del quiz o, si el recurso ya tenía uno, la
+// actualiza y borra sus preguntas para reemplazarlas. Devuelve el id vigente.
+func guardarQuiz(ctx context.Context, tx dbx.DB, q assessment.Quiz) (uuid.UUID, error) {
+	var existente uuid.UUID
+	err := tx.QueryRow(ctx, `SELECT id FROM assessment.quizzes WHERE resource_id=$1`, q.ResourceID).Scan(&existente)
+	if errors.Is(err, pgx.ErrNoRows) {
+		_, err = tx.Exec(ctx, `
+			INSERT INTO assessment.quizzes
+			    (id, resource_id, course_version_id, stable_id, max_attempts,
+			     time_limit_seconds, pass_score, feedback_policy, shuffle, partial_credit)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+			q.ID, q.ResourceID, q.CourseVersionID, q.StableID, q.MaxAttempts,
+			q.TimeLimitSeconds, q.PassScore, q.FeedbackPolicy, q.Shuffle, q.PartialCredit)
+		return q.ID, err
+	}
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE assessment.quizzes
+		   SET max_attempts=$2, time_limit_seconds=$3, pass_score=$4,
+		       feedback_policy=$5, shuffle=$6, partial_credit=$7
+		 WHERE id=$1`,
+		existente, q.MaxAttempts, q.TimeLimitSeconds, q.PassScore,
+		q.FeedbackPolicy, q.Shuffle, q.PartialCredit); err != nil {
+		return uuid.Nil, err
+	}
+	_, err = tx.Exec(ctx, `DELETE FROM assessment.quiz_questions WHERE quiz_id=$1`, existente)
+	return existente, err
+}
+
+func insertarPreguntas(ctx context.Context, tx dbx.DB, quizID uuid.UUID, preguntas []assessment.Question) error {
+	for _, p := range preguntas {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO assessment.quiz_questions
+			    (id, quiz_id, stable_id, position, statement_md, kind, points, explanation_md)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+			p.ID, quizID, p.StableID, p.Position, p.StatementMD, p.Kind, p.Points, p.ExplanationMD); err != nil {
+			return err
+		}
+		for _, o := range p.Options {
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO assessment.quiz_options
+				    (id, question_id, stable_id, position, text_md, is_correct)
+				VALUES ($1,$2,$3,$4,$5,$6)`,
+				o.ID, p.ID, o.StableID, o.Position, o.TextMD, o.IsCorrect); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (s *AssessmentStore) cargarQuiz(ctx context.Context, db dbx.DB, quizID uuid.UUID, q assessment.Quiz) (assessment.Quiz, error) {

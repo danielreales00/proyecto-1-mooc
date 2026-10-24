@@ -270,41 +270,19 @@ func IframePermitido(raw string) bool {
 
 // ------------------------------------------------------------ publicación --
 
+// Códigos de incumplimiento que se repiten entre reglas.
+const (
+	codigoNoDisponible = "resource.not_available"
+	codigoQuizInvalido = "quiz.invalid"
+)
+
 // ValidarPublicacion recorre TODAS las reglas y devuelve la lista completa de
 // incumplimientos. No para en el primero: es lo que exige CA-01 y lo que el
 // segmento 2 de la demostración tiene que evidenciar.
 func ValidarPublicacion(c Course, v CourseVersion) ValidationErrors {
 	var errs ValidationErrors
-
-	// Metadatos completos.
-	var faltantes []string
-	if strings.TrimSpace(c.Title) == "" {
-		faltantes = append(faltantes, "title")
-	}
-	if strings.TrimSpace(c.Summary) == "" {
-		faltantes = append(faltantes, "summary")
-	}
-	if strings.TrimSpace(c.Category) == "" {
-		faltantes = append(faltantes, "category")
-	}
-	if strings.TrimSpace(c.Language) == "" {
-		faltantes = append(faltantes, "language")
-	}
-	if len(faltantes) > 0 {
-		errs = append(errs, ValidationError{"metadata.missing_fields", "course",
-			"Faltan metadatos obligatorios: " + strings.Join(faltantes, ", ") + "."})
-	}
-
-	// Criterios de aprobación.
-	ac := v.ApprovalCriteria
-	if ac.RequiredCompletionPct <= 0 || ac.RequiredCompletionPct > 100 {
-		errs = append(errs, ValidationError{"approval.criteria_missing", "approval_criteria",
-			"El porcentaje de obligatorios debe estar entre 1 y 100."})
-	}
-	if ac.MinQuizScore < 0 || ac.MinQuizScore > 100 {
-		errs = append(errs, ValidationError{"approval.criteria_missing", "approval_criteria",
-			"La nota mínima debe estar entre 0 y 100."})
-	}
+	errs = append(errs, validarMetadatos(c)...)
+	errs = append(errs, validarCriterios(v.ApprovalCriteria)...)
 
 	// Estructura mínima: curso → módulo → unidad → recurso visible.
 	visiblesTotales := 0
@@ -316,35 +294,7 @@ func ValidarPublicacion(c Course, v CourseVersion) ValidationErrors {
 				}
 				visiblesTotales++
 				campo := fmt.Sprintf("modules[%d].units[%d].resources[%d]", mi, ui, ri)
-
-				if requiereAsset[r.Type] {
-					if r.AssetID == nil {
-						errs = append(errs, ValidationError{"resource.not_available", campo,
-							fmt.Sprintf("«%s» es de tipo %s y no tiene archivo asociado.", r.Title, r.Type)})
-					} else if r.ProcessingStatus() != "ready" {
-						errs = append(errs, ValidationError{"resource.not_available", campo,
-							fmt.Sprintf("«%s» aún no está disponible (estado %s).", r.Title, r.ProcessingStatus())})
-					}
-				}
-				if r.Type == TypeQuiz {
-					if !r.HasQuestions {
-						errs = append(errs, ValidationError{"quiz.invalid", campo,
-							fmt.Sprintf("El quiz «%s» no tiene preguntas.", r.Title)})
-					} else if !r.QuizAllOptionsOK {
-						errs = append(errs, ValidationError{"quiz.invalid", campo,
-							fmt.Sprintf("Alguna pregunta del quiz «%s» no tiene opción correcta.", r.Title)})
-					}
-				}
-				if r.Type == TypeIframe {
-					if r.ExternalURL == nil || !IframePermitido(*r.ExternalURL) {
-						errs = append(errs, ValidationError{"resource.iframe_not_allowed", campo,
-							fmt.Sprintf("El iframe «%s» apunta a un dominio no autorizado.", r.Title)})
-					}
-				}
-				if r.Type == TypeRichText && (r.ContentMD == nil || strings.TrimSpace(*r.ContentMD) == "") {
-					errs = append(errs, ValidationError{"resource.not_available", campo,
-						fmt.Sprintf("«%s» no tiene contenido.", r.Title)})
-				}
+				errs = append(errs, validarRecurso(r, campo)...)
 			}
 		}
 	}
@@ -354,6 +304,85 @@ func ValidarPublicacion(c Course, v CourseVersion) ValidationErrors {
 	}
 
 	return errs
+}
+
+func validarMetadatos(c Course) ValidationErrors {
+	var faltantes []string
+	for _, campo := range []struct{ nombre, valor string }{
+		{"title", c.Title}, {"summary", c.Summary},
+		{"category", c.Category}, {"language", c.Language},
+	} {
+		if strings.TrimSpace(campo.valor) == "" {
+			faltantes = append(faltantes, campo.nombre)
+		}
+	}
+	if len(faltantes) == 0 {
+		return nil
+	}
+	return ValidationErrors{{"metadata.missing_fields", "course",
+		"Faltan metadatos obligatorios: " + strings.Join(faltantes, ", ") + "."}}
+}
+
+func validarCriterios(ac ApprovalCriteria) ValidationErrors {
+	var errs ValidationErrors
+	if ac.RequiredCompletionPct <= 0 || ac.RequiredCompletionPct > 100 {
+		errs = append(errs, ValidationError{"approval.criteria_missing", "approval_criteria",
+			"El porcentaje de obligatorios debe estar entre 1 y 100."})
+	}
+	if ac.MinQuizScore < 0 || ac.MinQuizScore > 100 {
+		errs = append(errs, ValidationError{"approval.criteria_missing", "approval_criteria",
+			"La nota mínima debe estar entre 0 y 100."})
+	}
+	return errs
+}
+
+// validarRecurso aplica las reglas de un recurso visible según su tipo. Un
+// recurso puede incumplir varias a la vez y se devuelven todas.
+func validarRecurso(r Resource, campo string) ValidationErrors {
+	var errs ValidationErrors
+	if requiereAsset[r.Type] {
+		if e, ok := validarArchivo(r, campo); !ok {
+			errs = append(errs, e)
+		}
+	}
+	if r.Type == TypeQuiz {
+		if e, ok := validarQuiz(r, campo); !ok {
+			errs = append(errs, e)
+		}
+	}
+	if r.Type == TypeIframe && (r.ExternalURL == nil || !IframePermitido(*r.ExternalURL)) {
+		errs = append(errs, ValidationError{"resource.iframe_not_allowed", campo,
+			fmt.Sprintf("El iframe «%s» apunta a un dominio no autorizado.", r.Title)})
+	}
+	if r.Type == TypeRichText && (r.ContentMD == nil || strings.TrimSpace(*r.ContentMD) == "") {
+		errs = append(errs, ValidationError{codigoNoDisponible, campo,
+			fmt.Sprintf("«%s» no tiene contenido.", r.Title)})
+	}
+	return errs
+}
+
+func validarArchivo(r Resource, campo string) (ValidationError, bool) {
+	if r.AssetID == nil {
+		return ValidationError{codigoNoDisponible, campo,
+			fmt.Sprintf("«%s» es de tipo %s y no tiene archivo asociado.", r.Title, r.Type)}, false
+	}
+	if r.ProcessingStatus() != "ready" {
+		return ValidationError{codigoNoDisponible, campo,
+			fmt.Sprintf("«%s» aún no está disponible (estado %s).", r.Title, r.ProcessingStatus())}, false
+	}
+	return ValidationError{}, true
+}
+
+func validarQuiz(r Resource, campo string) (ValidationError, bool) {
+	if !r.HasQuestions {
+		return ValidationError{codigoQuizInvalido, campo,
+			fmt.Sprintf("El quiz «%s» no tiene preguntas.", r.Title)}, false
+	}
+	if !r.QuizAllOptionsOK {
+		return ValidationError{codigoQuizInvalido, campo,
+			fmt.Sprintf("Alguna pregunta del quiz «%s» no tiene opción correcta.", r.Title)}, false
+	}
+	return ValidationError{}, true
 }
 
 // ------------------------------------------------------------------ slug ---

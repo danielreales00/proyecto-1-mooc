@@ -83,10 +83,10 @@ func esc(v string) string {
 	return b.String()
 }
 
-func recortar(v string, max int) string {
+func recortar(v string, maximo int) string {
 	r := []rune(v)
-	if len(r) <= max {
+	if len(r) <= maximo {
 		return v
 	}
-	return string(r[:max-1]) + "…"
+	return string(r[:maximo-1]) + "…"
 }

@@ -86,6 +86,14 @@ migrate: ## Aplica las migraciones pendientes
 # Las réplicas del grupo elástico corren `migrate` al arrancar, a la vez. Tres
 # procesos sobre una base vacía: todos deben terminar bien y cada migración
 # quedar anotada una sola vez (bloqueo consultivo en cmd/migrate).
+# Publicar dos veces la misma job_key no duplica la tarea, y una tarea en la
+# DLQ se reactiva al reencolarla (DT-01). Contra el Redis del stack local.
+.PHONY: prueba-cola
+prueba-cola: ## Publicación idempotente de trabajos contra el Redis del stack
+	docker run --rm --network mooc_default -e REDIS_PRUEBA_ADDR=redis:6379 \
+		-v "$(PWD)/backend":/src -w /src $(GO_CACHE) \
+		$(GO_IMAGE) go test -count=1 -run TestPublicarNoDuplica -v ./internal/adapters/queue/
+
 .PHONY: migraciones-concurrentes
 migraciones-concurrentes: env ## Tres `migrate` simultáneos sobre una base vacía
 	@pg="$(COMPOSE) exec -T postgres psql -U $${POSTGRES_USER:-mooc} -d $${POSTGRES_DB:-mooc} -qtA"; \
@@ -475,6 +483,7 @@ ci: ## Corre TODO lo que corre el CI, en local. Úsalo antes de empujar.
 	@$(MAKE) --no-print-directory smoke
 	@$(MAKE) --no-print-directory invariantes
 	@$(MAKE) --no-print-directory migraciones-concurrentes
+	@$(MAKE) --no-print-directory prueba-cola
 	@$(MAKE) --no-print-directory postman
 	@echo "── navegador de la interfaz ──────────────────────────"
 	@$(MAKE) --no-print-directory frontend-e2e

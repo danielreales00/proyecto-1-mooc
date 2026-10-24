@@ -178,7 +178,7 @@ func run() error {
 
 	health := &health{pool: pool, redis: sessionRedis, objects: store}
 	mux.HandleFunc("GET /healthz", health.live)
-	mux.HandleFunc("GET /readyz", health.ready)
+	mux.HandleFunc("GET /readyz", health.ready(log))
 	// Solo red interna: Compose no publica este puerto fuera.
 	mux.Handle("GET /metrics", metrics.Handler())
 
