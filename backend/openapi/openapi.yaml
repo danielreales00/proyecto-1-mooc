@@ -126,7 +126,9 @@ paths:
       summary: Preparación para recibir tráfico
       description: |
         Comprueba PostgreSQL, Redis y el almacén de objetos. Docker Compose lo
-        usa para el orden de arranque; en GCP lo usará Cloud Run.
+        usa para el orden de arranque, y en GCP es la comprobación de salud del
+        balanceador y del grupo de instancias. Es público: el cuerpo dice solo
+        `ok` o `fail` por dependencia, y el motivo del fallo va al log.
       security: []
       responses:
         "200":
@@ -2444,11 +2446,11 @@ components:
 
     Readiness:
       type: object
-      description: "`ok`, o el motivo del fallo, por dependencia."
+      description: "`ok` o `fail` por dependencia. El motivo del fallo no sale en la respuesta."
       properties:
-        postgres: { type: string }
-        redis: { type: string }
-        objectstore: { type: string }
+        postgres: { type: string, enum: [ok, fail] }
+        redis: { type: string, enum: [ok, fail] }
+        objectstore: { type: string, enum: [ok, fail] }
 
     Page:
       type: object

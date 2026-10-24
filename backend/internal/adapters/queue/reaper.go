@@ -44,7 +44,7 @@ func NewReaper(db *pgxpool.Pool, p *Publisher, log *slog.Logger) *Reaper {
 	return &Reaper{
 		db: db, publisher: p, log: log,
 		EdadMinima:   30 * time.Second,
-		SinHeartbeat: 5 * time.Minute,
+		SinHeartbeat: jobs.LatidoVencido,
 	}
 }
 
@@ -96,10 +96,15 @@ func (r *Reaper) Run(ctx context.Context) (int, error) {
 			r.log.Error("no se pudo devolver el trabajo a la cola", "job_key", h.key, "error", err)
 			continue
 		}
-		if err := r.publisher.Publish(ctx, jobs.Job{
+		nueva, err := r.publisher.publicar(ctx, jobs.Job{
 			Key: h.key, Type: h.tipo, Queue: h.cola, Payload: h.payload,
-		}, ""); err != nil {
+		}, "")
+		if err != nil {
 			r.log.Error("no se pudo republicar el trabajo", "job_key", h.key, "error", err)
+			continue
+		}
+		if !nueva {
+			// Sigue en Redis esperando turno: no está huérfano, solo en cola.
 			continue
 		}
 		recuperados++

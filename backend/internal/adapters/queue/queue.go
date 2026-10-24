@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -28,7 +29,8 @@ type Payload struct {
 }
 
 type Publisher struct {
-	client *asynq.Client
+	client    *asynq.Client
+	inspector *asynq.Inspector
 }
 
 // NewPublisher abre el cliente de la cola.
@@ -38,7 +40,8 @@ type Publisher struct {
 // hablarían cifrado y la cola no conectaría, que es un fallo raro de
 // diagnosticar —todo parece bien hasta que ningún trabajo se ejecuta—.
 func NewPublisher(addr, password string, db int, useTLS bool) *Publisher {
-	return &Publisher{client: asynq.NewClient(OpcionesRedis(addr, password, db, useTLS))}
+	opt := OpcionesRedis(addr, password, db, useTLS)
+	return &Publisher{client: asynq.NewClient(opt), inspector: asynq.NewInspector(opt)}
 }
 
 // OpcionesRedis construye la configuración que comparten el cliente y el
@@ -60,22 +63,60 @@ func hostDe(addr string) string {
 	return addr
 }
 
-func (p *Publisher) Close() error { return p.client.Close() }
+func (p *Publisher) Close() error {
+	return errors.Join(p.inspector.Close(), p.client.Close())
+}
 
 func (p *Publisher) Publish(ctx context.Context, j jobs.Job, traceID string) error {
+	_, err := p.publicar(ctx, j, traceID)
+	return err
+}
+
+// publicar encola el trabajo con su job_key como TaskID, y dice si quedó una
+// tarea nueva en Redis.
+//
+// El TaskID hace que una segunda publicación de la misma clave no duplique la
+// tarea mientras la primera siga en Redis (DT-01). Sin él, el reaper copiaba
+// cada 30 s los trabajos que esperaban turno: la idempotencia descartaba las
+// copias, pero inflaban la profundidad de la cola, que es la señal de escalado
+// del grupo de workers. Una tarea archivada en la DLQ también conserva su
+// TaskID, así que el reencolado administrativo la reactiva en vez de
+// publicarla de nuevo.
+func (p *Publisher) publicar(ctx context.Context, j jobs.Job, traceID string) (bool, error) {
 	body, err := json.Marshal(Payload{JobKey: j.Key, TraceID: traceID, Data: j.Payload})
 	if err != nil {
-		return fmt.Errorf("serializar tarea %s: %w", j.Key, err)
+		return false, fmt.Errorf("serializar tarea %s: %w", j.Key, err)
 	}
 	_, err = p.client.EnqueueContext(ctx, asynq.NewTask(j.Type, body),
 		asynq.Queue(j.Queue),
+		asynq.TaskID(j.Key),
 		asynq.MaxRetry(jobs.MaxRetry),
 		asynq.Timeout(30*time.Minute),
 	)
-	if err != nil {
-		return fmt.Errorf("encolar %s: %w", j.Key, err)
+	if errors.Is(err, asynq.ErrTaskIDConflict) {
+		return p.reactivar(j)
 	}
-	return nil
+	if err != nil {
+		return false, fmt.Errorf("encolar %s: %w", j.Key, err)
+	}
+	return true, nil
+}
+
+// reactivar resuelve una publicación cuyo TaskID ya existe. Si la tarea está
+// pendiente, en ejecución o esperando reintento, ya hay quien la atienda y no
+// se hace nada. Si está archivada, vuelve a la cola con su payload original.
+func (p *Publisher) reactivar(j jobs.Job) (bool, error) {
+	info, err := p.inspector.GetTaskInfo(j.Queue, j.Key)
+	if err != nil {
+		return false, fmt.Errorf("consultar la tarea %s: %w", j.Key, err)
+	}
+	if info.State != asynq.TaskStateArchived {
+		return false, nil
+	}
+	if err := p.inspector.RunTask(j.Queue, j.Key); err != nil {
+		return false, fmt.Errorf("reactivar la tarea archivada %s: %w", j.Key, err)
+	}
+	return true, nil
 }
 
 // ParseQueues traduce "critical=6,default=3,bulk=1" al mapa de pesos de asynq.

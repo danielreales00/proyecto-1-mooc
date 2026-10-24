@@ -85,6 +85,10 @@ type Config struct {
 	ResetTokenTTL     time.Duration
 	WorkerConcurrency int
 	WorkerQueues      string
+	// WorkerShutdownTimeout es lo que el worker espera a que terminen los
+	// trabajos activos al recibir SIGTERM. Lo que no termina vuelve a la cola
+	// (DT-02). Tiene que caber dentro del stop_grace_period del contenedor.
+	WorkerShutdownTimeout time.Duration
 }
 
 type Buckets struct {
@@ -157,6 +161,8 @@ func Load() (Config, error) {
 		ResetTokenTTL:     optDuration("RESET_TOKEN_TTL", time.Hour),
 		WorkerConcurrency: optInt("WORKER_CONCURRENCY", 20),
 		WorkerQueues:      opt("WORKER_QUEUES", "critical=6,default=3,bulk=1"),
+
+		WorkerShutdownTimeout: optDuration("WORKER_SHUTDOWN_TIMEOUT", 30*time.Second),
 	}
 
 	if c.ObjectStore == "gcs" {

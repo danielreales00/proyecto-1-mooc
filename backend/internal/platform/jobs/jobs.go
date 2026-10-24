@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -42,6 +43,11 @@ const (
 	StatusFailed    = "failed"
 	StatusDead      = "dead"
 )
+
+// LatidoVencido es cuánto puede pasar sin latido antes de dar por perdido al
+// worker que ejecutaba un trabajo. El runner late cada 30 s: tres latidos
+// perdidos. Lo usan el reclamo y el reaper.
+const LatidoVencido = 90 * time.Second
 
 // MaxRetry es el número de reintentos antes de la DLQ (RNF-06, enunciado §6).
 const MaxRetry = 3
@@ -89,6 +95,10 @@ func Record(ctx context.Context, db dbx.DB, j Job) error {
 // entrega duplicada no produzca dos salidas (CA-03).
 func TryClaim(ctx context.Context, db dbx.DB, jobKey string) (bool, error) {
 	var claimed bool
+	// Un 'running' con el latido vencido es de un worker que desapareció sin
+	// apagarse, por ejemplo una instancia que el grupo retiró de golpe. asynq
+	// entrega de nuevo la tarea al vencer su lease, y aquí se puede reclamar
+	// sin esperar al reaper (DT-02).
 	err := db.QueryRow(ctx, `
 		UPDATE platform.job_runs
 		   SET status       = 'running',
@@ -96,8 +106,9 @@ func TryClaim(ctx context.Context, db dbx.DB, jobKey string) (bool, error) {
 		       heartbeat_at = now(),
 		       started_at   = coalesce(started_at, now())
 		 WHERE job_key = $1
-		   AND status IN ('queued', 'failed')
-		RETURNING true`, jobKey).Scan(&claimed)
+		   AND (status IN ('queued', 'failed')
+		        OR (status = 'running' AND heartbeat_at < now() - $2::interval))
+		RETURNING true`, jobKey, LatidoVencido.String()).Scan(&claimed)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// Ninguna fila reclamable: el trabajo ya terminó o lo tiene otro.

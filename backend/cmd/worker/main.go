@@ -27,11 +27,13 @@ import (
 	"mooc/backend/internal/adapters/objectstore"
 	"mooc/backend/internal/adapters/postgres"
 	"mooc/backend/internal/adapters/queue"
+	"mooc/backend/internal/adapters/rediscli"
 	"mooc/backend/internal/modules/audit"
 	"mooc/backend/internal/modules/badges"
 	"mooc/backend/internal/modules/identity"
 	"mooc/backend/internal/modules/media"
 	"mooc/backend/internal/platform/config"
+	"mooc/backend/internal/platform/httpx"
 	"mooc/backend/internal/platform/jobs"
 	"mooc/backend/internal/platform/logging"
 	"mooc/backend/internal/platform/metrics"
@@ -126,6 +128,10 @@ func run() error {
 		asynq.Config{
 			Concurrency: cfg.WorkerConcurrency,
 			Queues:      queue.ParseQueues(cfg.WorkerQueues),
+			// Al recibir SIGTERM asynq deja de tomar trabajos y espera a los
+			// activos este tiempo. Lo que no termina vuelve a la cola sin gastar
+			// un reintento, y otro worker lo reclama (DT-02).
+			ShutdownTimeout: cfg.WorkerShutdownTimeout,
 			// El backoff por defecto de asynq es exponencial con jitter, que es
 			// lo que pide RNF-06; el tope de 3 intentos lo fija cada tarea al
 			// encolarse (queue.Publish).
@@ -135,7 +141,17 @@ func run() error {
 	)
 
 	// El worker no expone API: solo salud, para el healthcheck de Compose.
-	healthSrv := startHealth(log)
+	// La cola es Redis: sin él, el worker está vivo pero no puede consumir.
+	colaRedis, err := rediscli.Open(ctx, cfg.RedisAddr, cfg.RedisPassword, cfg.RedisQueueDB, cfg.RedisTLS)
+	if err != nil {
+		return err
+	}
+	defer colaRedis.Close()
+
+	healthSrv := startHealth(log,
+		httpx.Dependencia{Nombre: "postgres", Ping: pool.Ping},
+		httpx.Dependencia{Nombre: "redis", Ping: func(ctx context.Context) error { return colaRedis.Ping(ctx).Err() }},
+	)
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -160,12 +176,15 @@ func run() error {
 	}
 }
 
-func startHealth(log *slog.Logger) *http.Server {
+func startHealth(log *slog.Logger, deps ...httpx.Dependencia) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
+	// /readyz es la comprobación del grupo de workers: un worker que perdió
+	// la base o la cola sigue vivo, pero no puede consumir (DT-04).
+	mux.HandleFunc("GET /readyz", httpx.Disponibilidad(log, deps...))
 	// El worker también expone sus métricas: jobs_dead_letter_total sale de
 	// aquí, y es la que dispara la alerta del §6.
 	mux.Handle("GET /metrics", metrics.Handler())

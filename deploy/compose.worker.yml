@@ -45,6 +45,10 @@ services:
     env_file: [.env]
     environment:
       WORKER_QUEUES: critical=6,default=3
+    # Retiro seguro (DT-02): al recibir SIGTERM el worker deja de tomar
+    # trabajos y espera a los activos WORKER_SHUTDOWN_TIMEOUT (30 s por
+    # defecto). Docker tiene que esperar algo más antes de matarlo.
+    stop_grace_period: 40s
     # /metrics para el agente de operaciones, solo en el 127.0.0.1.
     ports:
       - "127.0.0.1:8081:8081"
@@ -86,6 +90,9 @@ services:
     environment:
       WORKER_QUEUES: bulk=1
       WORKER_CONCURRENCY: 1
+      # La transcodificación más larga medida en la Entrega 2 duró 196 s.
+      WORKER_SHUTDOWN_TIMEOUT: 240s
+    stop_grace_period: 250s
     ports:
       - "127.0.0.1:8082:8081"
     depends_on:

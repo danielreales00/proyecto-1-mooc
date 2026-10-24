@@ -219,6 +219,9 @@ jobs:
       - name: Migraciones simultáneas desde varias réplicas
         run: make migraciones-concurrentes
 
+      - name: Publicación idempotente en la cola (DT-01)
+        run: make prueba-cola
+
       - name: Semilla de datos sintéticos
         run: docker compose run --rm seed
 

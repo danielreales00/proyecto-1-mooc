@@ -217,6 +217,9 @@ services:
     env_file: [.env]
     environment:
       WORKER_QUEUES: critical=6,default=3
+    # Retiro seguro (DT-02): el worker espera a los trabajos activos
+    # WORKER_SHUTDOWN_TIMEOUT (30 s por defecto); Docker espera algo más.
+    stop_grace_period: 40s
     depends_on:
       postgres:
         condition: service_healthy
@@ -273,6 +276,8 @@ services:
     environment:
       WORKER_QUEUES: bulk=1
       WORKER_CONCURRENCY: 2
+      WORKER_SHUTDOWN_TIMEOUT: 240s
+    stop_grace_period: 250s
     depends_on:
       postgres:
         condition: service_healthy
