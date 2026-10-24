@@ -388,6 +388,11 @@ tf: ## terraform de un entorno: make tf ENTORNO=dev ARGS="plan"
 	@test -n "$(ENTORNO)" || { echo 'uso: make tf ENTORNO=<dev|prod> ARGS="plan"'; exit 1; }
 	@test -d infra/environments/$(ENTORNO) \
 		|| { echo "no existe infra/environments/$(ENTORNO)"; exit 1; }
+	@# entrega2 cedió su estado a entrega3 (ADR-0019, D1): aplicarlo ahora
+	@# pelearía con entrega3 por los mismos recursos. Su configuración sigue en
+	@# el tag entrega-2.
+	@test "$(ENTORNO)" != entrega2 \
+		|| { echo "entrega2 está congelado: su estado pasó a entrega3 (ver el tag entrega-2)"; exit 1; }
 	@# Terraform se autentica con las credenciales por defecto de la aplicación,
 	@# las que deja `gcloud auth application-default login` en el mismo volumen.
 	@$(EN_NUBE) -w /repo/infra/environments/$(ENTORNO) \
