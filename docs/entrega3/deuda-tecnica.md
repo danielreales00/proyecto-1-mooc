@@ -175,7 +175,7 @@ Los responsables se nombran por frente de trabajo, según el reparto de
   coincide con los `job_runs` en `queued`, y los logs no registran duplicados
   descartados.
 - **Responsable y plazo.** Backend y calidad. Cierre de la Entrega 3.
-- **Estado.** Pendiente.
+- **Estado.** En tratamiento. Corregido en `e0b38f2`: `Publish` usa `asynq.TaskID(job_key)` y, si la tarea está archivada en la DLQ, la reactiva en vez de publicarla de nuevo. El reaper ya no cuenta como recuperado un trabajo que sigue en Redis. `make prueba-cola` lo prueba contra Redis. Falta la verificación del escenario 3B.
 
 #### DT-02 · OPE · El retiro de un worker corta el trabajo en curso
 
@@ -199,7 +199,7 @@ Los responsables se nombran por frente de trabajo, según el reparto de
   existe un solo juego de derivados HLS.
 - **Responsable y plazo.** Backend y calidad, con Infraestructura elástica.
   Cierre de la Entrega 3.
-- **Estado.** Pendiente.
+- **Estado.** En tratamiento. Corregido en `e0b38f2`: `WORKER_SHUTDOWN_TIMEOUT` (30 s, y 240 s en `worker-media`) con `stop_grace_period` de 40 y 250 s. Un trabajo en `running` con el latido vencido 90 s se puede reclamar sin esperar al reaper. Falta el tiempo de apagado de la instancia en la plantilla del grupo y la prueba controlada del escenario 3.
 
 #### DT-03 · ARQ · Las conexiones a la base no alcanzan para tres instancias
 
@@ -247,7 +247,7 @@ Los responsables se nombran por frente de trabajo, según el reparto de
   caída que compruebe que el cuerpo no contiene el error. Con Redis detenido, el
   grupo de workers marca la instancia como no sana.
 - **Responsable y plazo.** Backend y calidad. Cierre de la Entrega 3.
-- **Estado.** Pendiente.
+- **Estado.** En tratamiento. Corregido en `e0b38f2`: `httpx.Disponibilidad` responde `ok` o `fail` por dependencia y registra el error en el log, con prueba unitaria. El worker expone `/readyz` en el puerto 8081 con PostgreSQL y Redis. Falta que la comprobación de salud del grupo de workers apunte a ese `/readyz`.
 
 #### DT-05 · INF · Máquinas con IP pública (Blocker `terraform:S6329`)
 
@@ -307,7 +307,7 @@ Los responsables se nombran por frente de trabajo, según el reparto de
 - **Criterio de verificación.** `go:S3776` desaparece en los archivos de
   `modules/`. `make invariantes` y `make demo` siguen en verde.
 - **Responsable y plazo.** Backend y calidad. Entrega 4.
-- **Estado.** Pendiente.
+- **Estado.** Resuelto en `885df7e`. Se partieron las doce funciones, incluidas la suite de contrato, la semilla y la prueba, porque el umbral se mide sobre el código total. `make calidad` no registra `go:S3776` en `backend/`, y `make ci` sigue en verde.
 
 #### DT-07 · COD · La interfaz es un solo módulo de 1.157 líneas
 
@@ -363,7 +363,7 @@ Los responsables se nombran por frente de trabajo, según el reparto de
 - **Criterio de verificación.** Las tres reglas desaparecen del backend y
   `make rapido` sigue en verde.
 - **Responsable y plazo.** Backend y calidad. Cierre de la Entrega 3.
-- **Estado.** Pendiente.
+- **Estado.** Resuelto en `885df7e`. `InsertEvent` recibe la evidencia completa. `make calidad` no registra hallazgos en `backend/`.
 
 #### DT-09 · PRU · Cobertura unitaria baja en módulos con reglas de negocio
 
@@ -633,9 +633,14 @@ pendientes.
 | --- | --- | --- |
 | Configuración del análisis, `make calidad` y job «Calidad (SonarQube)» en el CI | El de este documento | `make calidad` termina con los dos umbrales en `ok` |
 | `scripts/calidad.py` se corrigió antes de la línea base. Tenía un literal repetido (`python:S1192`), un f-string sin campos (`python:S3457`) y una construcción de diccionario señalada por `S7494` y `S7500` | El de este documento | `scripts/` no tiene hallazgos en el análisis |
+| Los 27 hallazgos del backend (DT-06 y DT-08): 12 `go:S3776`, 6 `go:S1192`, 2 `go:S107`, 2 `go:S978` y 5 de nombres (`go:S117`, `go:S100`) | `885df7e` | `make calidad`: 0 hallazgos en `backend/`, 129 en total y 861 min de deuda estimada. `make ci` en verde |
+| Publicación idempotente en la cola (DT-01) | `e0b38f2` | `make prueba-cola`, en el CI |
+| Retiro de workers: tiempo de gracia y reclamo de trabajos con el latido vencido (DT-02) | `e0b38f2` | `make ci`. La verificación final es el escenario 3 |
+| `/readyz` sin detalle del error y `/readyz` en el worker (DT-04) | `e0b38f2` | Prueba unitaria `TestDisponibilidadNoExponeElError` |
 
-El código de la aplicación no se modificó durante el diagnóstico. Los 156
-hallazgos y los 21 elementos de este documento son la línea base.
+Los 156 hallazgos de la sección 2 son la medición inicial, antes de cualquier
+corrección. La línea base para las entregas siguientes es el análisis del
+commit final (sección 6), con los elementos que sigan abiertos.
 
 ## 6. Línea base del commit final
 
