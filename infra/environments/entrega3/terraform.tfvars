@@ -25,7 +25,7 @@ ip_interna_cola = "10.10.0.30"
 cloudsql_tier     = "db-g1-small"
 cloudsql_disco_gb = 10
 
-# Para detener la base entre sesiones: false y `make tf ENTORNO=entrega2
+# Para detener la base entre sesiones: false y `make tf ENTORNO=entrega3
 # ARGS=apply`. Aquí y no con -var: con -var, el siguiente apply sin él la
 # volvería a encender sin que nadie lo note. Se versiona, así el equipo ve en
 # git si la base debería estar encendida.

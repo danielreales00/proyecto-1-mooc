@@ -62,6 +62,8 @@ resource "google_compute_instance" "generador" {
   metadata = {
     startup-script = var.arranque
     enable-oslogin = "TRUE"
+    # Solo OS Login: ninguna clave SSH de proyecto entra en la máquina.
+    block-project-ssh-keys = "TRUE"
   }
 
   labels = {

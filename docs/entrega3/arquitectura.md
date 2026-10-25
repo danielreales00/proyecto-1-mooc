@@ -330,8 +330,8 @@ viaja en `Authorization`.
 
 Apagado, los grupos quedan en cero, `mooc-cola` y la base detenidas y las
 reglas de reenvío borradas. La IP y el certificado se conservan y la URL no
-cambia. `make tf ENTORNO=entrega2` se niega a correr, porque ese estado
-pelearía con `entrega3` por los mismos recursos.
+cambia. El entorno de la Entrega 2 salió de `main` y su configuración está en
+el tag `entrega-2`.
 
 ## 9. Decisiones de arquitectura
 

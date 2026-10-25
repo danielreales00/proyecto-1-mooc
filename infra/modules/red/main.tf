@@ -17,6 +17,14 @@ resource "google_compute_subnetwork" "principal" {
   # Las máquinas llegan a Cloud Storage, Artifact Registry y Secret Manager por
   # la red de Google, sin pasar por el NAT ni necesitar IP externa.
   private_ip_google_access = true
+
+  # Registros de flujo con muestreo bajo y sin metadatos: bastan para
+  # investigar un incidente de red y su costo es de centavos.
+  log_config {
+    aggregation_interval = "INTERVAL_10_MIN"
+    flow_sampling        = 0.1
+    metadata             = "EXCLUDE_ALL_METADATA"
+  }
 }
 
 # --- Acceso privado a servicios ---------------------------------------------

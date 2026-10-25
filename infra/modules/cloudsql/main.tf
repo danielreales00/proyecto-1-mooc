@@ -24,6 +24,17 @@ resource "google_sql_database_instance" "pg" {
     activation_policy = var.encendida ? "ALWAYS" : "NEVER"
     availability_type = "ZONAL"
 
+    # Registro de cada conexión y desconexión: con tres APIs y tres workers
+    # contra 47 conexiones útiles, es la evidencia de quién ocupa el pool.
+    database_flags {
+      name  = "log_connections"
+      value = "on"
+    }
+    database_flags {
+      name  = "log_disconnections"
+      value = "on"
+    }
+
     disk_type = "PD_SSD"
     disk_size = var.disco_gb
     # Fijo: la configuración no cambia a mitad de una corrida de carga.

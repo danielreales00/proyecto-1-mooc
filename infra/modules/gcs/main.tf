@@ -12,6 +12,8 @@ locals {
     derived    = { publico = false }
     badges     = { publico = true }
     quarantine = { publico = false }
+    # Registros de acceso de los cinco buckets, incluido este.
+    registros = { publico = false }
   }
 }
 
@@ -32,6 +34,26 @@ resource "google_storage_bucket" "b" {
     retention_duration_seconds = 0
   }
 
+  # Un objeto sobrescrito o borrado por error se recupera durante un día. Las
+  # versiones viejas se borran después: lo que sale de originals hacia
+  # cuarentena no se queda como copia.
+  versioning {
+    enabled = true
+  }
+
+  lifecycle_rule {
+    condition {
+      days_since_noncurrent_time = 1
+    }
+    action {
+      type = "Delete"
+    }
+  }
+
+  logging {
+    log_bucket = "${var.prefijo}-registros"
+  }
+
   dynamic "cors" {
     for_each = length(var.frontend_origins) > 0 ? [1] : []
     content {
@@ -39,6 +61,18 @@ resource "google_storage_bucket" "b" {
       method          = ["GET", "HEAD", "PUT"]
       response_header = ["Content-Type", "ETag", "Range", "Content-Range"]
       max_age_seconds = 3600
+    }
+  }
+
+  dynamic "lifecycle_rule" {
+    for_each = each.key == "registros" ? [1] : []
+    content {
+      condition {
+        age = 30
+      }
+      action {
+        type = "Delete"
+      }
     }
   }
 
@@ -65,4 +99,11 @@ resource "google_storage_bucket_iam_member" "lectura_publica" {
   bucket = google_storage_bucket.b[each.key].name
   role   = "roles/storage.legacyObjectReader"
   member = "allUsers"
+}
+
+# Cloud Storage entrega los registros de acceso con esta cuenta de Google.
+resource "google_storage_bucket_iam_member" "entrega_registros" {
+  bucket = google_storage_bucket.b["registros"].name
+  role   = "roles/storage.objectCreator"
+  member = "group:cloud-storage-analytics@google.com"
 }

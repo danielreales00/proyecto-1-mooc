@@ -443,11 +443,13 @@ medio privado del curso: las credenciales no se publican.
 ### Operar el despliegue
 
 Todo corre en contenedores: ni `gcloud` ni `terraform` se instalan en la
-máquina de nadie. La credencial vive en el volumen `mooc-gcloud`.
+máquina de nadie. La credencial vive en el volumen `mooc-gcloud`. Desde la
+Entrega 3 el entorno es `entrega3`, que heredó el estado de la Entrega 2. La
+configuración de las dos máquinas está en el tag `entrega-2`.
 
 ```bash
-make tf ENTORNO=entrega2 ARGS="plan -out=p.tfplan"   # revisar, y luego:
-make tf ENTORNO=entrega2 ARGS="apply p.tfplan"
+make tf ENTORNO=entrega3 ARGS="plan -out=p.tfplan"   # revisar, y luego:
+make tf ENTORNO=entrega3 ARGS="apply p.tfplan"
 make publicar          # imágenes a Artifact Registry, etiquetadas con el commit
 make semilla-nube      # cuentas sintéticas en Cloud SQL (CARGA=1 añade las de carga)
 make postman-nube      # la colección de la Entrega 1 entera contra la nube

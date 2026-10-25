@@ -53,6 +53,8 @@ resource "google_compute_instance_template" "plantilla" {
     mooc-env       = var.env
     startup-script = var.arranque
     enable-oslogin = "TRUE"
+    # Solo OS Login: ninguna clave SSH de proyecto entra en la máquina.
+    block-project-ssh-keys = "TRUE"
   }, { for clave, valor in { shutdown-script = var.apagado } : clave => valor if valor != "" })
 
   # La versión de las imágenes queda en cada instancia: así se comprueba que
