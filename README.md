@@ -402,8 +402,17 @@ El detalle de lo que falta de plataforma y evidencia, en
 Entrega en curso. El alcance está en
 [`arquitectura/alcance-entrega-3.md`](arquitectura/alcance-entrega-3.md).
 
+**URL de la aplicación:** `https://34-160-11-22.sslip.io`, la misma para la
+interfaz web y para el balanceador de la API (`/api/v1`, documentación en
+`/docs`). El entorno se enciende para las sesiones y la sustentación. El acceso
+para el equipo docente se comunica por el medio privado del curso.
+
 | Documento | Qué contiene |
 | --- | --- |
+| [`docs/entrega3/arquitectura.md`](docs/entrega3/arquitectura.md) | **Documento de arquitectura de la entrega**: componentes, despliegue elástico, escalado, operación, costo y limitaciones |
+| [`arquitectura/adr/0019`](arquitectura/adr/0019-arquitectura-elastica-iaas.md) | Las decisiones de la arquitectura elástica |
+| [`arquitectura/despliegue-gcp-entrega3.md`](arquitectura/despliegue-gcp-entrega3.md) | Plan ejecutable del despliegue elástico y de su reconstrucción |
+| [`docs/entrega3/evidencias/elastica/`](docs/entrega3/evidencias/elastica/) | Evidencia de la puesta en marcha, el arranque y el ciclo de autoscaling |
 | [`docs/entrega3/deuda-tecnica.md`](docs/entrega3/deuda-tecnica.md) | Primer diagnóstico de calidad, línea base de deuda técnica, inventario priorizado y plan de tratamiento |
 | [`docs/entrega3/calidad/`](docs/entrega3/calidad/) | Exportación del análisis de SonarQube: medidas, hallazgos y resumen |
 | [`arquitectura/adr/0018`](arquitectura/adr/0018-analisis-de-calidad-con-sonarqube-en-el-ci.md) | Cómo se ejecuta SonarQube en el CI y en local |
