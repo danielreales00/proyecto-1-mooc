@@ -205,7 +205,7 @@ Los responsables se nombran por frente de trabajo, según el reparto de
 
 - **Descripción y ubicación.** `db-g1-small` admite unas 50 conexiones. Los
   pools son de 25 por API y de 10 por proceso de worker
-  (`infra/environments/entrega2/terraform.tfvars:54-55`). Con una instancia de
+  (`infra/environments/entrega2/terraform.tfvars:54-55` en el tag `entrega-2`). Con una instancia de
   cada grupo suman 45. Con tres de cada una piden 135. `migrate` abre hasta 10
   más al arrancar cada API. `WORKER_CONCURRENCY` vale 20 por defecto con un
   pool de 10 (`backend/internal/platform/config/config.go:158`).
@@ -273,8 +273,10 @@ Los responsables se nombran por frente de trabajo, según el reparto de
   `S6329` en el módulo de los grupos. `gcloud compute instances list` no
   muestra IP externa en ninguna instancia de los grupos.
 - **Responsable y plazo.** Infraestructura elástica. Cierre de la Entrega 3.
-- **Estado.** En tratamiento. El módulo de la Entrega 2 se conserva sin cambios
-  porque reproduce la línea base.
+- **Estado.** Resuelto. Las plantillas de los grupos no tienen IP externa
+  (`692f30d`). `infra/environments/entrega2` y `infra/modules/maquinas` salen
+  de `main` en `cfa7fe5`, porque la configuración de la línea base vive en el
+  tag `entrega-2`. El generador se acepta como decisión de diseño (DT-20).
 
 ### Prioridad 2
 
@@ -340,7 +342,11 @@ Los responsables se nombran por frente de trabajo, según el reparto de
   navegador sigue en verde. Ningún archivo de la interfaz pasa de 400 líneas.
 - **Responsable y plazo.** Frontend. El paso 1 al cierre de la Entrega 3 y los
   pasos 2 y 3 en la Entrega 4.
-- **Estado.** Pendiente.
+- **Estado.** En tratamiento. Los pasos 1 y 3 se hicieron en `0ca7a6a`:
+  `cleanup` es asíncrona desde el principio, las plantillas anidadas pasaron a
+  funciones y las vistas complejas se partieron. SonarQube no reporta
+  hallazgos en `frontend/`. Queda el paso 2, separar las vistas en módulos,
+  para la Entrega 4.
 
 #### DT-08 · COD · Literales repetidos y firmas largas en Go
 
@@ -450,7 +456,11 @@ Los responsables se nombran por frente de trabajo, según el reparto de
 - **Criterio de verificación.** `S6258` desaparece en `cloudsql` y el bucket
   de originales tiene versionado.
 - **Responsable y plazo.** Infraestructura elástica. Entrega 4.
-- **Estado.** Pendiente.
+- **Estado.** Resuelto en código en `cfa7fe5`: `log_connections` y
+  `log_disconnections` en Cloud SQL, registros de flujo con muestreo de 0,1 en
+  la subred, versionado con borrado de versiones viejas a 1 día y registros de
+  acceso en un bucket `registros` que borra a los 30 días. Falta aplicarlo en
+  `entrega3`.
 
 ### Prioridad 3
 
@@ -478,7 +488,11 @@ Los responsables se nombran por frente de trabajo, según el reparto de
   expresión regular.
 - **Criterio de verificación.** Los Critical desaparecen de `capacity-planning/`.
 - **Responsable y plazo.** Capacidad. Entrega 4.
-- **Estado.** Aplazado de forma deliberada.
+- **Estado.** Resuelto en `e2087c9`. Los guiones conservan el recorrido, la
+  mezcla, las pausas y las tasas de la Entrega 2. Cambia la fuente de
+  aleatoriedad, de `Math.random` a la Web Crypto API, con la misma distribución
+  uniforme. El informe de capacidad lo declara como diferencia. La salida de
+  `tabla.py` es idéntica sobre los resultados de la Entrega 2.
 
 #### DT-14 · OPE · Faltan trabajos programados
 
@@ -580,19 +594,21 @@ Los responsables se nombran por frente de trabajo, según el reparto de
 | Regla | Ubicación | Decisión |
 | --- | --- | --- |
 | `terraform:S6404`, Major | `infra/modules/gcs/main.tf:67` | El bucket de insignias es de lectura pública porque la imagen de la insignia se verifica sin sesión. El rol `legacyObjectReader` no permite listar, así que no se pueden enumerar insignias ajenas |
-| `terraform:S6405`, Major | `infra/modules/generador/main.tf:62` | La máquina usa OS Login (`enable-oslogin = "TRUE"`), que ignora las claves SSH del proyecto |
-| `docker:S6471`, Minor | `frontend/Dockerfile:1` | Caddy corre como root dentro del contenedor para escuchar en el puerto 80. Se corrige junto con DT-17 pasando a un puerto alto |
-| `Web:S6819` y `css:S4666`, Major | `frontend/index.html:31`, `frontend/styles.css:699` | Accesibilidad y un selector duplicado. Se corrigen con DT-07 |
+| `terraform:S6329`, Blocker | `infra/modules/generador/main.tf:48` | El generador tiene IP externa porque por Cloud NAT perdió 813 conexiones. Existe solo mientras se mide, el firewall solo deja entrar SSH por IAP y usa OS Login |
+| `terraform:S6405`, Major | `infra/modules/generador/main.tf:62` y `cola/main.tf:46` | Corregido en `cfa7fe5` con `block-project-ssh-keys`, también en las plantillas de los grupos |
+| `docker:S6471`, Minor | `frontend/Dockerfile:1` | Corregido en `0ca7a6a`. Caddy corre como el usuario `web` en el puerto 8080 |
+| `Web:S6819` y `css:S4666`, Major | `frontend/index.html:31`, `frontend/styles.css:699` | Corregidos en `0ca7a6a` |
 
 - **Responsable y plazo.** Infraestructura elástica para Terraform y Frontend
   para el resto. Entrega 4.
-- **Estado.** Aceptado, salvo `S6471`, `S6819` y `S4666`, que quedan
-  pendientes.
+- **Estado.** `S6329` en el generador y `S6404` en el bucket de insignias se
+  aceptan. Se excluyen solo esas reglas en esos archivos, con la razón en
+  `sonar-project.properties`. El resto está corregido.
 
 #### DT-21 · OPE · El correo de producción no sale a Internet
 
 - **Descripción y ubicación.** En la nube el SMTP es Mailpit
-  (`infra/environments/entrega2/maquinas.tf:68-70`).
+  (`infra/environments/entrega2/maquinas.tf:68-70` en el tag `entrega-2`).
 - **Evidencia.** Configuración citada.
 - **Impacto.** La verificación de cuenta solo funciona leyendo Mailpit por un
   túnel. Las cuentas de la demostración se crean con la semilla.
