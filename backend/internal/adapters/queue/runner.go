@@ -92,8 +92,8 @@ func (r *Runner) Wrap(jobType string, h Handler) asynq.HandlerFunc {
 }
 
 // Esperar bloquea hasta que todos los trabajos en curso hayan registrado su
-// final, o hasta max. Devuelve false si se agotó el tiempo.
-func (r *Runner) Esperar(max time.Duration) bool {
+// final, o hasta plazo. Devuelve false si se agotó el tiempo.
+func (r *Runner) Esperar(plazo time.Duration) bool {
 	listo := make(chan struct{})
 	go func() {
 		r.activos.Wait()
@@ -102,7 +102,7 @@ func (r *Runner) Esperar(max time.Duration) bool {
 	select {
 	case <-listo:
 		return true
-	case <-time.After(max):
+	case <-time.After(plazo):
 		return false
 	}
 }
