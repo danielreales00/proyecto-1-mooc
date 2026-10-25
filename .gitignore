@@ -53,3 +53,7 @@ frontend/playwright-report/
 # cobertura de la interfaz. La exportación en docs/entrega3/calidad sí se versiona.
 .scannerwork/
 frontend/lcov.info
+
+# Bytecode de Python
+__pycache__/
+*.pyc
