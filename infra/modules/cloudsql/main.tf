@@ -34,6 +34,14 @@ resource "google_sql_database_instance" "pg" {
       name  = "log_disconnections"
       value = "on"
     }
+    database_flags {
+      name  = "log_checkpoints"
+      value = "on"
+    }
+    database_flags {
+      name  = "log_lock_waits"
+      value = "on"
+    }
 
     disk_type = "PD_SSD"
     disk_size = var.disco_gb

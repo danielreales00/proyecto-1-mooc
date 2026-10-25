@@ -207,7 +207,7 @@ function cardHTML(c, i) {
 function cards(items) {
   if (!items.length)
     return empty("Aún no hay cursos publicados que coincidan con tu búsqueda.");
-  return `<div class="grid">${items.map(cardHTML).join("")}</div>`;
+  return `<div class="grid">${items.map((c, i) => cardHTML(c, i)).join("")}</div>`;
 }
 async function home() {
   show(
@@ -266,7 +266,7 @@ async function course(slug) {
     ? button("Inscribirme al curso ↗", "enroll")
     : link("/login", "Inicia sesión para inscribirte");
   const outline =
-    (c.outline || []).map(outlineModuleHTML).join("") ||
+    (c.outline || []).map((m, i) => outlineModuleHTML(m, i)).join("") ||
     empty("El temario estará disponible pronto.");
   show(
     `${link("/catalog", "← Catálogo", "text")}<div class="split"><div>${title(c.category, c.title, c.summary)}<div class="meta">${e(c.language)} · ${e(c.enrolled_count)} estudiantes · Versión ${e(c.version_number)}</div><div class="actions" style="margin-top:28px">${enroll}</div></div><div class="feature"><div class="eyebrow">TU PRÓXIMO PASO</div><h2>Aprende.<br>Practica.<br>Avanza.</h2><div class="orbit" aria-hidden="true"></div></div></div><h2>Tu recorrido</h2>${outline}`,
@@ -432,7 +432,7 @@ async function learn(id) {
   if (!requireUser()) return;
   const activePage = pageRun;
   const d = await api.get(`/enrollments/${id}/content`);
-  const nav = d.resources.map(resourceNavHTML).join("");
+  const nav = d.resources.map((r, i) => resourceNavHTML(r, i)).join("");
   show(
     `${link("/learning", "← Mi aprendizaje", "text")}<div class="title-line">${title("Aula", "Un paso más cerca.")}<div><span id="progress" class="chip">${e(d.enrollment.progress_pct)}% completado</span>${button("Retirarme", "withdraw", "text danger")}</div></div><div class="workspace"><aside class="sidebar" aria-label="Recursos del curso">${nav}</aside><article id="reader">${empty("Selecciona un recurso para comenzar.")}</article></div>`,
   );
@@ -982,7 +982,7 @@ function optionEditorHTML(o, j) {
   return `<div data-option="${j}">${field("text_md", "Opción " + (j + 1), o.text_md)}${check("is_correct", "Respuesta correcta", o.is_correct)}</div>`;
 }
 function questionEditorHTML(x, i) {
-  return `<fieldset data-question="${i}"><legend>Pregunta ${i + 1}</legend>${field("statement_md", "Enunciado", x.statement_md)}<div class="form-grid">${select("kind", "Tipo", ["single", "multiple"], x.kind)}${field("points", "Puntos", x.points, "number")}</div>${field("explanation_md", "Explicación", x.explanation_md || "", "text", false)}${x.options.map(optionEditorHTML).join("")}<div class="actions"><button type="button" class="outline" data-add-option="${i}">Agregar opción</button><button type="button" class="text danger" data-remove-question="${i}">Quitar pregunta</button></div></fieldset>`;
+  return `<fieldset data-question="${i}"><legend>Pregunta ${i + 1}</legend>${field("statement_md", "Enunciado", x.statement_md)}<div class="form-grid">${select("kind", "Tipo", ["single", "multiple"], x.kind)}${field("points", "Puntos", x.points, "number")}</div>${field("explanation_md", "Explicación", x.explanation_md || "", "text", false)}${x.options.map((o, j) => optionEditorHTML(o, j)).join("")}<div class="actions"><button type="button" class="outline" data-add-option="${i}">Agregar opción</button><button type="button" class="text danger" data-remove-question="${i}">Quitar pregunta</button></div></fieldset>`;
 }
 async function quizEditor(id) {
   if (!requireUser(["teacher", "admin"])) return;
@@ -1009,7 +1009,9 @@ async function quizEditor(id) {
     options: x.options.map((o) => ({ ...o })),
   }));
   function draw() {
-    $("#questions").innerHTML = questions.map(questionEditorHTML).join("");
+    $("#questions").innerHTML = questions
+      .map((x, i) => questionEditorHTML(x, i))
+      .join("");
     document.querySelectorAll("[data-add-option]").forEach(
       (b) =>
         (b.onclick = () => {

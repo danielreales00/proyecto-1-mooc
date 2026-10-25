@@ -193,7 +193,7 @@ export function integridad() {
   // La clave nunca sale del servidor, ni en el snapshot del intento (ADR-0013).
   let r = post(`/enrollments/${s.inscripcion}/quizzes/${quiz.stable_id}/attempts`, null, t, 'integridad', true);
   const intento = json(r);
-  if (!intento || !intento.id) return;
+  if (!intento?.id) return;
   check(r, { 'integridad: el snapshot no trae la clave': () => !/is_correct|correct_option/.test(r.body) });
   patch(`/attempts/${intento.id}/answers`, {
     answers: intento.questions.map((p) => ({
