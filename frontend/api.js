@@ -24,37 +24,15 @@ export class Client {
       : this.storage.removeItem("mooc.session");
   }
   async request(path, { method = "GET", body, etag, key, signal } = {}) {
-    const headers = { Accept: "application/json" };
-    if (this.token) headers.Authorization = `Bearer ${this.token}`;
-    if (body !== undefined) headers["Content-Type"] = "application/json";
     const fingerprint = `${method}:${path}:${JSON.stringify(body)}`;
-    if (method === "POST") {
-      if (!this.pending.has(fingerprint))
-        this.pending.set(fingerprint, key || crypto.randomUUID());
-      headers["Idempotency-Key"] = this.pending.get(fingerprint);
-    }
-    if (!signal) signal = this.controller.signal;
-    if (etag) headers["If-Match"] = etag;
-    let response;
-    try {
-      response = await fetch(`/api/v1${path}`, {
-        method,
-        headers,
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal,
-      });
-    } catch (e) {
-      if (e.name === "AbortError") throw e;
-      throw new Error(
-        "No pudimos conectar. Comprueba tu conexión y vuelve a intentar.",
-      );
-    }
+    const headers = this.headers(method, body, etag, key, fingerprint);
+    signal ??= this.controller.signal;
+    const response = await send(path, method, headers, body, signal);
     const data =
       response.status === 204 ? null : await response.json().catch(() => ({}));
-    if (signal?.aborted)
+    if (signal.aborted)
       throw new DOMException("Navegación cancelada", "AbortError");
-    if (response.ok || (response.status >= 400 && response.status < 500))
-      this.pending.delete(fingerprint);
+    if (response.status < 500) this.pending.delete(fingerprint);
     if (!response.ok) {
       if (response.status === 401 && !path.startsWith("/auth/"))
         this.setToken(null);
@@ -64,24 +42,32 @@ export class Client {
     if (tag) this.etags.set(path, tag);
     return data;
   }
+  // Un POST repetido tras un fallo de red conserva su Idempotency-Key: el
+  // servidor lo reconoce y no lo aplica dos veces.
+  headers(method, body, etag, key, fingerprint) {
+    const headers = { Accept: "application/json" };
+    if (this.token) headers.Authorization = `Bearer ${this.token}`;
+    if (body !== undefined) headers["Content-Type"] = "application/json";
+    if (method === "POST") {
+      if (!this.pending.has(fingerprint))
+        this.pending.set(fingerprint, key || crypto.randomUUID());
+      headers["Idempotency-Key"] = this.pending.get(fingerprint);
+    }
+    if (etag) headers["If-Match"] = etag;
+    return headers;
+  }
   get(path) {
     return this.request(path);
   }
-  async all(path) {
-    const items = [];
-    let cursor = null;
-    const seen = new Set();
-    do {
-      const page = await this.get(
-        `${path}${cursor ? `${path.includes("?") ? "&" : "?"}cursor=${encodeURIComponent(cursor)}` : ""}`,
-      );
-      items.push(...page.items);
-      cursor = page.next_cursor;
-      if (cursor && seen.has(cursor))
-        throw new Error("La paginación no pudo continuar.");
-      if (cursor) seen.add(cursor);
-    } while (cursor);
-    return { items };
+  // Recorre todas las páginas siguiendo el cursor, una tras otra.
+  async all(path, cursor = null, items = [], seen = new Set()) {
+    const page = await this.get(withCursor(path, cursor));
+    items.push(...page.items);
+    const next = page.next_cursor;
+    if (!next) return { items };
+    if (seen.has(next)) throw new Error("La paginación no pudo continuar.");
+    seen.add(next);
+    return this.all(path, next, items, seen);
   }
   post(path, body, options = {}) {
     return this.request(path, { method: "POST", body, ...options });
@@ -89,6 +75,26 @@ export class Client {
   patch(path, body, etag) {
     return this.request(path, { method: "PATCH", body, etag });
   }
+}
+async function send(path, method, headers, body, signal) {
+  try {
+    return await fetch(`/api/v1${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
+    });
+  } catch (err) {
+    if (err.name === "AbortError") throw err;
+    throw new Error(
+      "No pudimos conectar. Comprueba tu conexión y vuelve a intentar.",
+    );
+  }
+}
+function withCursor(path, cursor) {
+  if (!cursor) return path;
+  const separator = path.includes("?") ? "&" : "?";
+  return path + separator + "cursor=" + encodeURIComponent(cursor);
 }
 export const escapeHTML = (value) =>
   String(value ?? "").replace(
