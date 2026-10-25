@@ -157,6 +157,75 @@ Ciclo mínimo de cada grupo, antes de las corridas medidas:
   2, el grupo crea una instancia y su `worker-media` toma un trabajo. Cuando la
   señal baja, retira una sin cortar ninguna transcodificación.
 
+## Fase 5 — Sesión de medición
+
+Pendiente. Produce la evidencia que falta para la entrega: el frontend en la
+nube y las corridas del
+[informe de capacidad](../capacity-planning/pruebas_de_carga_entrega3.md), cuyas
+secciones 5, 7 y 9 fijan niveles, repeticiones y fases. Parte de `main` al
+día (`git pull`).
+
+1. **Imágenes nuevas, obligatorio.** El contenedor del frontend escucha ahora en
+   el 8080 y `deploy/Caddyfile.produccion` ya apunta a `frontend:8080`. Con las
+   imágenes `5d24b4bc72e4` la interfaz no responde.
+
+   ```bash
+   make publicar          # imprime el SHA nuevo
+   # version_imagenes = "<sha>" en terraform.tfvars
+   make hornear-imagen    # imprime la imagen nueva
+   # imagen_grupos = "projects/mooc-509602/global/images/mooc-base-<sha>"
+   ```
+
+2. **`plan` y `apply` de `entrega3`.** Además de las imágenes trae los cambios de
+   la limpieza de SonarQube: registros de conexión en Cloud SQL, registros de
+   flujo en la subred, versionado y registros de acceso en los buckets (bucket
+   `registros` nuevo) y `block-project-ssh-keys`. También crea el presupuesto en
+   la cuenta de facturación que paga el proyecto, que hoy no tiene alerta. Quien
+   aplique necesita permiso de costos sobre esa cuenta. El plan no debe tocar la
+   base, los buckets existentes ni los secretos más allá de esos cambios.
+
+3. **Frontend en la nube.**
+
+   ```bash
+   make frontend-e2e-nube
+   ```
+
+   Deja la salida y las capturas en `docs/entrega3/evidencias/frontend/`. Se
+   añade una fila a la tabla de resultados de
+   `docs/entrega3/verificacion-frontend.md`.
+
+4. **Preparación de las corridas**, con `generador_encendido = true`:
+
+   ```bash
+   make semilla-nube CARGA=1
+   make carga-sincronizar && make carga-medios
+   make carga K6=preparar.js ETIQUETA=e3-preparar
+   make carga K6=preparar-medios.js ETIQUETA=e3-preparar-medios
+   ```
+
+5. **Escenario 1**: L1, L2 con integridad, L2b y L3, dos veces cada uno, y L2 una
+   vez de 15 minutos. Cada nivel empieza con el grupo de API en una instancia.
+
+   ```bash
+   # corre el nivel y exporta sus métricas de Cloud Monitoring de la misma ventana
+   make carga-nivel K6=escenario1.js ETIQUETA=e3-L2-1 ARGS="-e TASA=8 -e INTEGRIDAD=1"
+   ```
+
+6. **Escenario 2**: M1 y M2 dos veces, M3 una. Antes de cada nivel, cola `bulk`
+   vacía y el grupo de workers en una instancia.
+
+7. **3A y 3B**, con las fases de la sección 9 del informe. Se anota la hora de
+   cada cambio de carga para la línea de tiempo. Al terminar 3B se reconcilian
+   los trabajos de `platform.job_runs` con su estado final.
+
+8. **Apagado** como en «Apagar entre sesiones», con `generador_encendido =
+   false`. Las horas de la sesión van al registro del plan, para el consumo
+   observado del documento de arquitectura.
+
+`metricas/tabla.py` filtra la CPU por los nombres de máquina de la Entrega 2
+(`mooc-web`, `mooc-worker`). Antes de armar las tablas de la Entrega 3 hay que
+adaptarlo a las instancias de los grupos (`mooc-api-*`, `mooc-worker-*`).
+
 ## Variables por papel
 
 Lo común a los dos grupos está en `local.env_comun` de `grupos.tf`. Lo propio:
