@@ -46,7 +46,7 @@ export function entrar() {
   const email = `estudiante-carga-${String(n).padStart(4, '0')}@carga.local`;
   const r = post('/auth/login', { email, password: CLAVE }, null, OP);
   const d = json(r);
-  check(r, { 'sesión emitida': () => r.status === 200 && d && d.token });
+  check(r, { 'sesión emitida': () => r.status === 200 && d?.token });
 }
 
 export function handleSummary(d) {

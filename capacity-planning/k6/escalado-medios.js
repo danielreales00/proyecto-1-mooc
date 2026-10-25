@@ -23,7 +23,7 @@ export function setup() {
   return { token: login(__ENV.EMAIL || 'profesor@mooc.local') };
 }
 
-export default async function (d) {
+export default async function subirVideo(d) {
   const n = exec.vu.idInTest;
   const a = await subir(archivo, meta, d.token, 'c');
   if (!a) {

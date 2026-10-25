@@ -13,7 +13,7 @@ import { check, sleep } from 'k6';
 import { SharedArray } from 'k6/data';
 import exec from 'k6/execution';
 import { open as abrir } from 'k6/experimental/fs';
-import { post, json } from './comun.js';
+import { post, json, elegir } from './comun.js';
 import { subir, esperar, resolver } from './medios.js';
 
 const CARGAS = Number(__ENV.CARGAS || 1);
@@ -29,12 +29,10 @@ const SECUENCIA = [];
 ['a', 'b', 'c'].forEach((p, i) => { for (let k = 0; k < MEZCLA[i]; k++) SECUENCIA.push(p); });
 
 const manifiesto = open(`${MEDIOS}/manifiesto.jsonl`).trim().split('\n').map((l) => JSON.parse(l));
-const meta = {};
-const archivos = {};
-for (const m of manifiesto) {
-  meta[m.perfil] = m;
-  if (SECUENCIA.includes(m.perfil)) archivos[m.perfil] = await abrir(`${MEDIOS}/${m.perfil}.mp4`);
-}
+const meta = Object.fromEntries(manifiesto.map((m) => [m.perfil, m]));
+const usados = manifiesto.filter((m) => SECUENCIA.includes(m.perfil));
+const abiertos = await Promise.all(usados.map((m) => abrir(`${MEDIOS}/${m.perfil}.mp4`)));
+const archivos = Object.fromEntries(usados.map((m, k) => [m.perfil, abiertos[k]]));
 const datos = new SharedArray('datos', () => [JSON.parse(open(__ENV.DATOS || '/resultados/datos.json'))]);
 const medios = new SharedArray('medios', () => [JSON.parse(open(__ENV.DATOS_MEDIOS || '/resultados/medios.json'))]);
 
@@ -42,17 +40,17 @@ const OPS = ['POST /assets/init', 'POST /assets/complete', 'GET /assets/{id}', '
   'GET master', 'GET playlist', 'GET segmento (almacén)', 'PUT parte (almacén)'];
 
 export const options = {
-  scenarios: Object.assign(
-    CARGAS > 0 && SECUENCIA.length ? {
+  scenarios: {
+    ...(CARGAS > 0 && SECUENCIA.length ? {
       cargas: {
         executor: 'constant-arrival-rate', rate: CARGAS, timeUnit: '1m', duration: DURACION,
         preAllocatedVUs: 10, maxVUs: 400, exec: 'cargar', gracefulStop: `${ESPERA_MAX}m`,
       },
-    } : {},
-    ESPECTADORES > 0 ? {
+    } : {}),
+    ...(ESPECTADORES > 0 ? {
       espectadores: { executor: 'constant-vus', vus: ESPECTADORES, duration: DURACION, exec: 'ver', gracefulStop: '30s' },
-    } : {},
-  ),
+    } : {}),
+  },
   thresholds: Object.fromEntries(OPS.map((o) => [`http_req_duration{name:${o}}`, ['p(95)>=0']]).concat([
     ['http_req_failed{name:GET segmento (almacén)}', ['rate>=0']],
     ['http_req_failed{name:PUT parte (almacén)}', ['rate>=0']],
@@ -76,18 +74,18 @@ export async function cargar() {
 // variante más baja, y descarga los segmentos a la cadencia del video.
 export function ver() {
   const esp = medios[0].espectadores[(exec.vu.idInTest - 1) % medios[0].espectadores.length];
-  const video = medios[0].videos[Math.floor(Math.random() * medios[0].videos.length)];
+  const video = elegir(medios[0].videos);
   let r = post(`/enrollments/${esp.inscripcion}/media-sessions`, { resource_stable_id: video.recurso },
     esp.token, 'POST /media-sessions', true);
   const ses = json(r);
-  if (!check(r, { 'sesión de reproducción': () => (r.status === 200 || r.status === 201) && ses && ses.manifest_url })) {
+  if (!check(r, { 'sesión de reproducción': () => (r.status === 200 || r.status === 201) && ses?.manifest_url })) {
     sleep(5);
     return;
   }
   r = http.get(ses.manifest_url, { tags: { name: 'GET master' } });
   if (!check(r, { 'master HLS': () => r.status === 200 && r.body.includes('#EXTM3U') })) return;
-  const variantes = r.body.split('\n').filter((l) => l && !l.startsWith('#'));
-  const url = resolver(ses.manifest_url, variantes[0].trim());
+  const variante = r.body.split('\n').find((l) => l && !l.startsWith('#'));
+  const url = resolver(ses.manifest_url, variante.trim());
   r = http.get(url, { tags: { name: 'GET playlist' } });
   if (!check(r, { 'playlist HLS': () => r.status === 200 })) return;
 
@@ -96,7 +94,7 @@ export function ver() {
   let seg = 0;
   for (let i = 0; i < lineas.length && seg < maxSeg; i++) {
     if (!lineas[i].startsWith('#EXTINF:')) continue;
-    const dur = parseFloat(lineas[i].substring(8));
+    const dur = Number.parseFloat(lineas[i].substring(8));
     const s = http.get(resolver(url, lineas[i + 1].trim()), { tags: { name: 'GET segmento (almacén)' }, responseType: 'none' });
     check(s, { 'segmento descargado': (x) => x.status === 200 });
     seg++;
@@ -108,8 +106,12 @@ export function ver() {
 
 export function handleSummary(d) {
   const m = d.metrics;
-  const v = (n, k) => (m[n] && m[n].values ? m[n].values[k] : undefined);
-  const s = (x, u) => (x === undefined ? '-' : `${Number(x).toFixed(u === 'ms' ? 0 : 1)} ${u}`);
+  const v = (n, k) => m[n]?.values?.[k];
+  const s = (x, u) => {
+    if (x === undefined) return '-';
+    const decimales = u === 'ms' ? 0 : 1;
+    return Number(x).toFixed(decimales) + ' ' + u;
+  };
   const l = [`== ${ETIQUETA}  (cargas/min ${CARGAS}, mezcla ${MEZCLA.join('/')}, espectadores ${ESPECTADORES})`];
   for (const o of OPS) {
     const k = `http_req_duration{name:${o}}`;
@@ -119,9 +121,12 @@ export function handleSummary(d) {
     const k = `completa_a_ready_s{perfil:${p}}`;
     if (m[k] && v(k, 'count')) l.push(`  completa→ready perfil ${p}: p50 ${s(v(k, 'med'), 's')}  p95 ${s(v(k, 'p(95)'), 's')}  máx ${s(v(k, 'max'), 's')}  n ${v(k, 'count')}`);
   }
-  l.push(`  transferencia directa: p50 ${s(v('transferencia_mib_s', 'med'), 'MiB/s')}`);
-  l.push(`  segmentos fallidos: ${s((v('http_req_failed{name:GET segmento (almacén)}', 'rate') || 0) * 100, '%')}`);
-  l.push(`  estados finales: ${Object.keys(m).filter((k) => k.startsWith('estado_final')).map((k) => k).join(', ') || v('estado_final', 'count') || 0}`);
-  l.push(`  comprobaciones: ${s((v('checks', 'rate') || 0) * 100, '%')}   iteraciones perdidas: ${v('dropped_iterations', 'count') || 0}`);
+  const finales = Object.keys(m).filter((k) => k.startsWith('estado_final')).join(', ');
+  l.push(
+    `  transferencia directa: p50 ${s(v('transferencia_mib_s', 'med'), 'MiB/s')}`,
+    `  segmentos fallidos: ${s((v('http_req_failed{name:GET segmento (almacén)}', 'rate') || 0) * 100, '%')}`,
+    `  estados finales: ${finales || v('estado_final', 'count') || 0}`,
+    `  comprobaciones: ${s((v('checks', 'rate') || 0) * 100, '%')}   iteraciones perdidas: ${v('dropped_iterations', 'count') || 0}`,
+  );
   return { stdout: l.join('\n') + '\n', [`/resultados/${ETIQUETA}.json`]: JSON.stringify(d, null, 1) };
 }

@@ -32,17 +32,26 @@ export const CLAVE = __ENV.CLAVE || '';
 // Idempotency-Key única por petición: un reintento del generador no debe
 // contar como la misma operación, salvo cuando la prueba quiere justo eso.
 export function clave() {
-  // UUID v4 suficiente para claves de idempotencia; no es criptografía.
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
-  });
+  return crypto.randomUUID();
+}
+
+// Número uniforme en [0, 1) de la Web Crypto API. En k6 2.3.0
+// getRandomValues llena un solo byte por elemento aunque el arreglo sea de
+// 32 bits, así que el número se compone con cuatro bytes.
+export function aleatorio() {
+  const b = crypto.getRandomValues(new Uint8Array(4));
+  return (b[0] * 2 ** 24 + b[1] * 2 ** 16 + b[2] * 2 ** 8 + b[3]) / 2 ** 32;
+}
+
+// Un elemento cualquiera de la lista.
+export function elegir(lista) {
+  return lista[Math.floor(aleatorio() * lista.length)];
 }
 
 export function cabeceras(token, extra) {
   const h = { 'Content-Type': 'application/json' };
   if (token) h.Authorization = `Bearer ${token}`;
-  return Object.assign(h, extra || {});
+  return { ...h, ...extra };
 }
 
 // nombre agrupa las URL con identificadores en una sola serie por operación:
@@ -88,7 +97,7 @@ export function esperado(r, estado, nombre) {
 }
 
 export function pausa(min, max) {
-  return min + Math.random() * (max - min);
+  return min + aleatorio() * (max - min);
 }
 
 export function iteracion() {
@@ -99,19 +108,21 @@ export function iteracion() {
 // JSON completo en /resultados y deja en pantalla lo que va a la tabla.
 export function resumir(datos, etiqueta, operaciones) {
   const m = datos.metrics;
-  const v = (n, k) => (m[n] && m[n].values ? m[n].values[k] : undefined);
+  const v = (n, k) => m[n]?.values?.[k];
   const ms = (x) => (x === undefined ? '-' : `${Math.round(x)} ms`);
-  const lineas = [`== ${etiqueta}`];
   const dur = 'http_req_duration{scenario:medicion}';
-  lineas.push(`peticiones medidas: ${v('http_reqs{scenario:medicion}', 'count')}  ` +
-    `(${(v('http_reqs{scenario:medicion}', 'rate') || 0).toFixed(1)}/s)`);
-  lineas.push(`latencia p50 ${ms(v(dur, 'med'))}  p95 ${ms(v(dur, 'p(95)'))}  p99 ${ms(v(dur, 'p(99)'))}`);
-  for (const n of ['errores_5xx', 'timeouts', 'limitados_429', 'rechazos_4xx']) {
-    lineas.push(`${n}: ${v(`${n}{scenario:medicion}`, 'count') || 0}`);
-  }
-  lineas.push(`iteraciones perdidas por el generador: ${v('dropped_iterations', 'count') || 0}`);
   const ch = v('checks{scenario:medicion}', 'rate');
-  lineas.push(`comprobaciones funcionales: ${ch === undefined ? '-' : (ch * 100).toFixed(2) + ' %'}`);
+  const lineas = [
+    `== ${etiqueta}`,
+    `peticiones medidas: ${v('http_reqs{scenario:medicion}', 'count')}  ` +
+      `(${(v('http_reqs{scenario:medicion}', 'rate') || 0).toFixed(1)}/s)`,
+    `latencia p50 ${ms(v(dur, 'med'))}  p95 ${ms(v(dur, 'p(95)'))}  p99 ${ms(v(dur, 'p(99)'))}`,
+    ...['errores_5xx', 'timeouts', 'limitados_429', 'rechazos_4xx'].map(
+      (n) => n + ': ' + (v(n + '{scenario:medicion}', 'count') || 0),
+    ),
+    `iteraciones perdidas por el generador: ${v('dropped_iterations', 'count') || 0}`,
+    `comprobaciones funcionales: ${ch === undefined ? '-' : (ch * 100).toFixed(2) + ' %'}`,
+  ];
   for (const op of operaciones || []) {
     const k = `http_req_duration{scenario:medicion,name:${op}}`;
     if (m[k]) lineas.push(`  ${op.padEnd(34)} p50 ${ms(v(k, 'med')).padStart(8)}  p95 ${ms(v(k, 'p(95)')).padStart(8)}  p99 ${ms(v(k, 'p(99)')).padStart(8)}`);

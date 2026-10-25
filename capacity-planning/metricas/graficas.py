@@ -26,6 +26,8 @@ os.makedirs(OUT, exist_ok=True)
 plt.rcParams.update({"figure.dpi": 110, "font.size": 9, "axes.grid": True, "grid.alpha": 0.3})
 
 
+CPU_WORKER = "CPU Worker Server"
+
 def cargar(n):
     p = os.path.join(RES, n)
     return json.load(open(p)) if os.path.exists(p) else None
@@ -87,7 +89,7 @@ def e1(etiquetas):
     w = 0.2
     ax1.bar([i - 1.5 * w for i in idx], [f["web"] for f in filas], w, label="CPU Web Server")
     ax1.bar([i - 0.5 * w for i in idx], [f["sql"] for f in filas], w, label="CPU Cloud SQL")
-    ax1.bar([i + 0.5 * w for i in idx], [f["wrk"] for f in filas], w, label="CPU Worker Server")
+    ax1.bar([i + 0.5 * w for i in idx], [f["wrk"] for f in filas], w, label=CPU_WORKER)
     ax1.bar([i + 1.5 * w for i in idx], [f["gen"] for f in filas], w, label="CPU máx. generador")
     ax1.set_xticks(list(idx), [f["et"] for f in filas])
     ax1.set_ylabel("CPU media en la ventana (%)")
@@ -109,9 +111,8 @@ def comparar(etiquetas):
                "e1-L3-sql-dedicado": "1 vCPU dedicado, pool 25"}
     filas = []
     for et in etiquetas:
-        d, m = cargar(f"{et}.json"), cargar(f"{et}-metricas.json")
+        d = cargar(f"{et}.json")
         dur = "http_req_duration{scenario:medicion}"
-        uso = met(m, "sql_cpu", None, "valores") or []
         filas.append((nombres.get(et, et), k6(d, dur, "med"), k6(d, dur, "p(95)"),
                       k6(d, "dropped_iterations", "count") or 0))
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(8, 3.6))
@@ -170,7 +171,7 @@ def serie(et):
     t0 = datetime.fromisoformat(m["desde"].replace("Z", "+00:00")).timestamp()
     fig, axs = plt.subplots(3, 1, figsize=(7, 7), sharex=True)
     for nombre, filtro, etq, esc in (("cpu_uso", {"instance_name": "mooc-web"}, "CPU Web Server", 100),
-                                     ("cpu_uso", {"instance_name": "mooc-worker"}, "CPU Worker Server", 100),
+                                     ("cpu_uso", {"instance_name": "mooc-worker"}, CPU_WORKER, 100),
                                      ("sql_cpu", None, "CPU Cloud SQL", 100)):
         v = met(m, nombre, filtro, "valores")
         if v:
@@ -211,7 +212,7 @@ def cola(et):
         x, y = minutos(v, t0)
         axs[1].plot(x, [a / 60 for a in y], "r-")
     axs[1].set_ylabel("antigüedad del más viejo (min)")
-    for nombre, filtro, etq in (("cpu_uso", {"instance_name": "mooc-worker"}, "CPU Worker Server"),
+    for nombre, filtro, etq in (("cpu_uso", {"instance_name": "mooc-worker"}, CPU_WORKER),
                                 ("memoria_uso_pct", {"metadata_system_name": "mooc-worker"}, "Memoria Worker Server")):
         v = met(m, nombre, filtro, "valores")
         if v:

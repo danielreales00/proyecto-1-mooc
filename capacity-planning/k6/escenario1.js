@@ -13,7 +13,7 @@ import http from 'k6/http';
 import { sleep, check } from 'k6';
 import { SharedArray } from 'k6/data';
 import exec from 'k6/execution';
-import { BASE, get, post, patch, json, pausa, clave, iteracion, resumir, submetricas } from './comun.js';
+import { BASE, get, post, patch, json, pausa, clave, iteracion, resumir, submetricas, aleatorio, elegir } from './comun.js';
 
 const TASA = Number(__ENV.TASA || 1);
 const DURACION = __ENV.DURACION || '8m';
@@ -47,15 +47,16 @@ const escenario = (inicio, duracion) => ({
 });
 
 export const options = {
-  scenarios: Object.assign(
-    { calentamiento: escenario('0s', CALENTAMIENTO), medicion: escenario(CALENTAMIENTO, DURACION) },
-    __ENV.INTEGRIDAD === '1' ? {
+  scenarios: {
+    calentamiento: escenario('0s', CALENTAMIENTO),
+    medicion: escenario(CALENTAMIENTO, DURACION),
+    ...(__ENV.INTEGRIDAD === '1' ? {
       integridad: {
         executor: 'constant-arrival-rate', rate: 6, timeUnit: '1m', duration: DURACION,
         startTime: CALENTAMIENTO, preAllocatedVUs: 4, maxVUs: 8, exec: 'integridad',
       },
-    } : {},
-  ),
+    } : {}),
+  },
   thresholds: submetricas(OPERACIONES),
   summaryTrendStats: ['med', 'p(95)', 'p(99)', 'avg', 'max'],
 };
@@ -86,8 +87,8 @@ export function estudiar() {
   // 1-2. Catálogo y ficha del curso.
   let r = get('/catalog/courses?category=carga&limit=50', null, 'GET /catalog/courses');
   const cat = json(r);
-  check(r, { 'catálogo con cursos': () => r.status === 200 && cat && cat.items.length > 0 });
-  const curso = cat && cat.items.find((c) => c.id === s.curso);
+  check(r, { 'catálogo con cursos': () => r.status === 200 && cat?.items.length > 0 });
+  const curso = cat?.items.find((c) => c.id === s.curso);
   leer();
   if (curso) {
     r = get(`/catalog/courses/${curso.slug}`, null, 'GET /catalog/courses/{slug}');
@@ -101,8 +102,8 @@ export function estudiar() {
   if (!inscripcion) {
     r = post('/enrollments', { course_id: s.curso }, t, 'POST /enrollments', true);
     const e = json(r);
-    check(r, { 'inscripción creada': () => r.status === 201 && e && e.id });
-    if (!e || !e.id) return;
+    check(r, { 'inscripción creada': () => r.status === 201 && e?.id });
+    if (!e?.id) return;
     inscripcion = e.id;
     leer();
   }
@@ -118,8 +119,8 @@ export function estudiar() {
   // 5-6. Abrir dos lecturas y registrar latidos. La cadencia mínima es 10 s
   // por recurso (ADR-0012): se espera lo que falte en vez de chocar con ella,
   // porque un latido rechazado por cadencia sería un fallo del guion.
-  const a = lecturas[Math.floor(Math.random() * lecturas.length)];
-  let b = lecturas[Math.floor(Math.random() * lecturas.length)];
+  const a = elegir(lecturas);
+  let b = elegir(lecturas);
   if (b.stable_id === a.stable_id) b = lecturas[(lecturas.indexOf(a) + 1) % lecturas.length];
   const ultimo = {};
   const evidencia = (rec, kind) => {
@@ -129,7 +130,7 @@ export function estudiar() {
       t, 'POST /progress', true);
     ultimo[rec.stable_id] = Date.now();
     const ack = json(x);
-    check(x, { [`progreso ${kind} aceptado`]: () => x.status >= 200 && x.status < 300 && ack && ack.accepted === true });
+    check(x, { [`progreso ${kind} aceptado`]: () => x.status >= 200 && x.status < 300 && ack?.accepted === true });
   };
   evidencia(a, 'open');
   leer();
@@ -148,7 +149,7 @@ export function estudiar() {
   check(r, { 'progreso calculado por el servidor': () => r.status === 200 && pr && typeof pr.progress_pct === 'number' });
 
   // 8. Presentar un quiz, tres de cada diez iteraciones.
-  if (Math.random() < 0.3) {
+  if (aleatorio() < 0.3) {
     leer();
     presentar(inscripcion, t, cont.resources);
   }
@@ -157,17 +158,17 @@ export function estudiar() {
 function presentar(inscripcion, t, recursos) {
   const quizzes = recursos.filter((x) => x.type === 'quiz');
   if (!quizzes.length) return null;
-  const q = quizzes[Math.floor(Math.random() * quizzes.length)];
+  const q = elegir(quizzes);
   let r = post(`/enrollments/${inscripcion}/quizzes/${q.stable_id}/attempts`, null, t, 'POST /attempts', true);
   const intento = json(r);
   // 409: la cuenta ya tiene un intento abierto en ese quiz, de una iteración
   // anterior que se cortó a mitad (una corrida saturada). La regla que lo
   // rechaza funciona: es un rechazo de negocio, no una comprobación fallida.
   if (r.status === 409) return null;
-  if (!check(r, { 'intento iniciado': () => r.status === 201 && intento && intento.questions.length > 0 })) return null;
+  if (!check(r, { 'intento iniciado': () => r.status === 201 && intento?.questions.length > 0 })) return null;
   const respuestas = intento.questions.map((p) => ({
     question_stable_id: p.stable_id,
-    selected_option_stable_ids: [p.options[Math.floor(Math.random() * p.options.length)].stable_id],
+    selected_option_stable_ids: [elegir(p.options).stable_id],
   }));
   r = patch(`/attempts/${intento.id}/answers`, { answers: respuestas }, t, 'PATCH /answers');
   check(r, { 'respuestas guardadas': () => r.status === 200 });
@@ -181,12 +182,12 @@ function presentar(inscripcion, t, recursos) {
 // §5.5 — integridad bajo concurrencia, durante el nivel y no en reposo.
 export function integridad() {
   const lista = datos[0].estudiantes.filter((e) => e.inscripcion);
-  const s = lista[Math.floor(Math.random() * lista.length)];
-  const otro = lista[Math.floor(Math.random() * lista.length)];
+  const s = elegir(lista);
+  const otro = elegir(lista);
   const t = s.token;
 
   const cont = json(get(`/enrollments/${s.inscripcion}/content`, t, 'integridad'));
-  const quiz = cont && cont.resources.find((x) => x.type === 'quiz');
+  const quiz = cont?.resources.find((x) => x.type === 'quiz');
   if (!quiz) return;
 
   // La clave nunca sale del servidor, ni en el snapshot del intento (ADR-0013).
@@ -229,7 +230,7 @@ export function integridad() {
   r = post(`/enrollments/${s.inscripcion}/progress`,
     { resource_stable_id: lectura.stable_id, kind: 'heartbeat', progress_percent: 100 }, t, 'integridad', true);
   const ack = json(r);
-  check(r, { 'integridad: porcentaje del cliente rechazado': () => r.status >= 400 || (ack && ack.accepted === false) });
+  check(r, { 'integridad: porcentaje del cliente rechazado': () => r.status >= 400 || ack?.accepted === false });
 }
 
 export function handleSummary(d) {

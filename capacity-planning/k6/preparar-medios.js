@@ -13,25 +13,31 @@ const MEDIOS = __ENV.MEDIOS || '/medios';
 const ESPECTADORES = Number(__ENV.ESPECTADORES || 100);
 const manifiesto = open(`${MEDIOS}/manifiesto.jsonl`).trim().split('\n').map((l) => JSON.parse(l));
 const datos = JSON.parse(open(__ENV.DATOS || '/resultados/datos.json'));
-const archivos = {};
-for (const m of manifiesto) archivos[m.perfil] = await abrir(`${MEDIOS}/${m.perfil}.mp4`);
+const abiertos = await Promise.all(manifiesto.map((m) => abrir(`${MEDIOS}/${m.perfil}.mp4`)));
+const archivos = Object.fromEntries(manifiesto.map((m, k) => [m.perfil, abiertos[k]]));
 
 export const options = {
   setupTimeout: '90m',
   scenarios: { nada: { executor: 'shared-iterations', vus: 1, iterations: 1 } },
 };
 
+// Sube los perfiles de uno en uno y espera a que cada uno quede listo antes
+// de seguir: así la cola no tiene más de un video a la vez.
+async function prepararVideos(prof, pendientes, videos = []) {
+  if (!pendientes.length) return videos;
+  const [m, ...resto] = pendientes;
+  const a = await subir(archivos[m.perfil], m, prof, m.perfil);
+  if (!a) fail(`no se pudo subir el perfil ${m.perfil}`);
+  const estado = esperar(a, prof, m.perfil, 80 * 60);
+  if (estado !== 'ready') fail(`el perfil ${m.perfil} terminó en ${estado}`);
+  videos.push({ perfil: m.perfil, asset: a.id });
+  console.log(`perfil ${m.perfil} listo`);
+  return prepararVideos(prof, resto, videos);
+}
+
 export async function setup() {
   const prof = login('profesor-carga-01@carga.local');
-  const videos = [];
-  for (const m of manifiesto) {
-    const a = await subir(archivos[m.perfil], m, prof, m.perfil);
-    if (!a) fail(`no se pudo subir el perfil ${m.perfil}`);
-    const estado = esperar(a, prof, m.perfil, 80 * 60);
-    if (estado !== 'ready') fail(`el perfil ${m.perfil} terminó en ${estado}`);
-    videos.push({ perfil: m.perfil, asset: a.id });
-    console.log(`perfil ${m.perfil} listo`);
-  }
+  const videos = await prepararVideos(prof, manifiesto);
 
   let r = post('/courses', { title: 'Curso multimedia de carga', summary: 'Videos del escenario 2.', category: 'carga-medios', language: 'es' }, prof, 'POST /courses', true);
   const c = json(r);
@@ -56,7 +62,9 @@ export async function setup() {
   return { curso: c.course.id, videos, espectadores };
 }
 
-export default function () {}
+export default function sinIteraciones() {
+  // Todo el trabajo ocurre en setup(): la iteración no hace nada.
+}
 
 export function handleSummary(resumen) {
   if (!resumen.setup_data) return {};

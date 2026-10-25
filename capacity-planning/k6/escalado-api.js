@@ -5,6 +5,7 @@
 //   k6 run -e BASE_URL=https://<host> -e TASA=50 -e DURACION=30m escalado-api.js
 import http from 'k6/http';
 import { Counter } from 'k6/metrics';
+import { elegir } from './comun.js';
 
 const TASA = Number(__ENV.TASA || 50);
 const DURACION = __ENV.DURACION || '30m';
@@ -26,8 +27,8 @@ export const options = {
 
 const RUTAS = ['/catalog/courses', '/catalog/courses?limit=5', '/catalog/courses/fundamentos-de-cloud'];
 
-export default function () {
-  const r = http.get(BASE + RUTAS[Math.floor(Math.random() * RUTAS.length)], { timeout: '20s' });
+export default function pedirCatalogo() {
+  const r = http.get(BASE + elegir(RUTAS), { timeout: '20s' });
   porInstancia.add(1, { instancia: r.headers['X-Instancia'] || 'ninguna', estado: String(r.status) });
   if (r.status >= 500 || r.status === 0) {
     fallos.add(1, { estado: String(r.status) });
