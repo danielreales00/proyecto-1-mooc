@@ -554,6 +554,22 @@ audit: ## Muestra los últimos eventos de auditoría
 frontend-test: ## Pruebas del cliente HTTP de la interfaz en un contenedor
 	docker run --rm -v "$(PWD)/frontend":/src -w /src node:24-alpine npm test
 
+# El mismo recorrido de navegador contra la URL pública del balanceador: es la
+# evidencia del frontend en la nube. La contraseña se lee de Secret Manager en
+# el momento y el correo de verificación llega al Mailpit de mooc-cola por el
+# túnel. Deja la salida y las capturas en docs/entrega3/evidencias/frontend.
+.PHONY: frontend-e2e-nube
+frontend-e2e-nube: tunel-mailpit ## Recorrido de navegador contra la nube (crea datos sintéticos)
+	docker build -q -f frontend/tests/Dockerfile -t mooc-browser frontend/tests >/dev/null
+	@mkdir -p docs/entrega3/evidencias/frontend
+	@set -o pipefail; clave=$$($(GCLOUD) secrets versions access latest --secret=seed-password); \
+	docker run --rm --ipc=host --network $(NUBE_RED) \
+		-e BASE_URL=https://$(NUBE_HOST) -e MAILPIT_URL=http://mooc-tunel:8025 \
+		-e DEMO_PASSWORD="$$clave" -e EVIDENCIAS=/evidencias \
+		-v "$(PWD)/frontend":/src -v "$(PWD)/docs/entrega3/evidencias/frontend":/evidencias -w /src \
+		mooc-browser sh -c "npm ci --no-audit --no-fund >/dev/null && node tests/e2e.mjs" \
+		| tee docs/entrega3/evidencias/frontend/nube-$$(date -u +%Y%m%dT%H%MZ).log
+
 .PHONY: frontend-e2e
 frontend-e2e: ## Recorrido de navegador contra el stack local (crea datos sintéticos)
 	docker build -f frontend/tests/Dockerfile -t mooc-browser frontend/tests

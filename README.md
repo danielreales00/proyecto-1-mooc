@@ -410,6 +410,7 @@ para el equipo docente se comunica por el medio privado del curso.
 | Documento | Qué contiene |
 | --- | --- |
 | [`docs/entrega3/arquitectura.md`](docs/entrega3/arquitectura.md) | **Documento de arquitectura de la entrega**: componentes, despliegue elástico, escalado, operación, costo y limitaciones |
+| [`docs/entrega3/verificacion-frontend.md`](docs/entrega3/verificacion-frontend.md) | Recorridos de estudiante y profesor, sus rutas y la evidencia que los comprueba, en local y en la nube |
 | [`arquitectura/adr/0019`](arquitectura/adr/0019-arquitectura-elastica-iaas.md) | Las decisiones de la arquitectura elástica |
 | [`arquitectura/despliegue-gcp-entrega3.md`](arquitectura/despliegue-gcp-entrega3.md) | Plan ejecutable del despliegue elástico y de su reconstrucción |
 | [`docs/entrega3/evidencias/elastica/`](docs/entrega3/evidencias/elastica/) | Evidencia de la puesta en marcha, el arranque y el ciclo de autoscaling |

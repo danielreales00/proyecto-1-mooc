@@ -4,6 +4,8 @@ const { chromium } = await import(
   process.env.PLAYWRIGHT_MODULE || "playwright"
 );
 const base = process.env.BASE_URL || "http://localhost:8090";
+// Las capturas finales: /tmp en local, la carpeta de evidencias en la nube.
+const evidencias = process.env.EVIDENCIAS || "/tmp";
 const browser = await chromium.launch({
   headless: true,
   ...(process.env.CHROME_PATH
@@ -38,6 +40,25 @@ async function logout() {
   await page
     .getByRole("heading", { name: "Aprender nos transforma." })
     .waitFor();
+}
+// Llama a la API con la sesión de la pestaña, como lo haría alguien que se
+// salta la interfaz. Devuelve solo el código HTTP.
+async function apiStatus(method, path, body) {
+  return page.evaluate(
+    async ([m, p, b]) => {
+      const response = await fetch(`/api/v1${p}`, {
+        method: m,
+        headers: {
+          Authorization: `Bearer ${sessionStorage.getItem("mooc.session")}`,
+          "Content-Type": "application/json",
+          "Idempotency-Key": crypto.randomUUID(),
+        },
+        body: b === undefined ? undefined : JSON.stringify(b),
+      });
+      return response.status;
+    },
+    [method, path, body],
+  );
 }
 async function settle() {
   await page.waitForTimeout(350);
@@ -281,7 +302,59 @@ try {
     .getByText("Esta versión es inmutable.", { exact: false })
     .waitFor();
   await logout();
+  // Una profesora no puede modificar un curso ajeno: el servidor lo rechaza
+  // aunque la petición no pase por la interfaz.
+  await login("profesora2@mooc.local");
+  await goto("/studio", "Comparte lo que sabes.");
+  assert.equal(
+    await page.getByRole("heading", { name, exact: true }).count(),
+    0,
+    "el curso ajeno no aparece entre los cursos de la profesora",
+  );
+  assert.equal(
+    await apiStatus("PATCH", `/courses/${courseId}`, { title: "Ajeno" }),
+    403,
+    "editar los datos de un curso ajeno",
+  );
+  assert.equal(
+    await apiStatus("POST", `/courses/${courseId}/versions`),
+    403,
+    "crear una versión de un curso ajeno",
+  );
+  assert.equal(
+    await apiStatus("POST", `/courses/${courseId}/versions/1/unpublish`),
+    403,
+    "retirar la publicación de un curso ajeno",
+  );
+  await logout();
   await login("estudiante2@mooc.local");
+  // Un estudiante no ve el estudio ni puede usar sus operaciones.
+  await goto("/studio", "Esta sección requiere otro rol");
+  assert.equal(
+    await page.getByRole("link", { name: "Estudio", exact: true }).count(),
+    0,
+    "el menú del estudiante no ofrece el estudio",
+  );
+  assert.equal(
+    await apiStatus("POST", "/courses", {
+      title: "Curso de un estudiante",
+      summary: "No debe crearse.",
+      category: "prueba",
+      language: "es",
+    }),
+    403,
+    "un estudiante crea un curso",
+  );
+  assert.equal(
+    await apiStatus("PATCH", `/courses/${courseId}`, { title: "Ajeno" }),
+    403,
+    "un estudiante edita un curso",
+  );
+  assert.equal(
+    await apiStatus("POST", `/courses/${courseId}/versions/1/publish`),
+    403,
+    "un estudiante publica un curso",
+  );
   await goto("/catalog", "Siempre hay algo por descubrir.");
   await page.getByLabel("Buscar cursos").fill(name);
   await page.getByRole("button", { name: "Buscar ↗", exact: true }).click();
@@ -364,6 +437,17 @@ try {
   await page
     .getByRole("heading", { name: "Objetivo alcanzado.", exact: true })
     .waitFor();
+  // El porcentaje lo calcula el servidor con las evidencias de la lección.
+  await goto("/learning");
+  await page.getByRole("heading", { name: /Sigue avanzando/ }).waitFor();
+  const progreso = await page
+    .locator("article.row", { hasText: name })
+    .locator(".meta")
+    .textContent();
+  assert.ok(
+    Number(progreso.match(/([\d.]+)% completado/)?.[1]) > 0,
+    `el curso debe mostrar progreso registrado: ${progreso}`,
+  );
   await goto("/badges", "Lo aprendido deja huella.");
   for (
     let i = 0;
@@ -404,10 +488,10 @@ try {
     ),
     false,
   );
-  await page.screenshot({ path: "/tmp/mooc-mobile-final.png", fullPage: true });
+  await page.screenshot({ path: `${evidencias}/movil.png`, fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.screenshot({
-    path: "/tmp/mooc-desktop-final.png",
+    path: `${evidencias}/escritorio.png`,
     fullPage: true,
   });
   assert.deepEqual(errors, []);
