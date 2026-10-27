@@ -34,6 +34,60 @@ def serie(met, nombre, filtro=None, campo="max"):
     return max(vals) if vals else None
 
 
+def del_papel(nombre, papel):
+    """Si una serie pertenece al papel, en cualquiera de las dos entregas.
+
+    En la Entrega 2 había una máquina fija por papel: `mooc-web` y
+    `mooc-worker`. En la 3 son grupos, y cada instancia lleva su propio sufijo
+    (`mooc-api-znwh`, `mooc-worker-0w44`). Comparar por igualdad dejaba las
+    tablas de la Entrega 3 vacías, y es la forma de descubrirlo con las
+    corridas ya hechas.
+    """
+    if papel == "api":
+        return nombre == "mooc-web" or nombre.startswith("mooc-api-")
+    if papel == "worker":
+        return nombre == "mooc-worker" or nombre.startswith("mooc-worker-")
+    return nombre == f"mooc-{papel}"
+
+
+def filas_del_papel(met, nombre, etiqueta, papel):
+    filas = met["metricas"].get(nombre) if met else None
+    if not filas or isinstance(filas, dict):
+        return []
+    return [f for f in filas if del_papel(f["serie"].get(etiqueta, ""), papel)]
+
+
+def grupo(met, nombre, etiqueta, papel, campo="max", entre="max"):
+    """Un valor por papel, agregando las instancias que lo atendieron.
+
+    El máximo se toma entre todas las instancias. La media se promedia entre
+    ellas: el máximo de las medias describiría a la instancia más cargada del
+    grupo, no al grupo, y con autoscaling eso exagera el uso justo en los
+    niveles donde el grupo creció.
+    """
+    vals = [f[campo] for f in filas_del_papel(met, nombre, etiqueta, papel) if f[campo] is not None]
+    if not vals:
+        return None
+    return max(vals) if entre == "max" else sum(vals) / len(vals)
+
+
+def instancias(met, papel):
+    """Cuántas instancias del papel aparecieron en la ventana de la corrida.
+
+    Es la diferencia arquitectónica que la Entrega 3 evalúa, así que va en la
+    tabla y no en una nota al pie.
+    """
+    nombres = {f["serie"].get("instance_name") for f in filas_del_papel(met, "cpu_uso", "instance_name", papel)}
+    return len(nombres) or None
+
+
+def nombre_api(met):
+    """«API» con grupos, «web» con la máquina fija de la línea base."""
+    for f in filas_del_papel(met, "cpu_uso", "instance_name", "api"):
+        return "web" if f["serie"].get("instance_name") == "mooc-web" else "API"
+    return "API"
+
+
 def ms(x):
     return "-" if x is None else f"{x:.0f}"
 
@@ -64,9 +118,9 @@ def errores(d, reqs):
 
 
 def memoria(met):
-    web = de_serie(met, "memoria_uso_pct", {"metadata_system_name": "mooc-web"})
-    wrk = de_serie(met, "memoria_uso_pct", {"metadata_system_name": "mooc-worker"})
-    return f"{web:.0f} / {wrk:.0f} %" if web and wrk else "-"
+    api = grupo(met, "memoria_uso_pct", "metadata_system_name", "api")
+    wrk = grupo(met, "memoria_uso_pct", "metadata_system_name", "worker")
+    return f"{api:.0f} / {wrk:.0f} %" if api and wrk else "-"
 
 
 def fila_e1(et):
@@ -82,26 +136,40 @@ def fila_e1(et):
         "p99": ms(k6(d, DURACION, "p(99)")), "err": errores(d, reqs),
         "429": str(int(l429)), "chk": por_ciento(k6(d, "checks{scenario:medicion}", "rate"), 2),
         "caidas": str(int(caidas)),
-        "cpu_web": pct(de_serie(met, "cpu_uso", {"instance_name": "mooc-web"}, "media")),
-        "cpu_wrk": pct(de_serie(met, "cpu_uso", {"instance_name": "mooc-worker"}, "media")),
-        "cpu_gen": pct(de_serie(met, "cpu_uso", {"instance_name": "mooc-generador"}, "max")),
+        "cpu_web": pct(grupo(met, "cpu_uso", "instance_name", "api", "media", "media")),
+        "cpu_wrk": pct(grupo(met, "cpu_uso", "instance_name", "worker", "media", "media")),
+        "cpu_gen": pct(grupo(met, "cpu_uso", "instance_name", "generador", "max")),
+        "inst": f"{instancias(met, 'api') or '-'} / {instancias(met, 'worker') or '-'}",
         "mem": memoria(met),
         "sql": pct(de_serie(met, "sql_cpu", None, "media")), "conex": ms(de_serie(met, "sql_conexiones")),
     }
 
 
+def primeras_metricas(etiquetas):
+    """Las métricas de la primera corrida que las tenga, para rotular."""
+    for et in etiquetas:
+        met = cargar(f"{et}-metricas.json")
+        if met:
+            return met
+    return None
+
+
 def e1(etiquetas):
     filas = [f for f in (fila_e1(et) for et in etiquetas) if f]
-    print("| Nivel | Req/s | p50 / p95 / p99 (ms) | Errores (5xx + timeouts) | CPU web / worker / SQL | Memoria web / worker |")
+    papel = nombre_api(primeras_metricas(etiquetas))
+    print(f"| Nivel | Req/s | p50 / p95 / p99 (ms) | Errores (5xx + timeouts) | "
+          f"CPU {papel} / worker / SQL | Memoria {papel} / worker |")
     print(SEPARADOR)
     for f in filas:
         print(f"| {f['et']} | {f['req_s']} | {f['p50']} / {f['p95']} / {f['p99']} | {f['err']} | "
               f"{f['cpu_web']} / {f['cpu_wrk']} / {f['sql']} | {f['mem']} |")
     print()
-    print("| Nivel | 429 | Comprobaciones | Iteraciones perdidas | CPU máx. generador | Conexiones BD máx. |")
-    print(SEPARADOR)
+    print(f"| Nivel | 429 | Comprobaciones | Iteraciones perdidas | Instancias {papel} / worker | "
+          f"CPU máx. generador | Conexiones BD máx. |")
+    print("| --- | --- | --- | --- | --- | --- | --- |")
     for f in filas:
-        print(f"| {f['et']} | {f['429']} | {f['chk']} | {f['caidas']} | {f['cpu_gen']} | {f['conex']} |")
+        print(f"| {f['et']} | {f['429']} | {f['chk']} | {f['caidas']} | {f['inst']} | "
+              f"{f['cpu_gen']} | {f['conex']} |")
 
 
 def valor(d, metrica, clave):
@@ -128,15 +196,14 @@ def fila_e2_control(et, d):
 
 
 def fila_e2_cola(et, met):
-    worker = {"metadata_system_name": "mooc-worker"}
     pend = serie(met, "cola_profundidad", {"queue": "bulk", "state": "pending"})
     ant = serie(met, "cola_antiguedad_s", {"queue": "bulk"})
-    cm = serie(met, "cpu_uso", {"instance_name": "mooc-worker"}, "media")
-    cx = serie(met, "cpu_uso", {"instance_name": "mooc-worker"})
-    mx = serie(met, "memoria_uso_pct", worker)
-    dx = serie(met, "disco_uso_pct", worker)
-    return (f"| {et} | {ms(pend)} | {ms(ant)} | {pct(cm)} / {pct(cx)} | "
-            f"{entero_pct(mx)} | {entero_pct(dx)} |")
+    cm = grupo(met, "cpu_uso", "instance_name", "worker", "media", "media")
+    cx = grupo(met, "cpu_uso", "instance_name", "worker")
+    mx = grupo(met, "memoria_uso_pct", "metadata_system_name", "worker")
+    dx = grupo(met, "disco_uso_pct", "metadata_system_name", "worker")
+    return (f"| {et} | {ms(pend)} | {ms(ant)} | {instancias(met, 'worker') or '-'} | "
+            f"{pct(cm)} / {pct(cx)} | {entero_pct(mx)} | {entero_pct(dx)} |")
 
 
 def entero_pct(x):
@@ -156,8 +223,9 @@ def e2(etiquetas):
         if met:
             con_metricas.append((et, met))
     print()
-    print("| Nivel | Cola bulk máx. (pendientes) | Antigüedad máx. (s) | CPU worker media / máx. | Memoria worker máx. | Disco worker máx. |")
-    print(SEPARADOR)
+    print("| Nivel | Cola bulk máx. (pendientes) | Antigüedad máx. (s) | Instancias worker | "
+          "CPU worker media / máx. | Memoria worker máx. | Disco worker máx. |")
+    print("| --- | --- | --- | --- | --- | --- | --- |")
     for et, met in con_metricas:
         print(fila_e2_cola(et, met))
 

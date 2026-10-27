@@ -222,9 +222,34 @@ día (`git pull`).
    false`. Las horas de la sesión van al registro del plan, para el consumo
    observado del documento de arquitectura.
 
-`metricas/tabla.py` filtra la CPU por los nombres de máquina de la Entrega 2
-(`mooc-web`, `mooc-worker`). Antes de armar las tablas de la Entrega 3 hay que
-adaptarlo a las instancias de los grupos (`mooc-api-*`, `mooc-worker-*`).
+### Comprobaciones que cierran deuda técnica
+
+Dos hallazgos quedaron verificados a medias en la Sesión C y se cierran aquí,
+sin corrida propia: basta pedirlo en el momento adecuado.
+
+- **DT-03, conexiones a la base.** Durante **L3**, que es el único nivel que
+  llena el pool de la API, con el grupo en tres instancias:
+
+  ```bash
+  make psql-nube
+  -- dentro: select application_name, state, count(*) from pg_stat_activity
+  --         group by 1,2 order by 3 desc;
+  ```
+
+  La Sesión C vio 27 conexiones con 3 + 3, pero con carga ligera; el techo
+  calculado es 42 de 47.
+
+- **DT-02, retiro seguro.** En **3B**, retirar una instancia que esté con un
+  video del **perfil C**. La Sesión C retiró una ocupada y el trabajo terminó,
+  pero dispuso de 107 s y le bastaron 89: el plazo de 280 s de
+  `WORKER_SHUTDOWN_TIMEOUT` sigue sin ponerse a prueba. Un perfil C tarda unos
+  170 s y sí lo pone.
+
+`metricas/tabla.py` ya entiende los nombres de los grupos (`mooc-api-*`,
+`mooc-worker-*`), agrega las instancias de cada papel —media entre ellas para
+las medias, máximo para los máximos— y añade una columna con cuántas
+atendieron. Sigue dando los mismos números con los archivos de la Entrega 2,
+que es lo que necesita la comparación de la sección 12.
 
 ## Variables por papel
 

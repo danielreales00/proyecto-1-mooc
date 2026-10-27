@@ -175,7 +175,7 @@ Los responsables se nombran por frente de trabajo, según el reparto de
   coincide con los `job_runs` en `queued`, y los logs no registran duplicados
   descartados.
 - **Responsable y plazo.** Backend y calidad. Cierre de la Entrega 3.
-- **Estado.** En tratamiento. Corregido en `692f30d` y `e0b38f2`, integrados en la fusión con `main`: `Publisher.Republicar` encola con `asynq.TaskID(job_key)`, no duplica una tarea que sigue viva en Redis y reactiva con `RunTask` la que está archivada en la DLQ, conservando su payload. El reaper no cuenta como recuperado un trabajo que sigue en Redis. `make prueba-cola` lo prueba contra Redis. Falta la verificación del escenario 3B.
+- **Estado.** En tratamiento. Corregido en `692f30d` y `e0b38f2`, integrados en la fusión con `main`: `Publisher.Republicar` encola con `asynq.TaskID(job_key)`, no duplica una tarea que sigue viva en Redis y reactiva con `RunTask` la que está archivada en la DLQ, conservando su payload. El reaper no cuenta como recuperado un trabajo que sigue en Redis. `make prueba-cola` lo prueba contra Redis. La Sesión C aporta evidencia parcial en la nube: los nueve videos de la sesión terminaron con **un solo juego de derivados** (65 objetos y 4 manifiestos cada uno en `gs://mooc-509602-derived`), que es lo que un trabajo duplicado habría roto. Falta la verificación bajo carga del escenario 3B, que es donde el reaper tiene trabajos esperando turno de verdad.
 
 #### DT-02 · OPE · El retiro de un worker corta el trabajo en curso
 
@@ -199,7 +199,9 @@ Los responsables se nombran por frente de trabajo, según el reparto de
   existe un solo juego de derivados HLS.
 - **Responsable y plazo.** Backend y calidad, con Infraestructura elástica.
   Cierre de la Entrega 3.
-- **Estado.** En tratamiento. Corregido en `692f30d` y `e0b38f2`. El worker maneja SIGTERM con `Start` y no con `Run`, que apagaba el servidor por su cuenta y cortaba los trabajos sin esperar. Deja de tomar trabajos, espera `WORKER_SHUTDOWN_TIMEOUT` (8 s en local, 50 s en `worker` y 280 s en `worker-media` en la nube, con `stop_grace_period` de 15, 60 y 300 s) y corta lo que no termina para que el runner lo marque reclamable. Un trabajo en `running` con el latido vencido 90 s se reclama sin esperar al reaper. Falta comprobar en el escenario 3 que GCE respeta ese tiempo al retirar una instancia: sin apagado ordenado en la plantilla, el script de apagado dispone de unos 90 s.
+- **Estado.** En tratamiento. Corregido en `692f30d` y `e0b38f2`. El worker maneja SIGTERM con `Start` y no con `Run`, que apagaba el servidor por su cuenta y cortaba los trabajos sin esperar. Deja de tomar trabajos, espera `WORKER_SHUTDOWN_TIMEOUT` (8 s en local, 50 s en `worker` y 280 s en `worker-media` en la nube, con `stop_grace_period` de 15, 60 y 300 s) y corta lo que no termina para que el runner lo marque reclamable. Un trabajo en `running` con el latido vencido 90 s se reclama sin esperar al reaper.
+
+  **Verificado en parte (Sesión C, E16).** Se retiró `mooc-worker-0w44` con una transcodificación activa: el `delete` empezó a las 22:14:19, el trabajo terminó a las 22:15:48 en el intento 1 y el `delete` acabó a las 22:16:06. El criterio se cumple —el trabajo terminó, sin reintento y con un solo juego de derivados—, pero **el plazo de 280 s no se puso a prueba**: la máquina dispuso de 107 s en total y al trabajo le bastaron 89. Lo que falta por saber es si GCE habría esperado los 280 s configurados o lo habría cortado antes, y eso solo lo contesta una transcodificación más larga que el margen real. Mientras no se mida, `WORKER_SHUTDOWN_TIMEOUT=280` es una intención, no una garantía. El escenario 3B es la ocasión: basta retirar una instancia que esté con un video del perfil C.
 
 #### DT-03 · ARQ · Las conexiones a la base no alcanzan para tres instancias
 
@@ -223,7 +225,9 @@ Los responsables se nombran por frente de trabajo, según el reparto de
   `pg_stat_activity` no supera el límite y los logs no registran errores de
   conexión.
 - **Responsable y plazo.** Infraestructura elástica. Cierre de la Entrega 3.
-- **Estado.** En tratamiento. Corregido en `692f30d`. Pools de 8 por API y 3 por proceso de worker: con tres instancias de cada grupo suman 42 de las 47 conexiones disponibles, y las 5 restantes cubren el `migrate` de una API que arranca y una consola. La fórmula está en `infra/environments/entrega3/terraform.tfvars`. Falta confirmar con `pg_stat_activity` durante el escenario 3.
+- **Estado.** En tratamiento. Corregido en `692f30d`. Pools de 8 por API y 3 por proceso de worker: con tres instancias de cada grupo suman 42 de las 47 conexiones disponibles, y las 5 restantes cubren el `migrate` de una API que arranca y una consola. La fórmula está en `infra/environments/entrega3/terraform.tfvars`.
+
+  **Verificado en parte (Sesión C, C5).** `pg_stat_activity` dio 16 conexiones con 3 APIs y 1 worker, y Cloud Monitoring un máximo de 27 con 3 + 3, frente a las 47 útiles. Sin errores de conexión. Pero los pools abren a demanda y la carga de la sesión era ligera: 27 no se acerca al techo de 42 porque nadie lo pidió. La comprobación que cierra el hallazgo es `pg_stat_activity` durante el nivel L3 del escenario 1, que es el único que llena el pool de la API.
 
 #### DT-04 · SEG · `/readyz` expone errores internos y el worker no tiene comprobación de disponibilidad
 

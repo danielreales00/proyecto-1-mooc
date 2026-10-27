@@ -19,6 +19,11 @@ coverage.out
 # Artefactos de pruebas
 /scripts/out/
 *.log
+# ...salvo los registros que una evidencia enlaza. Esos no son artefactos: son
+# el entregable «evidencias reproducibles enlazadas desde los informes», y sin
+# esta excepción `*.log` los deja fuera del repositorio y el enlace del informe
+# apunta a nada.
+!/docs/**/evidencias/**/*.log
 
 # Editores
 .vscode/
