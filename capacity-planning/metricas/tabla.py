@@ -72,13 +72,24 @@ def grupo(met, nombre, etiqueta, papel, campo="max", entre="max"):
 
 
 def instancias(met, papel):
-    """Cuántas instancias del papel aparecieron en la ventana de la corrida.
+    """Cuántas instancias del papel atendieron a la vez, como mucho.
 
     Es la diferencia arquitectónica que la Entrega 3 evalúa, así que va en la
     tabla y no en una nota al pie.
+
+    Se cuenta por instante y se toma el máximo, no el número de nombres
+    distintos de la ventana: una instancia que se está drenando sigue
+    publicando métricas un rato y aparece junto a la que la sustituye, de modo
+    que contar nombres da tres donde nunca hubo más de dos sirviendo.
     """
-    nombres = {f["serie"].get("instance_name") for f in filas_del_papel(met, "cpu_uso", "instance_name", papel)}
-    return len(nombres) or None
+    filas = filas_del_papel(met, "cpu_uso", "instance_name", papel)
+    if not filas:
+        return None
+    por_instante = {}
+    for f in filas:
+        for marca, _ in f.get("valores") or []:
+            por_instante[marca] = por_instante.get(marca, 0) + 1
+    return max(por_instante.values()) if por_instante else len(filas)
 
 
 def nombre_api(met):

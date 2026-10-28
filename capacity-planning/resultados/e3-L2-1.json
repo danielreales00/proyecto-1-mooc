@@ -1,0 +1,584 @@
+{
+ "options": {
+  "summaryTimeUnit": "",
+  "noColor": true,
+  "summaryTrendStats": [
+   "med",
+   "p(95)",
+   "p(99)",
+   "avg",
+   "max"
+  ]
+ },
+ "state": {
+  "isStdOutTTY": false,
+  "isStdErrTTY": false,
+  "testRunDurationMs": 633467.07223
+ },
+ "metrics": {
+  "http_req_duration": {
+   "values": {
+    "p(95)": 31.121571350000004,
+    "p(99)": 174.36743728000258,
+    "avg": 28.68996316501822,
+    "max": 4217.519402,
+    "med": 17.896943999999998
+   },
+   "type": "trend",
+   "contains": "time"
+  },
+  "http_req_duration{scenario:medicion,name:POST /submit}": {
+   "contains": "time",
+   "values": {
+    "med": 18.303259,
+    "p(95)": 31.31985985000004,
+    "p(99)": 149.94213259000347,
+    "avg": 30.160771509242117,
+    "max": 2564.742306
+   },
+   "thresholds": {
+    "p(95)>=0": {
+     "ok": true
+    }
+   },
+   "type": "trend"
+  },
+  "rechazos_4xx{scenario:medicion}": {
+   "type": "counter",
+   "contains": "default",
+   "values": {
+    "count": 0,
+    "rate": 0
+   },
+   "thresholds": {
+    "count>=0": {
+     "ok": true
+    }
+   }
+  },
+  "http_req_tls_handshaking": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "max": 30.594527,
+    "med": 0,
+    "p(95)": 0,
+    "p(99)": 5.996194050000005,
+    "avg": 0.09338055172271677
+   }
+  },
+  "http_req_duration{scenario:medicion,name:POST /progress}": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "med": 18.9127785,
+    "p(95)": 31.958475399999983,
+    "p(99)": 132.58550742999748,
+    "avg": 29.528723722968735,
+    "max": 2963.272659
+   },
+   "thresholds": {
+    "p(95)>=0": {
+     "ok": true
+    }
+   }
+  },
+  "data_received": {
+   "values": {
+    "count": 280127384,
+    "rate": 442213.0151356802
+   },
+   "type": "counter",
+   "contains": "data"
+  },
+  "http_req_receiving": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "avg": 0.8606586584652094,
+    "max": 1557.334273,
+    "med": 0.124246,
+    "p(95)": 2.00073565,
+    "p(99)": 5.4071605300000005
+   }
+  },
+  "errores_5xx{scenario:medicion}": {
+   "type": "counter",
+   "contains": "default",
+   "values": {
+    "count": 0,
+    "rate": 0
+   },
+   "thresholds": {
+    "count>=0": {
+     "ok": true
+    }
+   }
+  },
+  "checks{scenario:medicion}": {
+   "values": {
+    "rate": 1,
+    "passes": 38382,
+    "fails": 0
+   },
+   "thresholds": {
+    "rate>=0": {
+     "ok": true
+    }
+   },
+   "type": "rate",
+   "contains": "default"
+  },
+  "http_req_duration{scenario:medicion,name:PATCH /answers}": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "avg": 38.92471525138629,
+    "max": 2038.90771,
+    "med": 25.912359000000002,
+    "p(95)": 39.5383458,
+    "p(99)": 175.37405294000075
+   },
+   "thresholds": {
+    "p(95)>=0": {
+     "ok": true
+    }
+   }
+  },
+  "http_reqs": {
+   "type": "counter",
+   "contains": "default",
+   "values": {
+    "count": 48528,
+    "rate": 76.6069810529637
+   }
+  },
+  "http_req_duration{scenario:medicion,name:GET /catalog/courses/{slug}}": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "avg": 23.505598056250093,
+    "max": 4217.519402,
+    "med": 8.879660999999999,
+    "p(95)": 21.09150629999998,
+    "p(99)": 210.4319498800033
+   },
+   "thresholds": {
+    "p(95)>=0": {
+     "ok": true
+    }
+   }
+  },
+  "http_req_duration{scenario:medicion}": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "p(95)": 30.879405499999994,
+    "p(99)": 161.1301431900051,
+    "avg": 28.29490179102193,
+    "max": 4217.519402,
+    "med": 17.813511
+   },
+   "thresholds": {
+    "p(95)>=0": {
+     "ok": true
+    }
+   }
+  },
+  "iteration_duration": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "med": 30163.868812,
+    "p(95)": 35133.6647946,
+    "p(99)": 36796.7772044,
+    "avg": 30396.603683947564,
+    "max": 40081.372038
+   }
+  },
+  "data_sent": {
+   "type": "counter",
+   "contains": "data",
+   "values": {
+    "count": 12528511,
+    "rate": 19777.68308602966
+   }
+  },
+  "checks": {
+   "type": "rate",
+   "contains": "default",
+   "values": {
+    "rate": 0.9998758586443764,
+    "passes": 48326,
+    "fails": 6
+   }
+  },
+  "rechazos_4xx": {
+   "type": "counter",
+   "contains": "default",
+   "values": {
+    "count": 98,
+    "rate": 0.15470417373867548
+   }
+  },
+  "dropped_iterations": {
+   "type": "counter",
+   "contains": "default",
+   "values": {
+    "count": 0,
+    "rate": 0
+   },
+   "thresholds": {
+    "count>=0": {
+     "ok": true
+    }
+   }
+  },
+  "http_req_duration{scenario:medicion,name:POST /enrollments}": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "med": 16.151369,
+    "p(95)": 27.745958,
+    "p(99)": 220.25535625,
+    "avg": 33.01538602256946,
+    "max": 2979.409541
+   },
+   "thresholds": {
+    "p(95)>=0": {
+     "ok": true
+    }
+   }
+  },
+  "http_reqs{scenario:medicion}": {
+   "thresholds": {
+    "count>=0": {
+     "ok": true
+    }
+   },
+   "type": "counter",
+   "contains": "default",
+   "values": {
+    "count": 38382,
+    "rate": 60.59036322895757
+   }
+  },
+  "vus": {
+   "contains": "default",
+   "values": {
+    "value": 1,
+    "min": 1,
+    "max": 255
+   },
+   "type": "gauge"
+  },
+  "http_req_duration{scenario:medicion,name:POST /attempts}": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "med": 16.9908785,
+    "p(95)": 30.41535385000003,
+    "p(99)": 270.8804366100011,
+    "avg": 32.28326508133086,
+    "max": 2806.299227
+   },
+   "thresholds": {
+    "p(95)>=0": {
+     "ok": true
+    }
+   }
+  },
+  "http_req_duration{scenario:medicion,name:GET /content}": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "med": 17.440936,
+    "p(95)": 35.437218449999996,
+    "p(99)": 110.53280037000023,
+    "avg": 28.953248781770867,
+    "max": 3749.656863
+   },
+   "thresholds": {
+    "p(95)>=0": {
+     "ok": true
+    }
+   }
+  },
+  "http_req_failed": {
+   "type": "rate",
+   "contains": "default",
+   "values": {
+    "rate": 0.0020194526871084736,
+    "passes": 98,
+    "fails": 48430
+   }
+  },
+  "limitados_429{scenario:medicion}": {
+   "thresholds": {
+    "count>=0": {
+     "ok": true
+    }
+   },
+   "type": "counter",
+   "contains": "default",
+   "values": {
+    "count": 0,
+    "rate": 0
+   }
+  },
+  "limitados_429": {
+   "type": "counter",
+   "contains": "default",
+   "values": {
+    "count": 0,
+    "rate": 0
+   }
+  },
+  "timeouts": {
+   "type": "counter",
+   "contains": "default",
+   "values": {
+    "count": 0,
+    "rate": 0
+   }
+  },
+  "timeouts{scenario:medicion}": {
+   "contains": "default",
+   "values": {
+    "count": 0,
+    "rate": 0
+   },
+   "thresholds": {
+    "count>=0": {
+     "ok": true
+    }
+   },
+   "type": "counter"
+  },
+  "http_req_duration{expected_response:true}": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "p(99)": 174.3512945599993,
+    "avg": 28.713530516291634,
+    "max": 4217.519402,
+    "med": 17.905039,
+    "p(95)": 31.128551799999983
+   }
+  },
+  "http_req_waiting": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "max": 4217.282086,
+    "med": 17.412035,
+    "p(95)": 29.822612700000004,
+    "p(99)": 170.87730724000912,
+    "avg": 27.696770248783942
+   }
+  },
+  "http_req_duration{scenario:medicion,name:GET /catalog/courses}": {
+   "thresholds": {
+    "p(95)>=0": {
+     "ok": true
+    }
+   },
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "avg": 23.814618170833327,
+    "max": 3122.130092,
+    "med": 8.9046545,
+    "p(95)": 20.94089189999997,
+    "p(99)": 285.78585970000034
+   }
+  },
+  "http_req_duration{scenario:medicion,name:GET /progress}": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "p(95)": 26.26379114999999,
+    "p(99)": 172.68512298000203,
+    "avg": 25.384236350520816,
+    "max": 3299.166527,
+    "med": 13.286072
+   },
+   "thresholds": {
+    "p(95)>=0": {
+     "ok": true
+    }
+   }
+  },
+  "http_req_blocked": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "avg": 0.12546324845449983,
+    "max": 75.846941,
+    "med": 0.000487,
+    "p(95)": 0.000888,
+    "p(99)": 7.631827160000002
+   }
+  },
+  "errores_5xx": {
+   "type": "counter",
+   "contains": "default",
+   "values": {
+    "rate": 0,
+    "count": 0
+   }
+  },
+  "http_req_connecting": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "med": 0,
+    "p(95)": 0,
+    "p(99)": 1.2704385200000219,
+    "avg": 0.027522108370425322,
+    "max": 22.316966
+   }
+  },
+  "vus_max": {
+   "values": {
+    "max": 644,
+    "value": 644,
+    "min": 644
+   },
+   "type": "gauge",
+   "contains": "default"
+  },
+  "iterations": {
+   "type": "counter",
+   "contains": "default",
+   "values": {
+    "count": 4850,
+    "rate": 7.656277986046694
+   }
+  },
+  "http_req_sending": {
+   "type": "trend",
+   "contains": "time",
+   "values": {
+    "p(95)": 0.23161130000000008,
+    "p(99)": 0.3181750500000009,
+    "avg": 0.13253425776871142,
+    "max": 1.106281,
+    "med": 0.125165
+   }
+  }
+ },
+ "root_group": {
+  "groups": [],
+  "checks": [
+    {
+     "name": "catálogo con cursos",
+     "path": "::catálogo con cursos",
+     "id": "d6c23d984b8648afb4bbe5e133305c3f",
+     "passes": 4801,
+     "fails": 0
+    },
+    {
+     "id": "881675ebff9f1982dc3cc2e5c9b71730",
+     "passes": 4801,
+     "fails": 0,
+     "name": "ficha del curso",
+     "path": "::ficha del curso"
+    },
+    {
+     "name": "contenido con lecturas",
+     "path": "::contenido con lecturas",
+     "id": "49fc8d3aadd8b616c848a3adde6d2d44",
+     "passes": 4801,
+     "fails": 0
+    },
+    {
+     "passes": 720,
+     "fails": 0,
+     "name": "inscripción creada",
+     "path": "::inscripción creada",
+     "id": "3dfcb1e168cdc828f09403c6ca72cfa3"
+    },
+    {
+     "name": "progreso open aceptado",
+     "path": "::progreso open aceptado",
+     "id": "0ab42547177eef9a59fc8a431a887f54",
+     "passes": 9602,
+     "fails": 0
+    },
+    {
+     "name": "progreso heartbeat aceptado",
+     "path": "::progreso heartbeat aceptado",
+     "id": "acdbd4a074f2fbd0fb5e2f9245299bb6",
+     "passes": 14397,
+     "fails": 6
+    },
+    {
+     "passes": 4801,
+     "fails": 0,
+     "name": "progreso calculado por el servidor",
+     "path": "::progreso calculado por el servidor",
+     "id": "d85d022ee0673dc54428be69e8ec3729"
+    },
+    {
+     "fails": 0,
+     "name": "intento iniciado",
+     "path": "::intento iniciado",
+     "id": "36e8d54f0ae3a5de3eabe30a374f4f92",
+     "passes": 1386
+    },
+    {
+     "name": "respuestas guardadas",
+     "path": "::respuestas guardadas",
+     "id": "78684c041f59d3a03f7787a6f26c815d",
+     "passes": 1386,
+     "fails": 0
+    },
+    {
+     "fails": 0,
+     "name": "intento calificado",
+     "path": "::intento calificado",
+     "id": "ab310396c098b46dcc983e4950257f6e",
+     "passes": 1386
+    },
+    {
+     "name": "integridad: el snapshot no trae la clave",
+     "path": "::integridad: el snapshot no trae la clave",
+     "id": "a1d62d295286dfaf660a8c2ddb8ac987",
+     "passes": 49,
+     "fails": 0
+    },
+    {
+     "name": "integridad: intento ajeno rechazado",
+     "path": "::integridad: intento ajeno rechazado",
+     "id": "d0c227cfde726e888a8d8c16cf5fc517",
+     "passes": 49,
+     "fails": 0
+    },
+    {
+     "fails": 0,
+     "name": "integridad: envío simultáneo, una sola calificación",
+     "path": "::integridad: envío simultáneo, una sola calificación",
+     "id": "f9a8bd30cb1e569ec2384d2234f74d6c",
+     "passes": 49
+    },
+    {
+     "name": "integridad: reenvío idempotente",
+     "path": "::integridad: reenvío idempotente",
+     "id": "3ac2ba5d4c4f052c21262acefadd2bb6",
+     "passes": 49,
+     "fails": 0
+    },
+    {
+     "path": "::integridad: porcentaje del cliente rechazado",
+     "id": "8ecfc7976f953544fa026f0d10adceb3",
+     "passes": 49,
+     "fails": 0,
+     "name": "integridad: porcentaje del cliente rechazado"
+    }
+   ],
+  "name": "",
+  "path": "",
+  "id": "d41d8cd98f00b204e9800998ecf8427e"
+ }
+}
