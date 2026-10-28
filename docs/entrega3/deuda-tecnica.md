@@ -88,7 +88,8 @@ El CI corre lo mismo en cada push y publica el artefacto `calidad-<sha>`.
 ## 2. Resumen de la medición inicial
 
 Análisis del 21 de octubre de 2026 sobre el commit `ccf2452` más la
-configuración del análisis. Los archivos completos están en
+configuración del análisis. **DT-22 no salió del analizador sino de la sesión
+de medición del 28 de octubre**: hay deuda que solo aparece ejecutando. Los archivos completos están en
 [`calidad/`](calidad/): [`resumen.md`](calidad/resumen.md),
 [`medidas.json`](calidad/medidas.json) y
 [`hallazgos.json`](calidad/hallazgos.json).
@@ -466,6 +467,43 @@ Los responsables se nombran por frente de trabajo, según el reparto de
   acceso en un bucket `registros` que borra a los 30 días. Falta aplicarlo en
   `entrega3`.
 
+#### DT-22 · COD · La sesión no se renueva con el uso, aunque el código diga que sí
+
+- **Descripción y ubicación.** `backend/internal/adapters/sessions/redis.go:82-84`
+  lleva el comentario «TTL deslizante: la actividad prolonga la sesión hasta el
+  tope absoluto», pero lo único que hace al leer una sesión es escribir
+  `last_seen_at`: **nunca llama a `Expire` para extenderla**. `Expire` solo
+  aparece en `Create` (líneas 47 y 51). Y `SessionMaxTTL`
+  (`config.go:83` y `158`, `SESSION_MAX_TTL=720h` en `.env.example`) **no se usa
+  en ninguna parte del código**: se declara, se lee y se ignora.
+- **Evidencia.** Encontrado midiendo, no leyendo. En la sesión de medición del
+  28 de octubre, los niveles M2-2 y M3-1 del escenario 2 devolvieron 27 y 26
+  respuestas `401` —«la sesión no existe, expiró o fue revocada»— y no subieron
+  ni un archivo. Las sesiones se habían creado a la 01:25 y `SESSION_TTL` son 12
+  horas: murieron a las 13:25, entre un nivel y el siguiente, pese a llevar toda
+  la mañana en uso. `grep -rn "SessionMaxTTL" backend/` solo devuelve la
+  declaración y la lectura.
+- **Impacto.** Una persona que trabaje doce horas seguidas pierde la sesión sin
+  aviso en mitad de lo que esté haciendo, aunque no haya dejado de usar la
+  plataforma. El comportamiento documentado en `.env.example` promete lo
+  contrario, así que nadie lo va a buscar ahí. Para las pruebas de carga
+  significa que los datos preparados caducan y una campaña larga mide con
+  sesiones muertas sin que nada falle de forma evidente: k6 sale con código 0 y
+  las tablas salen vacías.
+- **Prioridad.** P2. No hay pérdida de datos ni agujero de seguridad —si acaso
+  el efecto es más conservador que lo prometido—, pero es una promesa incumplida
+  en el camino más transitado de la aplicación.
+- **Tratamiento.** Decidir cuál de las dos cosas es la correcta y dejar que el
+  código y la documentación digan lo mismo. Si el TTL debe deslizarse, extender
+  la expiración en la lectura con el tope de `SessionMaxTTL`. Si no, quitar
+  `SessionMaxTTL` de la configuración y del `.env.example`, y corregir el
+  comentario.
+- **Criterio de verificación.** Una prueba que cree una sesión con un TTL corto,
+  la use pasada la mitad de ese plazo y compruebe que sigue viva después del
+  plazo original, sin pasar del tope absoluto.
+- **Responsable y plazo.** Backend y calidad. Entrega 4.
+- **Estado.** Pendiente.
+
 ### Prioridad 3
 
 #### DT-13 · COD · Guiones de carga y de métricas
@@ -639,7 +677,7 @@ mantenimiento.
 | 5 | DT-04 | `/readyz` sin detalle y comprobación del worker | Backend y calidad | Con el Terraform de la Entrega 3 |
 | 6 | DT-11 | Contraseña de Redis | Infraestructura elástica | Cierre de la Entrega 3 |
 | 7 | DT-08, DT-07 paso 1, DT-09 (`jobs` e `idempotency`) | Correcciones cortas y pruebas de idempotencia | Backend y calidad, Frontend | Cierre de la Entrega 3 |
-| 8 | DT-06, DT-07, DT-09, DT-10, DT-12, DT-13, DT-14, DT-17, DT-20 | Refactorizaciones y pruebas | Según el elemento | Entrega 4 |
+| 8 | DT-06, DT-07, DT-09, DT-10, DT-12, DT-13, DT-14, DT-17, DT-20, **DT-22** | Refactorizaciones y pruebas | Según el elemento | Entrega 4 |
 | 9 | DT-15, DT-16, DT-21 | Trazas, restauración y correo | Según el elemento | Entrega 5 |
 | | DT-18, DT-19 | Sin acción | | Aceptados |
 

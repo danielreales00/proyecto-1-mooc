@@ -292,7 +292,67 @@ evidencia.
 
 ## 8. Escenario 2. Resultados
 
-Pendiente de la sesión de medición.
+Sesión del 28 de octubre. Cinco niveles válidos; dos de ellos se repitieron
+tras descartarse por sesiones caducadas (ver «Dos niveles descartados»).
+
+| Nivel | Cargas/min | p95 autorizar / confirmar (ms) | Transferencia (MiB/s) | Completa→`ready` p50 A / B / C (s) | p95 playlist / segmento (ms) | Segmentos fallidos |
+| --- | --- | --- | --- | --- | --- | --- |
+| M1-1 | 3 | 417 / 585 | 14,2 | 20 / 53 / — | 1.029 / 144 | 0 |
+| M1-2 | 3 | 206 / 669 | 13,2 | 26 / 55 / — | 988 / 154 | 0 |
+| M2-1 | 6 | 302 / 784 | 14,7 | 173 / 202 / 436 | 892 / 184 | 0 |
+| M2-2 | 6 | 304 / 654 | 16,9 | 226 / 263 / 534 | 759 / 162 | 0 |
+| M3-1 | 12 | 218 / 615 | 16,0 | **510 / 562 / 847** | 795 / 137 | 0 |
+
+| Nivel | Cola `bulk` máx. | Antigüedad máx. (s) | Instancias worker | CPU worker media / máx. | Memoria worker máx. | Disco worker máx. |
+| --- | --- | --- | --- | --- | --- | --- |
+| M1-1 | 2 | 20 | 1 | 71 % / 85 % | 79 % | 15 % |
+| M1-2 | 2 | 27 | 2 | 36 % / 86 % | 84 % | 15 % |
+| M2-1 | 64 | 287 | 3 | 38 % / 99 % | 88 % | 15 % |
+| M2-2 | 42 | 147 | 3 | 70 % / 93 % | 88 % | 15 % |
+| M3-1 | **141** | **865** | 3 | 66 % / 98 % | 89 % | 15 % |
+
+### El escalado de los workers funciona, y se ve en el tiempo hasta `ready`
+
+A 3 cargas/min una sola instancia basta: la cola no pasa de 2 y un archivo
+corto está listo en 20 segundos. A 6 el grupo sube a **tres** y la cola llega a
+64 pendientes. A 12 la cola llega a **141** con 865 segundos de antigüedad, y el
+archivo largo tarda 847 segundos en estar disponible.
+
+La comparación con la Entrega 2 es la que importa: allí M2 dejó la cola en
+**779 pendientes** y los tiempos hasta `ready` en 9–11 minutos. Aquí M2 deja la
+cola en 42–64 y los tiempos en 3–9 minutos, con el mismo tamaño de instancia.
+**Tres workers en lugar de uno es exactamente lo que explica la diferencia.**
+
+### Lo que no cambia, y era de esperar
+
+La autorización de carga (218–417 ms), la transferencia directa al
+almacenamiento (13–17 MiB/s) y la reproducción (0 segmentos fallidos de todos
+los niveles) **no dependen de los workers**, y en efecto no mejoran con el
+escalado. Es la comprobación de que la mejora del tiempo hasta `ready` se
+atribuye al autoscaling y no al ruido.
+
+### La dispersión entre repeticiones es real
+
+M2-1 y M2-2 corrieron con los mismos parámetros y dieron 173/202/436 s frente a
+226/263/534 s, y colas de 64 frente a 42. Una diferencia del orden del 30 %
+según cuánto trabajo quedara en vuelo al empezar. Es la razón de repetir los
+niveles, y el informe reporta las dos medidas en vez de la mejor.
+
+### Dos niveles descartados: la sesión preparada caduca a las 12 horas
+
+M2-2 y M3-1 se corrieron primero a las 14:05 y 14:17 y **no subieron ni una
+parte**: 27 y 26 respuestas `401`, «la sesión no existe, expiró o fue
+revocada». Las sesiones preparadas se habían creado a la 01:25, y `SESSION_TTL`
+son 12 horas.
+
+Lo grave no es la caducidad, que está documentada, sino que **la sesión no se
+renueva con el uso aunque el código diga que sí**. Está registrado como hallazgo
+de deuda técnica. Para la metodología de este informe la consecuencia es
+directa: **los datos preparados tienen fecha de caducidad y hay que renovarlos
+si la campaña pasa de doce horas**.
+
+Las dos corridas quedan archivadas como `-descartada-sesion-caducada` y se
+repitieron con sesiones nuevas, sin un solo `401`.
 
 ## 9. Escenario 3. Definición del ciclo de autoscaling
 
@@ -365,12 +425,12 @@ completan con la sesión de medición.
 | E1, recorrido completo | L3 | Iteraciones perdidas | 531 | **161 / 183** | Un tercio. El generador mantiene mejor la tasa porque la API responde, aunque la base no siga |
 | E1, recorrido completo | Todos | Errores `5xx` y *timeouts* | 0 | **0** | Se mantiene. Ni siquiera saturada devuelve errores: se vuelve lenta, no incorrecta |
 | E1, integridad | L2 | Comprobaciones fallidas | 0 de 244 | **0 de 940** | Se mantiene, con casi cuatro veces más aserciones y el grupo escalando durante la corrida. Las cinco comprobaciones —snapshot sin clave, intento ajeno, envío simultáneo, reenvío idempotente y porcentaje del cliente— pasan en las tres corridas |
-| E2, autorizar carga | M2, 6 cargas/min | p95 (ms) | 308 | Pendiente | |
-| E2, procesamiento | M1, 3 cargas/min | Confirmación a `ready`, mediana A / B (s) | 10 / 35 | Pendiente | |
-| E2, procesamiento | M2, 6 cargas/min | Confirmación a `ready`, mediana A / B / C (min) | 9,4 / 9,6 / 11,3 | Pendiente | |
-| E2, procesamiento | M2 | Transcodificaciones/min | 1,3 | Pendiente | |
-| E2, cola | M2 | Profundidad máxima de `bulk` | 779 | Pendiente | |
-| E2, reproducción | M2 | Segmentos fallidos | 0 de 4.689 | Pendiente | |
+| E2, autorizar carga | M2, 6 cargas/min | p95 (ms) | 308 | **302 / 304** | Igual. Autorizar y firmar no depende de los workers, y es la comprobación de que la mejora del procesamiento no es ruido |
+| E2, procesamiento | M1, 3 cargas/min | Confirmación a `ready`, mediana A / B (s) | 10 / 35 | **20–26 / 53–55** | **Peor.** Con una sola instancia en los dos casos, la elástica tarda el doble: el worker comparte máquina con ClamAV y cruza la red para la cola. El escalado no ayuda donde no escala |
+| E2, procesamiento | M2, 6 cargas/min | Confirmación a `ready`, mediana A / B / C (min) | 9,4 / 9,6 / 11,3 | **2,9–3,8 / 3,4–4,4 / 7,3–8,9** | **Dos a tres veces mejor.** Aquí sí escala: el grupo llega a tres instancias |
+| E2, procesamiento | M2 | Vídeos a `ready` por minuto de carga | 1,3 | **3,1 / 4,8** | Hasta 8,0 en M3. Parte del salto es el escalado y parte el *reaper* corregido: en la Entrega 2 duplicaba trabajo (2.554 duplicados), así que su cifra está deprimida |
+| E2, cola | M2 | Profundidad máxima de `bulk` | 779 | **42 / 64** | Un orden de magnitud menos, pero la cifra de la Entrega 2 está inflada por los duplicados del *reaper*. La comparación honesta es la del tiempo hasta `ready` |
+| E2, reproducción | M2 | Segmentos fallidos | 0 de 4.689 | **0 de 4.726 y 0 de 4.741** | Se mantiene. La reproducción sale directa del almacenamiento y no pasa por la plataforma |
 
 La profundidad de la cola de la Entrega 2 está inflada por los duplicados del
 *reaper*, 856 en M2. En la Entrega 3 cada tarea lleva su clave como
