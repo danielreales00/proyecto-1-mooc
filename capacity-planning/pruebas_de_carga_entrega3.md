@@ -404,12 +404,99 @@ duración de los trabajos asíncronos no se mezcla con la latencia HTTP.
 
 ## 11. Escenario 3. Resultados
 
-Pendiente de la sesión de medición. La Sesión C del despliegue ya observó el
-ciclo en las dos capas, con lecturas del catálogo desde fuera de la nube y sin
-generador
-([evidencia](../docs/entrega3/evidencias/elastica/2026-10-24-sesion-c.md)). Esa
-observación valida el mecanismo. Las cifras de esta sección salen de las
-corridas con el generador.
+Sesión del 28 de octubre. 3A de 16:01 a 17:00, 3B de 17:04 a 17:52. Evidencia
+en [`docs/entrega3/evidencias/elastica/2026-10-28-sesion-d.md`](../docs/entrega3/evidencias/elastica/2026-10-28-sesion-d.md).
+
+### 3A. La API
+
+| Hora | Evento | Grupo |
+| --- | --- | --- |
+| 16:01:26 | Fase baja, 4 iteraciones/s | 1 |
+| 16:03:02 | `insert mooc-api-hzhr` | → 2 |
+| 16:09:07 | **Fase alta, 16 iteraciones/s** | 2 |
+| **16:10:20** | `insert mooc-api-lgfd`, **73 s después** | → 3 |
+| ~16:11 | La instancia nueva ya reparte | 3 |
+| 16:27:01 | Fase baja | 3 |
+| 16:39:19 | `delete mooc-api-hzhr`, **12 min después** | → 2 |
+| 16:59:44 | Fin | 2 |
+
+Los dos tiempos que el enunciado pide separar:
+
+| Tramo | Medido |
+| --- | --- |
+| Subida de la demanda → decisión del autoscaler | **73 s** |
+| Decisión → la instancia atiende peticiones | **~60 s** |
+| Bajada de la demanda → primera retirada | **~12 min** |
+
+Por minuto, con las peticiones de la aplicación y las conexiones a la base:
+
+| UTC | Instancias | Peticiones/s | Conexiones |
+| --- | --- | --- | --- |
+| 16:02 | 1 | 38 | 22 |
+| 16:04 | 1 | 81 | 22 |
+| 16:05 | **2** | 80 | 25 |
+| 16:10 | 2 | 204 | 26 |
+| 16:11 | **3** | 309 | 26 |
+| 16:13 | 3 | 317 | 36 |
+| 16:26 | 3 | 266 | 31 |
+| 16:28 | 3 | 101 | 25 |
+| 16:40 | **2** | 85 | 15 |
+| 16:59 | 2 | 39 | 16 |
+
+### El grupo no bajó a una instancia, y la previsión estaba mal
+
+La sección 9 decía que la fase baja final «reduce una instancia cada 10 min
+**hasta 1**». No ocurrió: el grupo se quedó en **2** durante los 32 minutos de
+carga baja.
+
+**No es un fallo del autoscaler, es un error de la previsión.** La señal es la
+utilización del balanceador con `maxRatePerInstance` 40 y objetivo 0,8, o sea
+32 peticiones/s por instancia. La fase baja genera unas 40 peticiones/s, que
+necesitan dos instancias. El autoscaler mantuvo exactamente lo que su política
+dice que hay que mantener.
+
+Se corrige la expectativa, no el resultado. Para ver la bajada completa hasta
+una instancia haría falta una fase baja por debajo de 32 peticiones/s.
+
+### 3B. Los workers
+
+| Hora | Evento | Grupo |
+| --- | --- | --- |
+| 17:04:19 | Cinco videos del perfil C, a la vez | 1 |
+| 17:05:29 | `insert mooc-worker-mrgs` | → 2 |
+| 17:06:11 | `insert mooc-worker-z207`, **~110 s** tras las cargas | → 3 |
+| 17:08 | Las tres transcodificando | 3 |
+| 17:12 | Cola vacía | 3 |
+| 17:21:02 | `delete mooc-worker-z207` | → 2 |
+| 17:26 | Dos videos más del perfil C | 2 |
+| 17:32:10 | `delete mooc-worker-mrgs` | → 1 |
+
+El grupo llega al máximo de 3 en **menos de dos minutos** desde la carga, y cada
+instancia nueva toma su primer trabajo en cuanto arranca. Los siete videos
+terminaron en `ready`, todos en el intento 1, sin trabajos muertos.
+
+### La prueba del retiro seguro no llegó a ejercitarse
+
+Se diseñó a propósito: dos videos del perfil C subidos a las 17:26, para que el
+autoscaler retirara una instancia **ocupada** y se pusiera a prueba el plazo de
+280 s de `WORKER_SHUTDOWN_TIMEOUT`.
+
+No salió. Las dos transcodificaciones terminaron a las **17:31:14** y
+**17:31:19**, y la retirada fue a las **17:32:10**: cincuenta segundos tarde.
+
+Y la razón es la propia defensa del sistema: **la señal del autoscaler cuenta
+los trabajos en curso además de los pendientes**, así que mientras una instancia
+transcodifica el grupo no la considera sobrante. El caso peligroso —retirar una
+instancia ocupada— es estructuralmente raro por diseño, y por eso cuesta
+provocarlo.
+
+Lo que queda demostrado y lo que no:
+
+| | |
+| --- | --- |
+| **Demostrado** | Los dos grupos crecen y decrecen solos, con sus tiempos medidos. Ningún trabajo se perdió, ninguno se reintentó, cada video tiene un solo juego de derivados |
+| **Demostrado en la Sesión C** | El criterio de DT-02: se retiró un worker con una transcodificación activa y el trabajo terminó en el intento 1 |
+| **Sin demostrar** | Que GCE respete los 280 s configurados. El margen real observado en la Sesión C fue de 107 s, y hoy no se pudo medir |
 
 ## 12. Comparación con la Entrega 2
 
