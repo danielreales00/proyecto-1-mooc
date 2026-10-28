@@ -64,7 +64,7 @@ pendientes.
 | Generador | `e2-standard-4` con IP externa, en `us-central1-a` | Igual |
 | Herramienta | k6 2.3.0 | Igual |
 | Guiones | Tag `entrega-2` | Mismo recorrido, mezcla, pausas y tasas. La aleatoriedad pasa de `Math.random` a la Web Crypto API, con la misma distribución uniforme |
-| Imágenes de la aplicación | `ef646a192a82` | Pendiente: el SHA de la sesión |
+| Imágenes de la aplicación | `ef646a192a82` | **`d4738e9e7919`**, con imagen horneada `mooc-base-d4738e9e7919`. Las mismas en los tres escenarios |
 
 Tres diferencias pueden mover los resultados y se discuten con ellos.
 
