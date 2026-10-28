@@ -29,12 +29,12 @@ cloudsql_disco_gb = 10
 # ARGS=apply`. Aquí y no con -var: con -var, el siguiente apply sin él la
 # volvería a encender sin que nadie lo note. Se versiona, así el equipo ve en
 # git si la base debería estar encendida.
-cloudsql_encendida = false
+cloudsql_encendida = true
 
 # Grupos en cero, cola detenida y reglas de reenvío borradas: lo que cobra por
 # hora se apaga. La IP del balanceador, su certificado y el disco de la cola se
 # quedan. Al encenderlo, cada pieza arranca sola.
-entorno_encendido = false
+entorno_encendido = true
 
 # Instancias de los dos grupos: las mismas 2 vCPU completas, 2048 MiB y 30 GiB
 # de la Entrega 2, para que la capacidad por instancia sea comparable con la
@@ -49,7 +49,7 @@ disco_maquinas_gb = 30
 # Imagen de las plantillas. Debian limpio mientras se pone en marcha; antes de
 # la primera corrida medida, la familia horneada (make hornear-imagen), y ya no
 # cambia entre corridas: el arranque es parte de lo que se mide (ADR-0019, D7).
-imagen_grupos = "projects/mooc-509602/global/images/mooc-base-5d24b4bc72e4"
+imagen_grupos = "projects/mooc-509602/global/images/mooc-base-d4738e9e7919"
 
 # La cola: Redis y Mailpit. e2-small (2 vCPU compartidas, 2 GiB) basta para el
 # volumen de la Entrega 2, que no pasó de 412 comandos por segundo.
@@ -58,7 +58,7 @@ disco_cola_gb = 20
 
 # Qué imágenes corren: el SHA que imprimió `make publicar`. Se registra en cada
 # corrida de carga.
-version_imagenes = "5d24b4bc72e4"
+version_imagenes = "d4738e9e7919"
 
 # Pools por proceso, repartidos para el máximo de los dos grupos contra las 50
 # conexiones de db-g1-small (3 reservadas al superusuario, quedan 47):
@@ -85,7 +85,7 @@ factor_limite_ip = 100
 
 # Generador de carga: solo encendido mientras se mide (capacity-planning/).
 # 4 vCPU para que su CPU no pase del 60 % y no sea él quien limite.
-generador_encendido = false
+generador_encendido = true
 tipo_generador      = "e2-standard-4"
 
 # --- Escalado (ADR-0019, D4 y D5) ---------------------------------------------

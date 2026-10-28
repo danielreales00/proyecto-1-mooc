@@ -320,7 +320,8 @@ carga-sincronizar: ## Copia los guiones de k6 y el generador de videos al genera
 		/repo/capacity-planning/k6/comun.js /repo/capacity-planning/k6/preparar.js \
 		/repo/capacity-planning/k6/preparar-medios.js /repo/capacity-planning/k6/escenario1.js \
 		/repo/capacity-planning/k6/escenario2.js /repo/capacity-planning/k6/rafaga-login.js \
-		/repo/capacity-planning/k6/medios.js /repo/capacity-planning/medios/generar.sh \
+		/repo/capacity-planning/k6/medios.js /repo/capacity-planning/k6/escalado-api.js \
+		/repo/capacity-planning/k6/escalado-medios.js /repo/capacity-planning/medios/generar.sh \
 		mooc-generador:/tmp/ >/dev/null
 	@$(SSH_NUBE) mooc-generador --command 'sudo mv /tmp/generar.sh $(CARGA_DIR)/medios/ && sudo mv /tmp/*.js $(CARGA_DIR)/k6/ && ls $(CARGA_DIR)/k6'
 

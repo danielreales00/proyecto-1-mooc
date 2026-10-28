@@ -201,11 +201,15 @@ try {
   await page
     .getByRole("heading", { name: "Contenido del archivo", exact: true })
     .waitFor();
+  // El enlace tiene que venir firmado, nunca ser una URL pública del bucket.
+  // El nombre del parámetro lo pone el almacén: `X-Amz-Signature` en MinIO y
+  // `X-Goog-Signature` en Cloud Storage. Exigir solo el de MinIO hacía que esta
+  // prueba fallara en la nube pese a estar el enlace bien firmado.
   assert.match(
     await page
       .getByRole("link", { name: "Descargar archivo", exact: true })
       .getAttribute("href"),
-    /X-Amz-Signature/,
+    /X-(Amz|Goog)-Signature=[^&]/,
   );
   await page.getByRole("button", { name: "Cerrar", exact: true }).click();
   await goto(`/studio/${courseId}/1`, name);
@@ -359,7 +363,12 @@ try {
   await page.getByLabel("Buscar cursos").fill(name);
   await page.getByRole("button", { name: "Buscar ↗", exact: true }).click();
   await page.getByRole("heading", { name: name, exact: true }).waitFor();
+  // Atado a la tarjeta de ESTE curso. «Explorar curso ↗» está en todas, y con
+  // el catálogo poblado por los datos de carga el localizador suelto encuentra
+  // veinte y no sabe cuál pulsar.
   await page
+    .locator("article")
+    .filter({ has: page.getByRole("heading", { name: name, exact: true }) })
     .getByRole("link", { name: "Explorar curso ↗", exact: true })
     .click();
   await page.getByRole("button", { name: "Inscribirme al curso ↗" }).click();

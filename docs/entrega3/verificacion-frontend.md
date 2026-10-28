@@ -94,3 +94,20 @@ publicada el estudiante no ve el recurso.
 | Fecha | Dónde | Commit | Resultado |
 | --- | --- | --- | --- |
 | 2026-10-25 | Stack local, `make frontend-e2e` | El de este documento | Pasa, sin errores en la consola del navegador |
+| 2026-10-28 | **Nube, por el balanceador**, `make frontend-e2e-nube` | `d4738e9` | Pasa, sin errores en la consola del navegador. Evidencia en [`evidencias/frontend/`](evidencias/frontend/) |
+
+La primera corrida en la nube **falló dos veces, y las dos por la prueba, no
+por la plataforma**. Las dos solo podían aparecer fuera del stack local:
+
+1. La descarga del archivo se comprobaba con `/X-Amz-Signature/`, que es el
+   parámetro de firma de MinIO. Cloud Storage firma con `X-Goog-Signature`, así
+   que el enlace estaba bien firmado —por `mooc-web`, con `GOOG4-RSA-SHA256` y
+   sin clave descargada— y la prueba lo daba por malo. Ahora acepta los dos
+   nombres sin aflojar la condición: el enlace tiene que venir firmado.
+2. En el catálogo se pulsaba «Explorar curso ↗» sin decir de qué tarjeta. En
+   local el catálogo está casi vacío; en la nube, con los veinte cursos de los
+   datos de carga, el localizador encontraba veinte enlaces iguales. Ahora se
+   ata a la tarjeta del curso que la propia prueba creó.
+
+Las dos son deuda de la prueba: estaba escrita contra el único entorno donde
+corría.
