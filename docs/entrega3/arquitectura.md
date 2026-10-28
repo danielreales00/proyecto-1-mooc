@@ -351,14 +351,22 @@ el tag `entrega-2`.
 
 ### Elasticidad observada
 
+Medido en el escenario 3 del 28 de octubre, con los tiempos de la Sesión C
+entre paréntesis cuando difieren.
+
 | Medida | Valor |
 | --- | --- |
-| De la carga a la decisión de crecer, API | 65 s |
-| De la creación a recibir tráfico, API | 109 s como máximo |
-| De la cola con 5 videos a dos workers nuevos | 30 a 55 s |
+| De la carga a la decisión de crecer, API | **73 s** (65 s) |
+| De la decisión a repartir tráfico, API | **~60 s** (109 s como máximo) |
+| De la carga a tres workers | **~110 s** |
 | De la creación a estar listo, workers | 68 a 71 s |
-| Reducción | Una instancia por ventana de 10 min, de 3 a 1 en las dos capas |
+| De la bajada de carga a la primera retirada | **~12 min** |
 | Errores al excluir una API | 2 de unas 700 peticiones |
+
+**La reducción no siempre llega a una instancia.** En 3A el grupo de API se
+quedó en dos durante 32 minutos de carga baja, y es correcto: su objetivo son
+32 peticiones/s por instancia y esa fase genera unas 40. El grupo baja hasta lo
+que su política dice, no hasta el mínimo.
 
 La comparación de los escenarios de la Entrega 2 sobre esta arquitectura está
 en el
@@ -380,9 +388,29 @@ por día de 24 horas encendido.
 | **Total** | **4,98** | **10,61** | **0,41** |
 
 La interfaz corre en las instancias de API y no suma costo. Apagado, la IP
-reservada es más de la mitad del gasto. Las tres
-sesiones de puesta en marcha y autoscaling sumaron unas 6 horas y 1,4 USD según
-sus registros. El presupuesto de 50 USD avisa al 50, 80 y 100 %.
+reservada es más de la mitad del gasto.
+
+### Consumo observado
+
+| Sesión | Duración encendido | Coste |
+| --- | --- | --- |
+| Sesiones A, B y C (puesta en marcha y autoscaling) | ~6 h | ~1,4 USD, de sus registros |
+| **Sesión D (medición, 28 de octubre)** | **01:07 → 18:00, unas 17 h** | **~7 USD estimados** |
+
+La Sesión D sumó además un generador `e2-standard-4` encendido todo el rato
+—0,134 USD/h, el recurso más caro de la sesión y ocioso más de la mitad del
+tiempo— y dejó **16,8 GB** en los buckets, de los que 12,8 son derivados HLS de
+las pruebas. Al ritmo medido, el entorno completo con los grupos en reposo
+cuesta unos **0,42 USD/h**.
+
+**La cifra de la Sesión D es una estimación a precios de lista, no la factura.**
+El consumo real tarda alrededor de un día en aparecer en la consola y hay que
+contrastarlo allí.
+
+**Dos ajustes que se derivan de lo observado:** apagar el generador entre
+corridas en vez de dejarlo encendido toda la sesión, y vaciar el bucket de
+derivados tras cada campaña, porque crece 12 GB por sesión de medición y no
+sirve para nada después.
 
 ## 11. Riesgos y deuda técnica
 
@@ -403,9 +431,15 @@ sus registros. El presupuesto de 50 USD avisa al 50, 80 y 100 %.
 - GCE da unos 90 s al script de apagado de una instancia normal. El periodo de
   300 s de `worker-media` no está garantizado sin el apagado ordenado de GCE.
   Más allá de ese margen, el trabajo se recupera por reclamo.
-- La alerta de presupuesto sigue en la cuenta de facturación anterior. El
-  proyecto factura a otra cuenta y la alerta debe moverse.
-- El consumo observado no se contrastó con la consola de facturación.
+- **El proyecto no tiene alerta de presupuesto efectiva.** El presupuesto de
+  50 USD existe en la cuenta `01D669-827C63-9BFAA3`, pero el proyecto factura a
+  `01AE21-896A12-61B4EB`, sobre la que la cuenta que opera el proyecto **no
+  tiene permiso ni para listar presupuestos**. Es una limitación de la cuenta,
+  no del diseño, y la entrega la documenta como tal. Para resolverla hay que
+  crear el presupuesto desde una cuenta con permiso de costos sobre
+  `01AE21-896A12-61B4EB`, o enlazar el proyecto a la cuenta donde ya existe.
+- El consumo observado se estimó a precios de lista y **no se contrastó con la
+  consola de facturación**, que tarda alrededor de un día en reflejarlo.
 - El correo no sale a Internet.
 
 ### Deuda técnica

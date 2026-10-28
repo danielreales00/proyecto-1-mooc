@@ -496,7 +496,37 @@ Lo que queda demostrado y lo que no:
 | --- | --- |
 | **Demostrado** | Los dos grupos crecen y decrecen solos, con sus tiempos medidos. Ningún trabajo se perdió, ninguno se reintentó, cada video tiene un solo juego de derivados |
 | **Demostrado en la Sesión C** | El criterio de DT-02: se retiró un worker con una transcodificación activa y el trabajo terminó en el intento 1 |
-| **Sin demostrar** | Que GCE respete los 280 s configurados. El margen real observado en la Sesión C fue de 107 s, y hoy no se pudo medir |
+| **Sin demostrar** | Que GCE respete los 280 s configurados. Ver abajo |
+
+### Segundo intento: la instancia ocupada sí se retiró
+
+El primer intento falló por el cronometraje —la segunda tanda se subió veinte
+minutos después del escalado en vez de doce— y se repitió a las 18:45
+contando desde el momento real en que el grupo llegó a tres.
+
+```text
+delete mooc-worker-1bs0            19:02:49
+media.transcode_hls  18:59:34 → 19:04:17   283 s, intento 1, succeeded
+media.transcode_hls  18:59:40 → 19:04:13   273 s, intento 1, succeeded
+```
+
+**La instancia se retiró con las dos transcodificaciones en vuelo y las dos
+terminaron bien, en el primer intento y sin reintento.** El trabajo necesitó
+**88 segundos** desde que empezó el `delete`, y los tuvo. Los siete videos
+quedaron en `ready`.
+
+Con esto el criterio de DT-02 queda cumplido por segunda vez, de forma
+deliberada y no por casualidad.
+
+**Lo que sigue sin verificarse, y conviene decirlo:** el plazo configurado es de
+280 s y en las dos observaciones el trabajo necesitó unos 88 segundos. El margen
+que GCE concedió fue de unos 107 s en la Sesión C. Es decir, **`WORKER_SHUTDOWN_TIMEOUT=280`
+promete más de lo que la plataforma parece conceder**: una transcodificación que
+necesitara más de unos 107 s tras la retirada se cortaría igual, pese a la
+configuración. Medir el límite real exige un trabajo deliberadamente más largo
+que ese margen; mientras tanto, lo prudente es bajar el valor configurado para
+que no prometa lo que no puede cumplir y confiar en el reclamo por latido
+vencido para los trabajos largos.
 
 ## 12. Comparación con la Entrega 2
 
