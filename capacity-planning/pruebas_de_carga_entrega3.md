@@ -21,12 +21,13 @@ pendientes.
    **28 ms**, diez veces mejor, con la misma base de datos y las mismas
    imágenes. De 30 a 91 peticiones/s el p95 no se mueve del intervalo 26–31 ms.
 
-2. **El límite no ha desaparecido: se ha mudado.** A 117 peticiones/s la
-   plataforma satura con un p95 de 5,5 s. Pero la CPU de la API va al 19–21 %
-   con tres instancias, las conexiones a la base llegan a 31 de 47 y Redis
-   atiende 659 órdenes/s. Nada de eso es un techo. El recurso compartido que
-   queda es **Cloud SQL `db-g1-small`**, y las escrituras se degradan entre tres
-   y seis veces más que las lecturas, lo que apunta a su vía de escritura.
+2. **El límite no ha desaparecido: se ha mudado al disco de la base.** A 117
+   peticiones/s la plataforma satura con un p95 de 5,5 s. La CPU de la API va al
+   19–21 % con tres instancias, las conexiones llegan a 31 de 47 y Redis atiende
+   659 órdenes/s: ninguno es techo. El techo son las **escrituras de disco de
+   Cloud SQL**, que se aplanan en 206–339 por segundo justo cuando la carga sube
+   un 30 % más. La instancia tiene un PD-SSD de **10 GB**, y un SSD de Google da
+   30 escrituras por segundo y gigabyte: **300**.
 
 3. **Saturar no es fallar.** Ni un `5xx` ni un *timeout* en las nueve corridas,
    incluidas las dos saturadas, y el 100 % de las comprobaciones funcionales.
@@ -38,11 +39,13 @@ pendientes.
    una sola calificación, el reenvío es idempotente y el porcentaje enviado por
    el cliente se rechaza.
 
-5. **La propuesta de evolución que se deriva** es subir el tamaño de la base
-   antes que el de los grupos: a 117 peticiones/s sobra API y falta base. Pero
-   **antes hay que medir qué recurso de `db-g1-small` se agota** —núcleo
-   compartido, disco o bloqueos—, porque cada uno se arregla de forma distinta.
-   Está en las limitaciones como la primera medición que falta.
+5. **La propuesta de evolución es agrandar el disco de la base, y es barata.**
+   En Cloud SQL las operaciones por segundo escalan con el tamaño del disco, así
+   que pasar de 10 GB a 100 GB multiplica por diez el techo de escritura —de 300
+   a 3.000— por unos pocos dólares al mes, sin tocar el `tier` ni una línea de
+   código. El disco está al **4 % de ocupación**: se agrandaría por rendimiento,
+   no por espacio, que es justo el ajuste que no se descubre sin medir. Subir a
+   un núcleo dedicado cuesta mucho más y no ataca lo medido.
 
 ## 2. Condiciones fijas y diferencias con la línea base
 
@@ -199,11 +202,50 @@ aguas abajo, y las que escriben se llevan la peor parte. Con la CPU de la API
 sobrada, las conexiones lejos del tope y Redis ocioso, **el recurso compartido
 que queda es Cloud SQL `db-g1-small`**, y dentro de él la vía de escritura.
 
-**Lo que no podemos afirmar** es cuál de sus recursos se agota: si el
-estrangulamiento del núcleo compartido, las operaciones de disco por segundo
-—que en Cloud SQL escalan con el tamaño del disco— o la contención de bloqueos.
-Distinguirlo exige métricas que esta sesión no capturó. Queda en las
-limitaciones, y es la medición que respaldaría la propuesta de evolución.
+### Qué recurso de la base se agota: las escrituras del disco
+
+La primera versión de esta sección decía que no se podía saber. Se añadieron las
+métricas de disco de Cloud SQL a `exportar.py` y se reexportaron las ventanas ya
+medidas, sin repetir ninguna corrida.
+
+| Nivel | Peticiones/s | Escrituras de disco/s (media) | Pico | Transacciones/s | CPU de la base |
+| --- | --- | --- | --- | --- | --- |
+| L2 | 61 | 144 | 182 | 312 | 31 % |
+| L2b | 91 | 218 | 260 | 476 | 43 % |
+| **L3** | **118** | **206** | **339** | 587 | 55 % |
+
+De L2 a L2b las escrituras **escalan con la carga**: +49 % de peticiones, +51 %
+de escrituras. De L2b a L3 la carga sube un 30 % más y las escrituras **dejan de
+subir**; la media incluso baja. Eso es la firma de un recurso saturado: el
+rendimiento se aplana y lo que crece es la espera.
+
+**El techo es el disco.** La instancia tiene un **PD-SSD de 10 GB**, y el disco
+SSD de Google da 30 operaciones de escritura por segundo y gigabyte: **300**. El
+pico medido en L3 es 339, por encima del régimen y dentro de lo que explica la
+ráfaga.
+
+Lo que descarta a los demás candidatos:
+
+- **Lecturas de disco: 0,6 por segundo.** El conjunto de trabajo cabe en
+  memoria; la base no lee del disco.
+- **Memoria al 51 %.** No hay presión.
+- **CPU al 55 %** sobre un núcleo compartido. No se puede descartar del todo
+  que contribuya, pero no crece en proporción a la degradación.
+- Las transacciones por segundo **siguen creciendo** (476 → 587) mientras las
+  escrituras se aplanan, que es lo que ocurre cuando el límite es el `fsync`:
+  al subir la concurrencia cada confirmación de grupo agrupa más transacciones
+  por escritura, y cada una espera más.
+
+**La propuesta de evolución sale sola, y es barata:** agrandar el disco. En
+Cloud SQL las operaciones por segundo escalan linealmente con el tamaño, así que
+pasar de 10 GB a 100 GB multiplica por diez el techo de escritura —de 300 a
+3.000— por unos pocos dólares al mes, sin tocar el `tier` ni el código. Subir de
+`db-g1-small` a un núcleo dedicado cuesta bastante más y no ataca lo que
+medimos.
+
+Conviene decir que el disco está **al 4 % de ocupación**: se agrandaría por
+rendimiento, no por espacio. Es exactamente el tipo de ajuste que no se descubre
+sin medir.
 
 ### Las comprobaciones que fallaron no son fallos
 
@@ -340,13 +382,13 @@ tiene ese sesgo.
 
 **Del escenario 1, ya medido:**
 
-- **No se identificó qué recurso de Cloud SQL se agota en L3.** Sabemos que no
-  es la CPU de la API, ni las conexiones, ni Redis, ni la CPU de la base. Dentro
-  de `db-g1-small` quedan al menos tres candidatos —estrangulamiento del núcleo
-  compartido, operaciones de disco por segundo y contención de bloqueos— y
-  distinguirlos exige métricas de disco y de espera de la instancia que esta
-  sesión no exportó. Es la medición que respaldaría la propuesta de evolución,
-  así que es la primera que habría que añadir.
+- **El estrangulamiento del núcleo compartido no se descartó del todo.** La
+  evidencia señala las escrituras de disco, pero `db-g1-small` tiene un núcleo
+  compartido y su CPU al 55 % podría estar ya limitada. Separar las dos causas
+  exigiría repetir L3 con el disco agrandado: si el p95 cae, era el disco.
+- **La propuesta de agrandar el disco no se verificó.** Se deriva de la relación
+  documentada entre tamaño y operaciones por segundo, no de una medición propia
+  con el disco ya grande.
 - **El desglose de `pg_stat_activity` por aplicación no se capturó** durante L3.
   La campaña corrió sin nadie delante y esa consulta es interactiva. El dato
   que sí hay, el máximo de conexiones de Cloud Monitoring, basta para descartar

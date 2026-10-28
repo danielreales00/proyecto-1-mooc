@@ -36,6 +36,14 @@ CONSULTAS = {
     "sql_memoria": 'avg(cloudsql_googleapis_com:database_memory_utilization)',
     "sql_conexiones": 'sum(cloudsql_googleapis_com:database_postgresql_num_backends)',
     "sql_transacciones_s": 'sum(rate(cloudsql_googleapis_com:database_postgresql_transaction_count[1m]))',
+    # Disco de la base. Sin esto, cuando la plataforma satura solo se puede decir
+    # «es la base» y no cual de sus recursos: en Cloud SQL las operaciones por
+    # segundo escalan con el tamano del disco, y en un nucleo compartido la CPU
+    # al 50 % ya puede estar estrangulada.
+    "sql_disco_escrituras_s": 'sum(rate(cloudsql_googleapis_com:database_disk_write_ops_count[1m]))',
+    "sql_disco_lecturas_s": 'sum(rate(cloudsql_googleapis_com:database_disk_read_ops_count[1m]))',
+    "sql_disco_uso": 'max(cloudsql_googleapis_com:database_disk_utilization)',
+    "sql_disco_bytes": 'max(cloudsql_googleapis_com:database_disk_bytes_used)',
     # Cola (B2).
     "cola_profundidad": 'sum by (queue, state) (queue_depth)',
     "cola_antiguedad_s": 'max by (queue) (queue_oldest_pending_age_seconds)',
