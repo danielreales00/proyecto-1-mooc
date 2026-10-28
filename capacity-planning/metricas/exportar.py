@@ -47,6 +47,10 @@ CONSULTAS = {
     "trabajo_p95_s": 'histogram_quantile(0.95, sum by (le, type) (rate(job_duration_seconds_bucket[5m])))',
     "trabajos_muertos": 'sum by (type) (jobs_dead_letter_total)',
     "limitados_429_s": 'sum by (rule) (rate(rate_limited_total[2m]))',
+    # Evidencias de progreso rechazadas por el servidor (ADR-0012, CA-05). No son
+    # errores: son la regla funcionando, y el informe las cuenta aparte. Sin esta
+    # serie, una comprobacion fallida de k6 no se puede distinguir de un fallo real.
+    "progreso_rechazado": 'sum by (reason) (progress_rejected_total)',
     # Redis (receptor del agente).
     "redis_clientes": 'max(workload_googleapis_com:redis_clients_connected{monitored_resource="gce_instance"})',
     "redis_comandos_s": 'sum(rate(workload_googleapis_com:redis_commands_processed{monitored_resource="gce_instance"}[1m]))',
