@@ -580,6 +580,25 @@ tiene ese sesgo.
   frente a los 28 de L1-2 lo sugiere, pero con dos corridas no se distingue del
   ruido.
 
+## 13 bis. Gráficas
+
+Generadas con `make carga-graficas` a partir de los resultados de
+[`resultados/`](resultados/), sin pasos manuales.
+
+| Gráfica | Qué enseña |
+| --- | --- |
+| [`e3-latencia-por-nivel.png`](graficas/e3-latencia-por-nivel.png) | p50, p95 y p99 del escenario 1 por nivel: la curva plana hasta L2b y el salto en L3 |
+| [`e3-recursos-por-nivel.png`](graficas/e3-recursos-por-nivel.png) | CPU de los grupos y de la base por nivel: la API sobrada cuando la base satura |
+| [`e3-L3-1-serie.png`](graficas/e3-L3-1-serie.png) | L3 minuto a minuto |
+| [`e3-3A-serie.png`](graficas/e3-3A-serie.png) | **El ciclo de la API**: la carga sube, el grupo crece a tres y vuelve a bajar |
+| [`e3-cola-por-nivel.png`](graficas/e3-cola-por-nivel.png) | Profundidad y antigüedad de `bulk` por nivel del escenario 2 |
+| [`e3-M3-1-cola.png`](graficas/e3-M3-1-cola.png) | M3 minuto a minuto: la cola creciendo con tres workers |
+| [`e3-3B-cola.png`](graficas/e3-3B-cola.png) | **El ciclo de los workers**: la cola, el grupo creciendo y el drenaje |
+
+Las de la Entrega 2 conservan sus nombres (`e1-*`, `e2-*`) y se regeneran
+idénticas: `graficas.py` deriva el prefijo de las etiquetas, para que dibujar
+una entrega no sobrescriba la evidencia de la anterior.
+
 ## 14. Reproducir estas pruebas
 
 | Qué | Dónde |
@@ -598,4 +617,17 @@ make carga K6=preparar-medios.js ETIQUETA=e3-preparar-medios
 make carga-nivel K6=escenario2.js ETIQUETA=e3-M2 \
   ARGS="-e CARGAS=6 -e MEZCLA=3/2/1 -e ESPECTADORES=45 -e DURACION=10m -e ESPERA_MAX=20"
 make carga-tabla ARGS="e1 e3-L1 e3-L2 e3-L2b e3-L3"
+make carga-graficas ARGS="e1 e3-L1 e3-L2 e3-L2b e3-L3"
 ```
+
+**Dos trampas que costaron corridas y conviene conocer antes de repetirlas:**
+
+1. **Los datos preparados caducan a las 12 horas.** `preparar.js` y
+   `preparar-medios.js` dejan sesiones abiertas, y `SESSION_TTL` son 12 horas
+   que **no se renuevan con el uso** (DT-22). Si la campaña se alarga, hay que
+   volver a prepararlos. Una corrida con la sesión muerta no falla de forma
+   evidente: k6 sale con código 0 y las tablas salen vacías.
+2. **Descartar una corrida en el repositorio no basta.** `make carga-traer` baja
+   del generador todos los resúmenes en cada nivel, así que una corrida
+   renombrada aquí reaparece con su nombre bueno en el siguiente. Hay que
+   renombrarla también en `/opt/carga/resultados` del generador.

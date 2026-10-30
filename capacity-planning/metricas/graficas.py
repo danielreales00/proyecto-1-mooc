@@ -45,6 +45,18 @@ def met(m, nombre, filtro=None, campo="media"):
     return None
 
 
+def entrega_de(etiquetas):
+    """Prefijo de entrega a partir de las etiquetas: `e3-L2-1` → `e3`.
+
+    Los modos que agregan varios niveles escribian un nombre fijo, asi que
+    dibujar la Entrega 3 sobrepisaba las graficas de la Entrega 2, que son
+    evidencia de una entrega ya presentada. El nombre tiene que depender de los
+    datos y no solo del modo.
+    """
+    prefijos = {e.split("-", 1)[0] for e in etiquetas if "-" in e}
+    return prefijos.pop() if len(prefijos) == 1 else "mixto"
+
+
 def guardar(fig, nombre):
     ruta = os.path.join(OUT, nombre)
     fig.tight_layout()
@@ -82,7 +94,7 @@ def e1(etiquetas):
     ax.set_ylabel("latencia (ms, escala log)")
     ax.set_title("Escenario 1: latencia por nivel de carga")
     ax.legend()
-    guardar(fig, "e1-latencia-por-nivel.png")
+    guardar(fig, f"{entrega_de(etiquetas)}-latencia-por-nivel.png")
 
     fig, ax1 = plt.subplots(figsize=(7, 4))
     idx = range(len(filas))
@@ -102,7 +114,7 @@ def e1(etiquetas):
     h2, l2 = ax2.get_legend_handles_labels()
     ax1.legend(h1 + h2, l1 + l2, loc="upper left", fontsize=8)
     ax1.set_title("Escenario 1: recursos por nivel")
-    guardar(fig, "e1-recursos-por-nivel.png")
+    guardar(fig, f"{entrega_de(etiquetas)}-recursos-por-nivel.png")
 
 
 def comparar(etiquetas):
@@ -159,7 +171,7 @@ def e2(etiquetas):
     a2.set_ylabel("CPU media del Worker Server (%)")
     a2.set_title("Trabajo del Worker Server", fontsize=9)
     fig.suptitle("Escenario 2: cada nivel de carga")
-    guardar(fig, "e2-por-nivel.png")
+    guardar(fig, f"{entrega_de(etiquetas)}-cola-por-nivel.png")
 
 
 def minutos(valores, t0):
