@@ -431,6 +431,21 @@ sirve para nada después.
 - GCE da unos 90 s al script de apagado de una instancia normal. El periodo de
   300 s de `worker-media` no está garantizado sin el apagado ordenado de GCE.
   Más allá de ese margen, el trabajo se recupera por reclamo.
+- **La cuota de la cuenta impide los dos grupos en tres a la vez.** El proyecto
+  tiene un tope de **16 vCPU globales** y la configuración completa pide
+  diecisiete: 6 de las tres instancias de API, 6 de las tres de worker, 1 de
+  `mooc-cola` y 4 del generador de carga. Al intentarlo, la instancia que sobra
+  falla con `QUOTA_EXCEEDED: Quota 'CPUS_ALL_REGIONS' exceeded. Limit: 16.0`.
+
+  **No afecta a los resultados del informe.** Se comprobó serie a serie, por
+  instante, el número de instancias de cada grupo en las corridas medidas: el
+  pico fue de **15 vCPU** en los escenarios 3A y 3B, uno por debajo del tope.
+  Ninguna corrida se quedó sin la capacidad que su autoscaler pidió. Lo que sí
+  limita es demostrar las dos capas al máximo simultáneamente: hay que hacerlo
+  en dos momentos, o apagar el generador.
+
+  Se resuelve pidiendo ampliación de cuota, que para `CPUS_ALL_REGIONS` suele
+  concederse, o usando un generador más pequeño.
 - **El proyecto no tiene alerta de presupuesto efectiva.** El presupuesto de
   50 USD existe en la cuenta `01D669-827C63-9BFAA3`, pero el proyecto factura a
   `01AE21-896A12-61B4EB`, sobre la que la cuenta que opera el proyecto **no
