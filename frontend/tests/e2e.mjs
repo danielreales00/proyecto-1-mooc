@@ -16,6 +16,16 @@ const context = await browser.newContext({
   viewport: { width: 1440, height: 1000 },
 });
 const page = await context.newPage();
+// Capturas del recorrido, numeradas en orden. La matriz de
+// `docs/entrega3/verificacion-frontend.md` se lee contra estos archivos: el
+// enunciado no exige capturas, pero pide evidencia de verificación funcional, y
+// dos imágenes del final no enseñan los veinte flujos que la prueba recorre.
+let nCaptura = 0;
+async function captura(nombre) {
+  nCaptura += 1;
+  const n = String(nCaptura).padStart(2, "0");
+  await page.screenshot({ path: `${evidencias}/${n}-${nombre}.png` });
+}
 const errors = [];
 page.on("pageerror", (err) => errors.push(err.message));
 const name = `Curso navegador ${Date.now()}`;
@@ -110,6 +120,7 @@ try {
     .waitFor();
   await login("profesor@mooc.local");
   await goto("/studio", "Comparte lo que sabes.");
+  await captura("profesor-estudio");
   await page.getByText("Crear un curso", { exact: true }).click();
   const newCourse = page.locator("#new-course");
   await newCourse.getByLabel("Título", { exact: true }).fill(name);
@@ -161,6 +172,7 @@ try {
     "# Bienvenido\n\nAprendemos usando infraestructura existente.",
   );
   await goto("/media", "De tu archivo al aula.");
+  await captura("profesor-biblioteca-de-medios");
   await page.locator("[name=file]").setInputFiles({
     name: "prueba.png",
     mimeType: "image/png",
@@ -298,6 +310,7 @@ try {
     .filter({ hasText: "Evaluación guardada." })
     .waitFor();
   await goto(`/studio/${courseId}/1`, name);
+  await captura("profesor-version-antes-de-publicar");
   await page.getByRole("button", { name: "Validar contenido" }).click();
   await page.getByText("Todo listo para publicar.").waitFor();
   await page.getByRole("button", { name: "Publicar versión ↗" }).click();
@@ -360,6 +373,7 @@ try {
     "un estudiante publica un curso",
   );
   await goto("/catalog", "Siempre hay algo por descubrir.");
+  await captura("estudiante-catalogo");
   await page.getByLabel("Buscar cursos").fill(name);
   await page.getByRole("button", { name: "Buscar ↗", exact: true }).click();
   await page.getByRole("heading", { name: name, exact: true }).waitFor();
@@ -371,6 +385,7 @@ try {
     .filter({ has: page.getByRole("heading", { name: name, exact: true }) })
     .getByRole("link", { name: "Explorar curso ↗", exact: true })
     .click();
+  await captura("estudiante-detalle-del-curso");
   await page.getByRole("button", { name: "Inscribirme al curso ↗" }).click();
   await page
     .getByRole("heading", { name: "Lectura de bienvenida", exact: true })
@@ -378,6 +393,8 @@ try {
   await page
     .getByRole("heading", { name: "Bienvenido", exact: true })
     .waitFor();
+  // Ya con la leccion cargada: esto si es el aula.
+  await captura("estudiante-aula-con-la-leccion");
   await page.waitForTimeout(16500);
   await page.getByRole("button", { name: /Imagen de prueba/ }).click();
   await page.locator("#reader img").waitFor();

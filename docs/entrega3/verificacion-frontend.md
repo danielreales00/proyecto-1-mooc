@@ -89,6 +89,27 @@ Un archivo en procesamiento no se ofrece como disponible. La validación de la
 versión lo rechaza con «aún no está disponible (estado …)», y sin versión
 publicada el estudiante no ve el recurso.
 
+## Capturas del recorrido
+
+El enunciado no exige capturas —pide la matriz de recorridos, sus rutas y la
+evidencia de verificación—, y la evidencia fuerte es la prueba de navegador:
+comprueba comportamiento y se repite. Pero dos imágenes del final no enseñan
+los veinte flujos que recorre, así que la prueba captura los hitos por sí
+misma, numerados en orden y **sobre el entorno cloud**.
+
+| Captura | Flujo de la matriz |
+| --- | --- |
+| [`01-profesor-estudio.png`](evidencias/frontend/01-profesor-estudio.png) | Consultar sus cursos |
+| [`02-profesor-biblioteca-de-medios.png`](evidencias/frontend/02-profesor-biblioteca-de-medios.png) | Cargar archivos y consultar su estado de procesamiento |
+| [`03-profesor-version-antes-de-publicar.png`](evidencias/frontend/03-profesor-version-antes-de-publicar.png) | Estructura y contenido de la versión, antes de validar y publicar |
+| [`04-estudiante-catalogo.png`](evidencias/frontend/04-estudiante-catalogo.png) | Consultar el catálogo |
+| [`05-estudiante-detalle-del-curso.png`](evidencias/frontend/05-estudiante-detalle-del-curso.png) | Ver el detalle de un curso publicado |
+| [`06-estudiante-aula-con-la-leccion.png`](evidencias/frontend/06-estudiante-aula-con-la-leccion.png) | Navegar módulos, unidades y recursos, con el progreso |
+| [`escritorio.png`](evidencias/frontend/escritorio.png) y [`movil.png`](evidencias/frontend/movil.png) | La misma vista a 1440 y a ancho de móvil, sin desbordamiento horizontal |
+
+Se regeneran solas en cada `make frontend-e2e-nube`. Nadie las toma a mano, así
+que no pueden quedarse desactualizadas respecto a lo que la prueba comprueba.
+
 ## Resultados
 
 | Fecha | Dónde | Commit | Resultado |
