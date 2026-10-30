@@ -42,9 +42,10 @@ capacity-planning/medios/*.mp4
 capacity-planning/medios/manifiesto.jsonl
 
 # Guiones y reparto de los videos: se trabajan en local, no se versionan.
-demo/guion.md
-demo/guion-entrega2.md
-demo/reparto.md
+# Por nombre explicito no: cada entrega trae uno nuevo y se cuela en el primer
+# `git add -A`. Ya paso con el de la Entrega 3.
+demo/guion*.md
+demo/reparto*.md
 
 # Herramientas de desarrollo de la interfaz
 frontend/node_modules/
