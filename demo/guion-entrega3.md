@@ -385,12 +385,25 @@ pide diecisiete:
 | Generador de carga | 4 |
 | **Total** | **17** |
 
-**Los dos grupos no pueden estar en tres a la vez mientras el generador esté
-encendido.** No afecta a los resultados del informe —el pico real de las
-corridas medidas fue de 15 vCPU, comprobado serie a serie—, pero sí al guion:
-los bloques 3 y 5 **tienen que ir en ese orden y no solaparse**. Al llegar al
-bloque 5, la carga de la API ya habrá terminado y el grupo estará bajando.
+**Resuelto antes de grabar.** El generador se bajó a `e2-standard-2` tras
+comprobar que su CPU nunca había pasado del 20,5 % con cuatro núcleos. La cuenta
+queda así:
 
-Si el grupo de API sigue en tres al empezar el bloque 5, el tercer worker falla
-con `QUOTA_EXCEEDED` y en el video se ve un grupo que no crece. Comprobar con
-`make instancias` antes de lanzar los videos.
+| | vCPU |
+| --- | --- |
+| 3 instancias de API | 6 |
+| 3 instancias de worker | 6 |
+| `mooc-cola` | 1 |
+| Generador | 2 |
+| **Total** | **15 de 16** ✅ |
+
+Los dos grupos ya pueden estar en tres a la vez, así que los bloques 3 y 5 no
+necesitan separarse. Aun así, **comprobar `make instancias` antes del bloque 5**:
+si alguna vez se ve `QUOTA_EXCEEDED` en
+`make gcloud ARGS="compute instance-groups managed list-instances mooc-worker --zone us-central1-a"`,
+es esto.
+
+> Para el acta: el enunciado **no exige** que los dos grupos estén en tres
+> simultáneamente. Pide que cada uno escale de 1 a 3 por sí solo, y eso está
+> demostrado por separado en los escenarios 1, 2, 3A y 3B. Esto es una mejora
+> del directo, no un requisito.

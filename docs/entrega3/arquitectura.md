@@ -400,7 +400,11 @@ reservada es más de la mitad del gasto.
 La Sesión D sumó además un generador `e2-standard-4` encendido todo el rato
 —0,134 USD/h, el recurso más caro de la sesión y ocioso más de la mitad del
 tiempo— y dejó **16,8 GB** en los buckets, de los que 12,8 son derivados HLS de
-las pruebas. Al ritmo medido, el entorno completo con los grupos en reposo
+las pruebas.
+
+**Ese hallazgo ya está aplicado:** el generador pasó a `e2-standard-2`, la mitad
+de precio (0,067 USD/h), tras comprobar que su CPU nunca había pasado del 20,5 %
+y que con dos núcleos sostiene la misma tasa de carga. Al ritmo medido, el entorno completo con los grupos en reposo
 cuesta unos **0,42 USD/h**.
 
 **La cifra de la Sesión D es una estimación a precios de lista, no la factura.**
@@ -431,21 +435,26 @@ sirve para nada después.
 - GCE da unos 90 s al script de apagado de una instancia normal. El periodo de
   300 s de `worker-media` no está garantizado sin el apagado ordenado de GCE.
   Más allá de ese margen, el trabajo se recupera por reclamo.
-- **La cuota de la cuenta impide los dos grupos en tres a la vez.** El proyecto
-  tiene un tope de **16 vCPU globales** y la configuración completa pide
-  diecisiete: 6 de las tres instancias de API, 6 de las tres de worker, 1 de
-  `mooc-cola` y 4 del generador de carga. Al intentarlo, la instancia que sobra
-  falla con `QUOTA_EXCEEDED: Quota 'CPUS_ALL_REGIONS' exceeded. Limit: 16.0`.
+- **La cuota de 16 vCPU de la cuenta apretaba, y se resolvió midiendo.** Con el
+  generador en `e2-standard-4`, la configuración completa pedía diecisiete vCPU
+  —6 de tres instancias de API, 6 de tres de worker, 1 de `mooc-cola` y 4 del
+  generador—, y la instancia sobrante fallaba con
+  `QUOTA_EXCEEDED: Quota 'CPUS_ALL_REGIONS' exceeded. Limit: 16.0`.
 
-  **No afecta a los resultados del informe.** Se comprobó serie a serie, por
-  instante, el número de instancias de cada grupo en las corridas medidas: el
-  pico fue de **15 vCPU** en los escenarios 3A y 3B, uno por debajo del tope.
-  Ninguna corrida se quedó sin la capacidad que su autoscaler pidió. Lo que sí
-  limita es demostrar las dos capas al máximo simultáneamente: hay que hacerlo
-  en dos momentos, o apagar el generador.
+  **Nunca afectó a los resultados.** Se comprobó serie a serie, por instante, el
+  número de instancias de cada grupo en las corridas medidas: el pico fue de
+  **15 vCPU** en 3A y 3B, uno por debajo del tope, y ninguna corrida se quedó
+  sin la capacidad que su autoscaler pidió.
 
-  Se resuelve pidiendo ampliación de cuota, que para `CPUS_ALL_REGIONS` suele
-  concederse, o usando un generador más pequeño.
+  El generador se bajó a **`e2-standard-2`** porque los datos decían que sobraba:
+  su CPU nunca pasó del 20,5 % con cuatro núcleos. Verificado después del
+  cambio, sostiene las 90 iteraciones/s exactas (`21601 iteraciones,
+  89,999992/s`) con la CPU entre el 14 % y el 33 %, muy por debajo del criterio
+  del 60 %. La configuración completa pasa a pedir **15 vCPU de 16** y los dos
+  grupos pueden estar en tres a la vez.
+
+  Dicho sea de paso: el enunciado no exige que coincidan en el máximo, solo que
+  cada grupo escale de 1 a 3 por sí solo. La cuota nunca bloqueó un requisito.
 - **El proyecto no tiene alerta de presupuesto efectiva.** El presupuesto de
   50 USD existe en la cuenta `01D669-827C63-9BFAA3`, pero el proyecto factura a
   `01AE21-896A12-61B4EB`, sobre la que la cuenta que opera el proyecto **no

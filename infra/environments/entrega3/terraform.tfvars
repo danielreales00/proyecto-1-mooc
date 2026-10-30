@@ -84,9 +84,17 @@ db_max_conns_api = 8
 factor_limite_ip = 100
 
 # Generador de carga: solo encendido mientras se mide (capacity-planning/).
-# 4 vCPU para que su CPU no pase del 60 % y no sea él quien limite.
+#
+# El criterio sigue siendo que su CPU no pase del 60 % y no sea el quien limite.
+# Empezo en e2-standard-4 por prudencia; medido, nunca paso del 20,5 % (3A, el
+# nivel mas exigente), asi que en 2 vCPU rondaria el 41 % y el criterio se
+# cumple con margen.
+#
+# Bajarlo a 2 vCPU resuelve ademas dos cosas: era el recurso mas caro y el mas
+# ocioso de la sesion de medicion, y liberaba la cuota de 16 vCPU de la cuenta,
+# que con 4 impedia tener los dos grupos en tres a la vez (6+6+1+4 = 17).
 generador_encendido = true
-tipo_generador      = "e2-standard-4"
+tipo_generador      = "e2-standard-2"
 
 # --- Escalado (ADR-0019, D4 y D5) ---------------------------------------------
 # Puesta en marcha con una instancia fija por grupo; true cuando el balanceador
