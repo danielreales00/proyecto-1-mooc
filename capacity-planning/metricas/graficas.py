@@ -60,24 +60,33 @@ def del_papel(nombre, papel):
     return nombre == papel
 
 
+ETIQUETAS_DE_MAQUINA = ("instance_name", "metadata_system_name")
+
+
+def casa(serie, clave, valor):
+    """Si una etiqueta de la serie casa con lo pedido.
+
+    Las que nombran maquinas se comparan por papel, porque en la Entrega 3
+    cada instancia del grupo lleva su propio sufijo.
+    """
+    actual = serie.get(clave, "")
+    if clave in ETIQUETAS_DE_MAQUINA:
+        return del_papel(actual, valor)
+    return actual == valor
+
+
 def series_de(m, nombre, filtro):
     """Las series que casan con el filtro, tratando el papel por prefijo."""
-    salida = []
-    for f in m["metricas"].get(nombre) or []:
-        if not (isinstance(f, dict) and "serie" in f):
-            continue
-        if not filtro:
-            salida.append(f); continue
-        ok = True
-        for clave, valor in filtro.items():
-            actual = f["serie"].get(clave, "")
-            if clave in ("instance_name", "metadata_system_name"):
-                ok = ok and del_papel(actual, valor)
-            else:
-                ok = ok and actual == valor
-        if ok:
-            salida.append(f)
-    return salida
+    candidatas = [
+        f for f in m["metricas"].get(nombre) or []
+        if isinstance(f, dict) and "serie" in f
+    ]
+    if not filtro:
+        return candidatas
+    return [
+        f for f in candidatas
+        if all(casa(f["serie"], c, v) for c, v in filtro.items())
+    ]
 
 
 def met(m, nombre, filtro=None, campo="media"):
