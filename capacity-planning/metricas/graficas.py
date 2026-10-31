@@ -28,6 +28,13 @@ plt.rcParams.update({"figure.dpi": 110, "font.size": 9, "axes.grid": True, "grid
 
 CPU_WORKER = "CPU Worker Server"
 
+
+def etiquetas_cpu(etiquetas):
+    """Como llamar a cada papel: en la Entrega 2 son maquinas, en la 3 grupos."""
+    if any(e.startswith("e3-") for e in etiquetas):
+        return "CPU grupo API", "CPU grupo workers"
+    return "CPU Web Server", CPU_WORKER
+
 def cargar(n):
     p = os.path.join(RES, n)
     return json.load(open(p)) if os.path.exists(p) else None
@@ -38,11 +45,66 @@ def k6(d, m, k):
     return x["values"].get(k) if x else None
 
 
-def met(m, nombre, filtro=None, campo="media"):
+def del_papel(nombre, papel):
+    """Si una serie pertenece al papel, en cualquiera de las dos entregas.
+
+    En la Entrega 2 habia una maquina fija por papel: `mooc-web` y
+    `mooc-worker`. En la 3 son grupos y cada instancia lleva sufijo propio
+    (`mooc-api-znwh`). Comparar por igualdad dejaba estas graficas con la
+    leyenda puesta y sin una sola barra, que es como se descubrio.
+    """
+    if papel == "mooc-web":
+        return nombre == "mooc-web" or nombre.startswith("mooc-api-")
+    if papel == "mooc-worker":
+        return nombre == "mooc-worker" or nombre.startswith("mooc-worker-")
+    return nombre == papel
+
+
+def series_de(m, nombre, filtro):
+    """Las series que casan con el filtro, tratando el papel por prefijo."""
+    salida = []
     for f in m["metricas"].get(nombre) or []:
-        if isinstance(f, dict) and "serie" in f and (not filtro or all(f["serie"].get(a) == b for a, b in filtro.items())):
-            return f[campo] if campo != "valores" else f["valores"]
-    return None
+        if not (isinstance(f, dict) and "serie" in f):
+            continue
+        if not filtro:
+            salida.append(f); continue
+        ok = True
+        for clave, valor in filtro.items():
+            actual = f["serie"].get(clave, "")
+            if clave in ("instance_name", "metadata_system_name"):
+                ok = ok and del_papel(actual, valor)
+            else:
+                ok = ok and actual == valor
+        if ok:
+            salida.append(f)
+    return salida
+
+
+def met(m, nombre, filtro=None, campo="media"):
+    """Un valor por papel, agregando las instancias del grupo.
+
+    El maximo se toma entre todas; la media se promedia entre ellas, porque el
+    maximo de las medias describiria a la instancia mas cargada y no al grupo.
+    """
+    fs = series_de(m, nombre, filtro)
+    if not fs:
+        return None
+    if campo == "valores":
+        # Un grupo son varias series, cada una viva en un tramo distinto: la
+        # instancia que se retira pronto solo tiene valores del principio.
+        # Quedarse con la primera cortaba la linea a mitad de la grafica. Se
+        # promedia por instante entre las que esten vivas en ese momento.
+        if len(fs) == 1:
+            return fs[0]["valores"]
+        por_instante = {}
+        for f in fs:
+            for marca, valor in f.get("valores") or []:
+                por_instante.setdefault(int(marca), []).append(float(valor))
+        return [[k, sum(v) / len(v)] for k, v in sorted(por_instante.items())]
+    vals = [f[campo] for f in fs if f.get(campo) is not None]
+    if not vals:
+        return None
+    return sum(vals) / len(vals) if campo == "media" else max(vals)
 
 
 def entrega_de(etiquetas):
@@ -99,9 +161,10 @@ def e1(etiquetas):
     fig, ax1 = plt.subplots(figsize=(7, 4))
     idx = range(len(filas))
     w = 0.2
-    ax1.bar([i - 1.5 * w for i in idx], [f["web"] for f in filas], w, label="CPU Web Server")
+    etq_web, etq_wrk = etiquetas_cpu([f["et"] for f in filas])
+    ax1.bar([i - 1.5 * w for i in idx], [f["web"] for f in filas], w, label=etq_web)
     ax1.bar([i - 0.5 * w for i in idx], [f["sql"] for f in filas], w, label="CPU Cloud SQL")
-    ax1.bar([i + 0.5 * w for i in idx], [f["wrk"] for f in filas], w, label=CPU_WORKER)
+    ax1.bar([i + 0.5 * w for i in idx], [f["wrk"] for f in filas], w, label=etq_wrk)
     ax1.bar([i + 1.5 * w for i in idx], [f["gen"] for f in filas], w, label="CPU máx. generador")
     ax1.set_xticks(list(idx), [f["et"] for f in filas])
     ax1.set_ylabel("CPU media en la ventana (%)")
@@ -168,8 +231,9 @@ def e2(etiquetas):
     for b, v in zip(barras, cpu):
         a2.annotate(f"{v:.0f} %", (b.get_x() + b.get_width() / 2, v), ha="center", va="bottom", fontsize=8)
     a2.set_ylim(0, 100)
-    a2.set_ylabel("CPU media del Worker Server (%)")
-    a2.set_title("Trabajo del Worker Server", fontsize=9)
+    quien = etiquetas_cpu(etiquetas)[1].replace("CPU ", "")
+    a2.set_ylabel(f"CPU media, {quien} (%)")
+    a2.set_title(f"Trabajo: {quien}", fontsize=9)
     fig.suptitle("Escenario 2: cada nivel de carga")
     guardar(fig, f"{entrega_de(etiquetas)}-cola-por-nivel.png")
 
@@ -182,14 +246,22 @@ def serie(et):
     m = cargar(f"{et}-metricas.json")
     t0 = datetime.fromisoformat(m["desde"].replace("Z", "+00:00")).timestamp()
     fig, axs = plt.subplots(3, 1, figsize=(7, 7), sharex=True)
-    for nombre, filtro, etq, esc in (("cpu_uso", {"instance_name": "mooc-web"}, "CPU Web Server", 100),
-                                     ("cpu_uso", {"instance_name": "mooc-worker"}, CPU_WORKER, 100),
+    etq_web, etq_wrk = etiquetas_cpu([et])
+    for nombre, filtro, etq, esc in (("cpu_uso", {"instance_name": "mooc-web"}, etq_web, 100),
+                                     ("cpu_uso", {"instance_name": "mooc-worker"}, etq_wrk, 100),
                                      ("sql_cpu", None, "CPU Cloud SQL", 100)):
         v = met(m, nombre, filtro, "valores")
         if v:
             x, y = minutos(v, t0)
             axs[0].plot(x, [a * esc for a in y], label=etq)
     axs[0].set_ylabel("CPU (%)")
+    # El bucket mas alto de http_request_duration_seconds son 10 s, asi que el
+    # p95 del servidor se queda pegado ahi cuando lo rebasa: la linea plana en
+    # 10.000 ms significa «10 s o mas», no «10 s». Se marca para que nadie la
+    # lea como una medicion.
+    axs[2].axhline(10000, color="gray", linestyle=":", linewidth=1)
+    axs[2].text(0.01, 10000, " tope del histograma (10 s)", fontsize=7,
+                color="gray", va="bottom", transform=axs[2].get_yaxis_transform())
     axs[0].legend(fontsize=8)
     v = met(m, "sql_conexiones", None, "valores")
     if v:
@@ -224,8 +296,10 @@ def cola(et):
         x, y = minutos(v, t0)
         axs[1].plot(x, [a / 60 for a in y], "r-")
     axs[1].set_ylabel("antigüedad del más viejo (min)")
-    for nombre, filtro, etq in (("cpu_uso", {"instance_name": "mooc-worker"}, CPU_WORKER),
-                                ("memoria_uso_pct", {"metadata_system_name": "mooc-worker"}, "Memoria Worker Server")):
+    _, etq_wrk = etiquetas_cpu([et])
+    mem_wrk = etq_wrk.replace("CPU", "Memoria")
+    for nombre, filtro, etq in (("cpu_uso", {"instance_name": "mooc-worker"}, etq_wrk),
+                                ("memoria_uso_pct", {"metadata_system_name": "mooc-worker"}, mem_wrk)):
         v = met(m, nombre, filtro, "valores")
         if v:
             x, y = minutos(v, t0)
