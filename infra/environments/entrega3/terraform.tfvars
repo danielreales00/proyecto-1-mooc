@@ -29,12 +29,12 @@ cloudsql_disco_gb = 10
 # ARGS=apply`. Aquí y no con -var: con -var, el siguiente apply sin él la
 # volvería a encender sin que nadie lo note. Se versiona, así el equipo ve en
 # git si la base debería estar encendida.
-cloudsql_encendida = true
+cloudsql_encendida = false
 
 # Grupos en cero, cola detenida y reglas de reenvío borradas: lo que cobra por
 # hora se apaga. La IP del balanceador, su certificado y el disco de la cola se
 # quedan. Al encenderlo, cada pieza arranca sola.
-entorno_encendido = true
+entorno_encendido = false
 
 # Instancias de los dos grupos: las mismas 2 vCPU completas, 2048 MiB y 30 GiB
 # de la Entrega 2, para que la capacidad por instancia sea comparable con la
@@ -93,7 +93,7 @@ factor_limite_ip = 100
 # Bajarlo a 2 vCPU resuelve ademas dos cosas: era el recurso mas caro y el mas
 # ocioso de la sesion de medicion, y liberaba la cuota de 16 vCPU de la cuenta,
 # que con 4 impedia tener los dos grupos en tres a la vez (6+6+1+4 = 17).
-generador_encendido = true
+generador_encendido = false
 tipo_generador      = "e2-standard-2"
 
 # --- Escalado (ADR-0019, D4 y D5) ---------------------------------------------
