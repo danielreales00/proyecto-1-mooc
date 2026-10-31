@@ -1,8 +1,8 @@
 {
   "servidor": "SonarQube 26.10.0.133078",
   "proyecto": "mooc",
-  "commit": "d9f9194e9403bd0dae70972440f2bf5f6bc9b85b",
-  "fecha_analisis": "2026-10-30T23:50:31+0000",
+  "commit": "72dd024340af0ef019599b2060f0a8c59f805954",
+  "fecha_analisis": "2026-10-31T20:42:40+0000",
   "perfiles": {
     "Azure Resource Manager": "Sonar way comprehensive",
     "CloudFormation": "Sonar way comprehensive",
@@ -33,14 +33,14 @@
     "YAML": "Sonar way comprehensive"
   },
   "medidas": {
-    "coverage": "9.7",
-    "complexity": "3210",
+    "coverage": "9.6",
+    "complexity": "3227",
     "reliability_rating": "1.0",
     "code_smells": "0",
     "duplicated_lines_density": "1.5",
-    "ncloc_language_distribution": "css=702;docker=67;go=12028;js=2290;py=637;terraform=1767;web=37",
+    "ncloc_language_distribution": "css=702;docker=67;go=12028;js=2290;py=683;terraform=1767;web=37",
     "duplicated_lines": "327",
-    "functions": "1070",
+    "functions": "1074",
     "security_rating": "1.0",
     "sqale_debt_ratio": "0.0",
     "security_hotspots": "0",
@@ -48,11 +48,11 @@
     "sqale_index": "0",
     "sqale_rating": "1.0",
     "bugs": "0",
-    "lines_to_cover": "8502",
-    "uncovered_lines": "7708",
-    "cognitive_complexity": "1942",
+    "lines_to_cover": "8541",
+    "uncovered_lines": "7747",
+    "cognitive_complexity": "1954",
     "duplicated_blocks": "10",
-    "ncloc": "17528",
+    "ncloc": "17574",
     "files": "148",
     "vulnerabilities": "0"
   }

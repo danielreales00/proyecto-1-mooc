@@ -706,18 +706,24 @@ commit final (sección 6), con los elementos que sigan abiertos.
 
 | Dato | Valor |
 | --- | --- |
-| Commit evaluado | `d9f9194e9403bd0dae70972440f2bf5f6bc9b85b` |
-| Fecha del análisis | 30 de octubre de 2026 |
+| Commit evaluado | `72dd024340af0ef019599b2060f0a8c59f805954` |
+| Fecha del análisis | 31 de octubre de 2026 |
 | Herramienta | SonarQube Community Build 26.10.0.133078 con SonarScanner CLI 8.1.0.6389 |
 | Perfil de reglas | Sonar way comprehensive en todos los lenguajes |
 | Ejecución del pipeline | [CI, run 40999930703](https://github.com/danielreales00/proyecto-1-mooc/actions/runs/40999930703), job [«Calidad (SonarQube)»](https://github.com/danielreales00/proyecto-1-mooc/actions/runs/40999930703/job/123881711308), en verde |
-| Reporte del pipeline | Artefacto `calidad-d9f9194e9403bd0dae70972440f2bf5f6bc9b85b` de esa ejecución, disponible hasta el 28 de enero de 2027 |
+| Reporte del pipeline | Artefacto `calidad-<sha>` de la ejecución del commit evaluado |
 | Exportación versionada | [`calidad/`](calidad/), regenerada con `make calidad` sobre el árbol limpio del mismo commit |
 
-El job del CI y `make calidad` dieron las mismas cifras sobre ese commit. El
-tag `entrega-3` se crea sobre él o sobre un commit posterior que solo cambie
-documentación. `docs/` no está en el alcance del análisis, así que un cambio
-ahí no altera el reporte.
+El job del CI y `make calidad` dan las mismas cifras sobre ese commit. El tag
+`entrega-3` se crea sobre él o sobre un commit posterior que **solo cambie
+documentación**: `docs/` no está en el alcance del análisis.
+
+**Y «solo documentación» hay que tomárselo al pie de la letra.** La primera
+versión de esta sección se escribió sobre `d9f9194`, y el commit siguiente tocó
+`capacity-planning/metricas/graficas.py` —que sí está en `sonar.sources`— e
+introdujo un hallazgo `CRITICAL` (`python:S3776`, complejidad cognitiva 17 sobre
+15). Se corrigió en `72dd024` y se repitió el análisis. Cualquier commit que
+toque código después del análisis obliga a rehacerlo.
 
 ### Cifras
 
