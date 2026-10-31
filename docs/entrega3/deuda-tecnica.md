@@ -706,13 +706,14 @@ commit final (sección 6), con los elementos que sigan abiertos.
 
 | Dato | Valor |
 | --- | --- |
-| Commit evaluado | `72dd024340af0ef019599b2060f0a8c59f805954` |
+| Commit evaluado | `a25da6f7df2f1bcf31495b7ba10e412efa61c6a3` |
 | Fecha del análisis | 31 de octubre de 2026 |
 | Herramienta | SonarQube Community Build 26.10.0.133078 con SonarScanner CLI 8.1.0.6389 |
 | Perfil de reglas | Sonar way comprehensive en todos los lenguajes |
 | Ejecución del pipeline | [CI, run 40999930703](https://github.com/danielreales00/proyecto-1-mooc/actions/runs/40999930703), job [«Calidad (SonarQube)»](https://github.com/danielreales00/proyecto-1-mooc/actions/runs/40999930703/job/123881711308), en verde |
 | Reporte del pipeline | Artefacto `calidad-<sha>` de la ejecución del commit evaluado |
 | Exportación versionada | [`calidad/`](calidad/), regenerada con `make calidad` sobre el árbol limpio del mismo commit |
+| Relación con el tag | El tag `entrega-3` apunta al commit siguiente, que **solo toca este documento**. `docs/` está fuera de `sonar.sources`, así que las cifras son las mismas |
 
 El job del CI y `make calidad` dan las mismas cifras sobre ese commit. El tag
 `entrega-3` se crea sobre él o sobre un commit posterior que **solo cambie
