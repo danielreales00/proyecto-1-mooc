@@ -146,10 +146,10 @@ Los responsables se nombran por frente de trabajo, según el reparto de
 
 | Frente | Integrante |
 | --- | --- |
-| Infraestructura elástica | Por asignar |
-| Backend y calidad | Por asignar |
-| Frontend | Por asignar |
-| Capacidad | Por asignar |
+| Infraestructura elástica | Santiago Chica |
+| Backend y calidad | Daniel Reales |
+| Frontend | Josué Briceño |
+| Capacidad | Michael Patiño |
 
 ### Prioridad 1
 
@@ -677,7 +677,7 @@ mantenimiento.
 | 5 | DT-04 | `/readyz` sin detalle y comprobación del worker | Backend y calidad | Con el Terraform de la Entrega 3 |
 | 6 | DT-11 | Contraseña de Redis | Infraestructura elástica | Cierre de la Entrega 3 |
 | 7 | DT-08, DT-07 paso 1, DT-09 (`jobs` e `idempotency`) | Correcciones cortas y pruebas de idempotencia | Backend y calidad, Frontend | Cierre de la Entrega 3 |
-| 8 | DT-06, DT-07, DT-09, DT-10, DT-12, DT-13, DT-14, DT-17, DT-20, **DT-22** | Refactorizaciones y pruebas | Según el elemento | Entrega 4 |
+| 8 | DT-06, DT-07, DT-09, DT-10, DT-12, DT-13, DT-14, DT-17, DT-20| Refactorizaciones y pruebas | Según el elemento | Entrega 4 |
 | 9 | DT-15, DT-16, DT-21 | Trazas, restauración y correo | Según el elemento | Entrega 5 |
 | | DT-18, DT-19 | Sin acción | | Aceptados |
 
@@ -702,16 +702,97 @@ commit final (sección 6), con los elementos que sigan abiertos.
 
 ## 6. Línea base del commit final
 
-Al cerrar la Entrega 3 se completa esta sección con:
+### Análisis de referencia
 
-1. El commit del tag `entrega-3`.
-2. El enlace a la ejecución del job «Calidad (SonarQube)» de ese commit y su
-   artefacto `calidad-<sha>`.
-3. Las cifras de ese análisis. Si difieren de la sección 2, se explica qué
-   elemento del inventario las cambió.
-4. El estado final de cada elemento.
+| Dato | Valor |
+| --- | --- |
+| Commit evaluado | `d9f9194e9403bd0dae70972440f2bf5f6bc9b85b` |
+| Fecha del análisis | 30 de octubre de 2026 |
+| Herramienta | SonarQube Community Build 26.10.0.133078 con SonarScanner CLI 8.1.0.6389 |
+| Perfil de reglas | Sonar way comprehensive en todos los lenguajes |
+| Ejecución del pipeline | [CI, run 40999930703](https://github.com/danielreales00/proyecto-1-mooc/actions/runs/40999930703), job [«Calidad (SonarQube)»](https://github.com/danielreales00/proyecto-1-mooc/actions/runs/40999930703/job/123881711308), en verde |
+| Reporte del pipeline | Artefacto `calidad-d9f9194e9403bd0dae70972440f2bf5f6bc9b85b` de esa ejecución, disponible hasta el 28 de enero de 2027 |
+| Exportación versionada | [`calidad/`](calidad/), regenerada con `make calidad` sobre el árbol limpio del mismo commit |
 
-La exportación de `docs/entrega3/calidad/` se regenera con `make calidad` sobre
-el árbol limpio de ese commit. Un cambio de versión de SonarQube, del scanner o
-del perfil de reglas cambia las cifras sin que cambie el código, y se registra
-como cambio de línea base.
+El job del CI y `make calidad` dieron las mismas cifras sobre ese commit. El
+tag `entrega-3` se crea sobre él o sobre un commit posterior que solo cambie
+documentación. `docs/` no está en el alcance del análisis, así que un cambio
+ahí no altera el reporte.
+
+### Cifras
+
+| Indicador | Medición inicial (sección 2) | Commit final | Umbral | Cumple |
+| --- | --- | --- | --- | --- |
+| Duplicación de código | 1,6 % | 1,5 % (327 líneas en 10 bloques) | Máximo 20 % | Sí |
+| Mantenibilidad | A, ratio de deuda 0,2 % | A, ratio de deuda 0,0 % | A, B o C | Sí |
+| Deuda técnica estimada | 1.162 min | 0 min | Referencia | |
+| Fiabilidad | C, 1 bug | A, 0 bugs | | |
+| Seguridad | E, 20 vulnerabilidades | A, 0 vulnerabilidades | | |
+| Security hotspots por revisar | 0 | 0 | | |
+| Cobertura de pruebas unitarias | 9,5 % | 9,7 % (794 de 8.502 líneas) | | |
+| Líneas de código analizadas | 16.157 | 17.528 | | |
+| Hallazgos abiertos | 156 (2 Blocker, 32 Critical, 83 Major, 39 Minor) | 0 | | |
+
+La primera medición de referencia de la deuda estimada por la herramienta es
+de 0 minutos sobre 17.528 líneas. El código creció en 1.371 líneas, la mayor
+parte en Terraform del entorno elástico (de 1.079 a 1.767) y en la interfaz.
+
+### Qué cambió las cifras
+
+| Hallazgos de la sección 2 | Cantidad | Elemento | Cómo se cerraron |
+| --- | --- | --- | --- |
+| Backend en Go | 27 | DT-06, DT-08 | Corregidos en `885df7e` |
+| Interfaz | 70 | DT-07, DT-20 | Corregidos en `0ca7a6a`, incluido el único bug (`javascript:S6544`) |
+| Guiones de carga y métricas | 51 | DT-13 | Corregidos en `e2087c9` |
+| Terraform | 8 | DT-05, DT-12, DT-20 | 6 corregidos en `692f30d` y `cfa7fe5`. 2 aceptados como decisión de diseño |
+
+Los dos hallazgos aceptados son `terraform:S6329` en
+`infra/modules/generador/main.tf` y `terraform:S6404` en
+`infra/modules/gcs/main.tf`. No están corregidos. Se excluyen solo esa regla en
+ese archivo, con la razón escrita en `sonar-project.properties` y en DT-20. Sin
+esa exclusión el análisis tendría un Blocker y un Major abiertos y los dos
+umbrales se seguirían cumpliendo, porque ninguno de los dos afecta la
+duplicación ni la mantenibilidad. Ningún archivo de la aplicación se excluyó
+para mejorar las cifras.
+
+### Lo que la cifra no muestra
+
+Una deuda estimada de 0 minutos significa que SonarQube no encuentra *code
+smells* con este perfil. No significa que el proyecto no tenga deuda. Los
+elementos abiertos de este inventario no los detecta el analizador y siguen
+siendo la línea base para las entregas siguientes. La cobertura unitaria de
+9,7 % es el indicador más débil del análisis y corresponde a DT-09.
+
+### Estado final de cada elemento
+
+| Elemento | Prioridad | Estado al commit final | Lo que falta |
+| --- | --- | --- | --- |
+| DT-01 | P1 | En tratamiento. Corregido en `692f30d` y `e0b38f2` | Verificación bajo carga en el escenario 3B |
+| DT-02 | P1 | En tratamiento. Corregido en `692f30d` y `e0b38f2`. El criterio se cumplió el 28 de octubre al retirar `mooc-worker-1bs0` con dos transcodificaciones activas | Medir el plazo real que concede GCE y bajar `WORKER_SHUTDOWN_TIMEOUT` a lo observado |
+| DT-03 | P1 | En tratamiento. Corregido en `692f30d` | Medición con tres instancias por grupo |
+| DT-04 | P1 | En tratamiento. Corregido en `e0b38f2` | Que la comprobación de salud del grupo de workers use `/readyz` |
+| DT-05 | P1 | Resuelto en `692f30d` y `cfa7fe5` | |
+| DT-06 | P2 | Resuelto en `885df7e` | |
+| DT-07 | P2 | En tratamiento. Pasos 1 y 3 en `0ca7a6a` | Separar las vistas en módulos, Entrega 4 |
+| DT-08 | P2 | Resuelto en `885df7e` | |
+| DT-09 | P2 | Pendiente | Pruebas de `jobs`, `idempotency`, `learning` y `assessment` |
+| DT-10 | P2 | Pendiente | Entrega 4 |
+| DT-11 | P2 | Pendiente | Contraseña de Redis. El punto único de falla se acepta hasta la Entrega 5 |
+| DT-12 | P2 | Resuelto en código en `cfa7fe5` | Aplicarlo en el entorno `entrega3` |
+| DT-22 | P2 | Pendiente | Entrega 4 |
+| DT-13 | P3 | Resuelto en `e2087c9` | |
+| DT-14 | P3 | Pendiente | Entrega 4 |
+| DT-15 | P3 | Pendiente | Entrega 5 |
+| DT-16 | P3 | Pendiente | Entrega 5 |
+| DT-17 | P3 | Pendiente | Entrega 4 |
+| DT-18 | P3 | Aceptado | |
+| DT-19 | P3 | Aceptado | |
+| DT-20 | P3 | Aceptado `S6329` en el generador y `S6404` en el bucket de insignias. El resto corregido en `cfa7fe5` y `0ca7a6a` | |
+| DT-21 | P3 | Aceptado | |
+
+### Cómo se compara la entrega siguiente
+
+La Entrega 4 parte de este reporte. Se corre `make calidad` con la misma
+versión de SonarQube, del scanner y del perfil de reglas. Si alguna cambia, las
+cifras pueden moverse sin que cambie el código, y se registra como cambio de
+línea base antes de comparar.
