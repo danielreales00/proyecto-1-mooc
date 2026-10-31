@@ -435,6 +435,23 @@ sirve para nada después.
 - GCE da unos 90 s al script de apagado de una instancia normal. El periodo de
   300 s de `worker-media` no está garantizado sin el apagado ordenado de GCE.
   Más allá de ese margen, el trabajo se recupera por reclamo.
+- **El entorno no arrancó limpio el 31 de octubre: Redis sin puerto publicado.**
+  Tras un ciclo de apagado y encendido, la API no levantó —`ping a redis db 1:
+  dial tcp 10.10.0.30:6379: connect: connection refused`— y el grupo marcó la
+  instancia `TIMEOUT`. Redis estaba corriendo y sano dentro de su contenedor,
+  pero `docker ps` lo mostraba **sin puertos publicados**, frente a Mailpit que
+  sí los tenía.
+
+  La causa: el contenedor se había creado días antes sin el mapeo, y
+  `docker compose up` lo reutiliza en vez de recrearlo mientras exista. Cada
+  arranque de la máquina reiniciaba el mismo contenedor defectuoso.
+
+  Se resolvió con `docker compose up -d --force-recreate redis` en
+  `mooc-cola`, y la API se recuperó sola en dos minutos.
+
+  **Consecuencia para la reconstrucción:** el procedimiento debe comprobar que
+  `ss -lnt` en `mooc-cola` muestra `10.10.0.30:6379` antes de dar el entorno por
+  levantado. Un contenedor sano no implica un puerto publicado.
 - **La cuota de 16 vCPU de la cuenta apretaba, y se resolvió midiendo.** Con el
   generador en `e2-standard-4`, la configuración completa pedía diecisiete vCPU
   —6 de tres instancias de API, 6 de tres de worker, 1 de `mooc-cola` y 4 del

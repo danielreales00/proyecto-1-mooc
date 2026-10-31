@@ -385,6 +385,9 @@ try {
     .filter({ has: page.getByRole("heading", { name: name, exact: true }) })
     .getByRole("link", { name: "Explorar curso ↗", exact: true })
     .click();
+  // Esperar a que la ficha haya pintado antes de capturar: tomarla justo tras
+  // el clic del catalogo dejaba el estado de carga, «Abriendo tu espacio».
+  await page.getByRole("button", { name: "Inscribirme al curso ↗" }).waitFor();
   await captura("estudiante-detalle-del-curso");
   await page.getByRole("button", { name: "Inscribirme al curso ↗" }).click();
   await page

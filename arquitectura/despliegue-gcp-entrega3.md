@@ -278,6 +278,21 @@ Desde cero, en el mismo proyecto:
 1. `make tf ENTORNO=entrega3 ARGS=init` y `apply` con `entorno_encendido = true`
    y `autoescalado = false`.
 2. Esperar el certificado.
+2b. **Comprobar que Redis publica el puerto**, antes de dar nada por bueno:
+
+   ```bash
+   make ssh MAQUINA=mooc-cola CMD="sudo ss -lnt"
+   ```
+
+   Tiene que salir `10.10.0.30:6379`. Si no, el contenedor existe de un
+   arranque anterior sin el mapeo y hay que recrearlo:
+
+   ```bash
+   make ssh MAQUINA=mooc-cola CMD="cd /opt/mooc && sudo docker compose up -d --force-recreate redis"
+   ```
+
+   Sin esto la API no levanta y el grupo acaba marcándola `TIMEOUT`. Pasó el 31
+   de octubre: un contenedor sano no implica un puerto publicado.
 3. `make semilla-nube`.
 4. `make hornear-imagen` si la imagen no existe, `imagen_grupos` y `apply`.
 5. `autoescalado = true` y `apply`.
