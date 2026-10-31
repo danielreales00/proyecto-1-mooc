@@ -706,7 +706,7 @@ commit final (sección 6), con los elementos que sigan abiertos.
 
 | Dato | Valor |
 | --- | --- |
-| Commit evaluado | `a25da6f7df2f1bcf31495b7ba10e412efa61c6a3` |
+| Commit evaluado | `c18820b3e7063ec818692a80d05820dac829256a` |
 | Fecha del análisis | 31 de octubre de 2026 |
 | Herramienta | SonarQube Community Build 26.10.0.133078 con SonarScanner CLI 8.1.0.6389 |
 | Perfil de reglas | Sonar way comprehensive en todos los lenguajes |
