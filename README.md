@@ -1,6 +1,27 @@
 # Plataforma MOOC
 
-**Video Entrega 3: [https://www.youtube.com/watch?v=_RsKRuP7awg](https://www.youtube.com/watch?v=_RsKRuP7awg)**
+## Entregables de la Entrega 3
+
+| # | Entregable | Dónde |
+| --- | --- | --- |
+| 1 | **Plataforma desplegada**: frontend, autoscaling en API y workers, cola compartida y persistencia | `https://34-160-11-22.sslip.io` — se enciende para la sustentación, ver [reconstrucción](arquitectura/despliegue-gcp-entrega3.md#reconstrucción-para-la-sustentación) |
+| 2 | **Release del código y la configuración** | Tag [`entrega-3`](../../tree/entrega-3) |
+| 3 | **Documento de arquitectura**, con operación y reconstrucción | [`docs/entrega3/arquitectura.md`](docs/entrega3/arquitectura.md) |
+| 4 | **Verificación funcional del frontend**, con la matriz de recorridos y rutas | [`docs/entrega3/verificacion-frontend.md`](docs/entrega3/verificacion-frontend.md) |
+| 5 | **Informe de capacidad**: escenarios 1, 2, 3A y 3B, y la comparación con la Entrega 2 | [`capacity-planning/pruebas_de_carga_entrega3.md`](capacity-planning/pruebas_de_carga_entrega3.md) |
+| 6 | **Primer documento de deuda técnica**, con diagnóstico, línea base, inventario y plan | [`docs/entrega3/deuda-tecnica.md`](docs/entrega3/deuda-tecnica.md) |
+| 7 | **Evidencias reproducibles** | [Guiones y resultados](capacity-planning/), [gráficas](capacity-planning/graficas/), [sesiones del despliegue](docs/entrega3/evidencias/elastica/), [recorrido del frontend](docs/entrega3/evidencias/frontend/) y [reporte de calidad](docs/entrega3/calidad/) |
+| 8 | **Video de sustentación** | [youtube.com/watch?v=_RsKRuP7awg](https://www.youtube.com/watch?v=_RsKRuP7awg) |
+
+**URL de la aplicación:** `https://34-160-11-22.sslip.io` — la misma para la
+interfaz web y para el balanceador de la API (`/api/v1`, contrato navegable en
+`/docs`). Las credenciales no se publican: el acceso para el equipo docente se
+comunica por el medio privado del curso.
+
+El detalle de la entrega está en [Entrega 3 — aplicación elástica
+IaaS](#entrega-3--aplicación-elástica-iaas).
+
+---
 
 **Video Entrega 2: [https://youtu.be/b-06APPZTCM](https://youtu.be/b-06APPZTCM)**
 
