@@ -1,5 +1,7 @@
 # Plataforma MOOC
 
+**Video Entrega 3: [https://www.youtube.com/watch?v=_RsKRuP7awg](https://www.youtube.com/watch?v=_RsKRuP7awg)**
+
 **Video Entrega 2: [https://youtu.be/b-06APPZTCM](https://youtu.be/b-06APPZTCM)**
 
 Plataforma web de cursos masivos abiertos en línea. Un profesor autorizado crea
@@ -418,6 +420,9 @@ para el equipo docente se comunica por el medio privado del curso.
 | [`docs/entrega3/deuda-tecnica.md`](docs/entrega3/deuda-tecnica.md) | Primer diagnóstico de calidad, línea base de deuda técnica, inventario priorizado y plan de tratamiento |
 | [`docs/entrega3/calidad/`](docs/entrega3/calidad/) | Exportación del análisis de SonarQube: medidas, hallazgos y resumen |
 | [`arquitectura/adr/0018`](arquitectura/adr/0018-analisis-de-calidad-con-sonarqube-en-el-ci.md) | Cómo se ejecuta SonarQube en el CI y en local |
+| [Video de sustentación](https://www.youtube.com/watch?v=_RsKRuP7awg) | Arquitectura elástica, recorrido en el frontend, ciclos de escalamiento, resultados comparativos y diagnóstico de calidad |
+
+**Versión evaluada:** el tag [`entrega-3`](../../tree/entrega-3).
 
 ## Entrega 2 — despliegue básico en la nube
 

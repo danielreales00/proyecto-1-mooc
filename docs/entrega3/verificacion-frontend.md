@@ -115,7 +115,8 @@ que no pueden quedarse desactualizadas respecto a lo que la prueba comprueba.
 | Fecha | Dónde | Commit | Resultado |
 | --- | --- | --- | --- |
 | 2026-10-25 | Stack local, `make frontend-e2e` | El de este documento | Pasa, sin errores en la consola del navegador |
-| 2026-10-28 | **Nube, por el balanceador**, `make frontend-e2e-nube` | `d4738e9` | Pasa, sin errores en la consola del navegador. Evidencia en [`evidencias/frontend/`](evidencias/frontend/) |
+| 2026-10-28 | **Nube, por el balanceador**, `make frontend-e2e-nube` | `d4738e9` | Pasa, sin errores en la consola del navegador |
+| 2026-10-30 | **Nube, antes de grabar**, `make frontend-e2e-nube` | `d9f9194` | Pasa. **Es la corrida que generó las capturas** de [`evidencias/frontend/`](evidencias/frontend/) |
 
 La primera corrida en la nube **falló dos veces, y las dos por la prueba, no
 por la plataforma**. Las dos solo podían aparecer fuera del stack local:
