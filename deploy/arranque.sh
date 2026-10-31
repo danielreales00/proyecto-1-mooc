@@ -203,8 +203,30 @@ docker compose pull --quiet
 # sabe esperar a servicios de la suya: si la cola arranca después, la API no
 # pasa su healthcheck y `up` aborta. Se reintenta hasta que esté lista; diez
 # minutos cubren su arranque en frío.
+# Un contenedor sano no implica un puerto publicado. Si Redis se creó en un
+# arranque anterior sin el mapeo de puertos, `compose up` lo reutiliza tal cual
+# —no lo recrea mientras exista— y queda escuchando solo dentro de su red de
+# Docker. Su healthcheck pasa igual, porque `redis-cli ping` corre dentro. Lo
+# que ve la API desde otra máquina es «connection refused», y el síntoma no
+# apunta a la causa: pasó el 31 de octubre de 2026 y costó media hora.
+falta_publicar() {
+  [ "$ROL" = cola ] || return 1
+  local ip
+  ip=$(md mooc-ip-privada)
+  # Sin IP no se puede comprobar; no se bloquea el arranque por ello. Y la
+  # comparación es literal (-F): los puntos de una IP son comodines en grep.
+  [ -n "$ip" ] || return 1
+  ! ss -lnt 2>/dev/null | grep -qF "${ip}:6379"
+}
+
 for intento in $(seq 1 60); do
   if docker compose up -d --remove-orphans --wait --wait-timeout 120; then
+    if falta_publicar; then
+      echo "mooc: redis sano pero sin publicar el 6379 en la IP privada; se recrea"
+      docker compose up -d --force-recreate redis || true
+      sleep 5
+      continue
+    fi
     # Caddy corre con la API de administración apagada y no recarga solo: si
     # su configuración cambió, se reinicia el proxy.
     if [ "$ROL" = web ] && [ "$caddy_antes" != "$(sha256sum "$DIR/Caddyfile")" ]; then
