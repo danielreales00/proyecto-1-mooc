@@ -1,8 +1,8 @@
 {
   "servidor": "SonarQube 26.10.0.133078",
   "proyecto": "mooc",
-  "commit": "c18820b3e7063ec818692a80d05820dac829256a",
-  "fecha_analisis": "2026-10-31T22:08:12+0000",
+  "commit": "4b79b9c62b8c62b6371cdd31c6c26869dd1044e7",
+  "fecha_analisis": "2026-11-01T19:01:06+0000",
   "perfiles": {
     "Azure Resource Manager": "Sonar way comprehensive",
     "CloudFormation": "Sonar way comprehensive",

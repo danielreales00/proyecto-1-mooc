@@ -1,8 +1,8 @@
 # Resumen del análisis de calidad
 
 - Herramienta: SonarQube 26.10.0.133078
-- Commit: `c18820b3e7063ec818692a80d05820dac829256a`
-- Fecha del análisis: 2026-10-31T22:08:12+0000
+- Commit: `4b79b9c62b8c62b6371cdd31c6c26869dd1044e7`
+- Fecha del análisis: 2026-11-01T19:01:06+0000
 - Perfiles: Azure Resource Manager (Sonar way comprehensive), C# (Sonar way comprehensive), CSS (Sonar way comprehensive), CloudFormation (Sonar way comprehensive), Docker (Sonar way comprehensive), Flex (Sonar way comprehensive), Go (Sonar way comprehensive), HTML (Sonar way comprehensive), IPython Notebooks (Sonar way comprehensive), JSON (Sonar way comprehensive), JSP (Sonar way comprehensive), Java (Sonar way comprehensive), JavaScript (Sonar way comprehensive), Kotlin (Sonar way comprehensive), Kubernetes (Sonar way comprehensive), PHP (Sonar way comprehensive), Python (Sonar way comprehensive), Ruby (Sonar way comprehensive), Rust (Sonar way comprehensive), Scala (Sonar way comprehensive), Secrets (Sonar way comprehensive), Terraform (Sonar way comprehensive), Text (Sonar way comprehensive), TypeScript (Sonar way comprehensive), VB.NET (Sonar way comprehensive), XML (Sonar way comprehensive), YAML (Sonar way comprehensive)
 - Líneas de código: 17574 (css=702;docker=67;go=12028;js=2290;py=683;terraform=1767;web=37)
 
