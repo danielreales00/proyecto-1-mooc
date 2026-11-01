@@ -219,11 +219,23 @@ falta_publicar() {
   ! ss -lnt 2>/dev/null | grep -qF "${ip}:6379"
 }
 
+# Se borra, no se recrea: `--force-recreate` no sirve si el contenedor no es de
+# Compose —pasa si alguien depuró con `docker run`—, porque `up` falla con un
+# conflicto de nombre y el arranque entra en bucle. Borrarlo cubre los dos
+# casos: el que existe sin el mapeo y el que Compose no controla.
+redis_de_cero() {
+  echo "mooc: redis no publica el 6379 en la IP privada; se borra para recrearlo"
+  docker rm -f mooc-redis-1 >/dev/null 2>&1 || true
+}
+
+# Con `set -e`, una lista `a && b` que acaba en falso aborta el guion: tiene que
+# ser un `if`. Sin esto, la cola moriria al arrancar justo cuando todo iba bien.
+if falta_publicar; then redis_de_cero; fi
+
 for intento in $(seq 1 60); do
   if docker compose up -d --remove-orphans --wait --wait-timeout 120; then
     if falta_publicar; then
-      echo "mooc: redis sano pero sin publicar el 6379 en la IP privada; se recrea"
-      docker compose up -d --force-recreate redis || true
+      redis_de_cero
       sleep 5
       continue
     fi

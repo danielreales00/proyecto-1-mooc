@@ -278,21 +278,30 @@ Desde cero, en el mismo proyecto:
 1. `make tf ENTORNO=entrega3 ARGS=init` y `apply` con `entorno_encendido = true`
    y `autoescalado = false`.
 2. Esperar el certificado.
-2b. **Comprobar que Redis publica el puerto**, antes de dar nada por bueno:
+2b. **Redis y su puerto: ya se corrige solo, pero conviene mirarlo.**
 
-   ```bash
-   make ssh MAQUINA=mooc-cola CMD="sudo ss -lnt"
+   El 31 de octubre el entorno no arrancó porque el contenedor de Redis existía
+   de antes sin el mapeo de puertos: corría sano —su healthcheck es
+   `redis-cli ping` *dentro* del contenedor— y escuchaba solo en su red de
+   Docker. La API, desde otra máquina, veía `connection refused`.
+
+   `deploy/arranque.sh` lo comprueba ahora en cada arranque de la cola: si el
+   6379 no escucha en la IP privada, borra el contenedor y deja que Compose lo
+   cree de cero. En el diario sale así:
+
+   ```text
+   mooc: redis no publica el 6379 en la IP privada; se borra para recrearlo
+   mooc: cola levantado en 12 s
    ```
 
-   Tiene que salir `10.10.0.30:6379`. Si no, el contenedor existe de un
-   arranque anterior sin el mapeo y hay que recrearlo:
+   Verificado el 31 de octubre atando Redis a `127.0.0.1` a propósito y
+   reiniciando la máquina: se corrigió solo en menos de un minuto.
+
+   La comprobación manual sigue valiendo como confirmación rápida:
 
    ```bash
-   make ssh MAQUINA=mooc-cola CMD="cd /opt/mooc && sudo docker compose up -d --force-recreate redis"
+   make ssh MAQUINA=mooc-cola CMD="sudo ss -lnt"   # debe salir 10.10.0.30:6379
    ```
-
-   Sin esto la API no levanta y el grupo acaba marcándola `TIMEOUT`. Pasó el 31
-   de octubre: un contenedor sano no implica un puerto publicado.
 3. `make semilla-nube`.
 4. `make hornear-imagen` si la imagen no existe, `imagen_grupos` y `apply`.
 5. `autoescalado = true` y `apply`.
