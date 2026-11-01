@@ -368,9 +368,31 @@ quedó en dos durante 32 minutos de carga baja, y es correcto: su objetivo son
 32 peticiones/s por instancia y esa fase genera unas 40. El grupo baja hasta lo
 que su política dice, no hasta el mínimo.
 
-La comparación de los escenarios de la Entrega 2 sobre esta arquitectura está
-en el
-[informe de capacidad](../../capacity-planning/pruebas_de_carga_entrega3.md).
+### Qué consiguió la arquitectura, y dónde está su límite
+
+El detalle está en el
+[informe de capacidad](../../capacity-planning/pruebas_de_carga_entrega3.md);
+aquí, lo que esas mediciones dicen **de estas decisiones de diseño**.
+
+| Lo que se decidió | Lo que midió |
+| --- | --- |
+| Grupo de API de 1 a 3, repartido por el balanceador | A 91 peticiones/s el p95 es de **28 ms**, donde la máquina fija de la Entrega 2 daba **272 ms**. El grupo absorbe la carga que antes era el codo de la curva |
+| Grupo de workers de 1 a 3 con la cola como señal | A 6 cargas/min el tiempo hasta `ready` baja de **9–11 minutos a 3–9**. A 12 cargas/min se completan **8 vídeos por minuto** frente a 1,3 |
+| Redis fuera de los grupos, en `mooc-cola` | No fue el límite en ninguna corrida: **659 órdenes/s** de pico, carga trivial para Redis. El salto de red que añade no aparece en los percentiles |
+| Cloud SQL sin cambios, a propósito | **Es el límite.** A 117 peticiones/s la API va al 19–21 % de CPU y las conexiones a 31 de 47, mientras las escrituras de disco se aplanan en 206–339/s contra el techo de 300 de un PD-SSD de 10 GB |
+
+**La conclusión que ordena la siguiente entrega:** escalar la API movió el codo
+de 61 a 91 peticiones/s, pero el techo se mudó a la base. Subirlo no pasa por
+más instancias sino por **agrandar el disco de Cloud SQL de 10 a 100 GB**, que
+multiplica por diez las escrituras por segundo por unos pocos dólares al mes y
+sin tocar el código. El disco está al 4 % de ocupación: se agrandaría por
+rendimiento, no por espacio.
+
+**Y donde la arquitectura no escala, no mejora.** Con una sola instancia de
+worker en las dos entregas, el tiempo hasta `ready` de un archivo corto es el
+doble aquí: el worker comparte máquina con ClamAV y cruza la red para la cola.
+Se dice porque enseñar solo los niveles favorables sería elegir los resultados
+después de verlos.
 
 ### Costo
 

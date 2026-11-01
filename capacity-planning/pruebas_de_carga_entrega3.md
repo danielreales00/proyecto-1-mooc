@@ -1,5 +1,8 @@
 # Pruebas de carga. Entrega 3
 
+Santiago Chica Castano, Josue Briceño Urquijo, Daniel Alfredo Reales Paba y
+Michael Javier Patiño Pantoja.
+
 Informe de capacidad de la plataforma MOOC sobre la arquitectura elástica de
 Google Cloud: dos grupos de instancias que escalan solos, un balanceador HTTPS
 y la cola en su propia máquina. Repite los dos escenarios de la Entrega 2 y
@@ -7,9 +10,10 @@ añade un tercero dedicado al autoscaling. La línea base es el
 [informe de la Entrega 2](pruebas_de_carga_entrega2.md), medido con el tag
 `entrega-2`.
 
-> **Estado del documento.** Las secciones 2 a 7 y 10 están cerradas: fijan qué
-> se mide y cómo, antes de medir. Las marcadas como pendientes se completan con
-> la sesión de medición.
+> **Estado del documento: completo.** Las secciones 2 a 5, 7, 9 y 10 se
+> escribieron **antes de medir** —fijan qué se mide y en qué condiciones, para
+> que los resultados no se elijan después— y las de resultados se rellenaron
+> con las corridas de los días 28 y 30 de octubre de 2026.
 
 ## 1. Conclusiones
 
@@ -61,7 +65,7 @@ pendientes.
 | Pool por proceso | API 25, worker 10 | API 8, worker 3. Repartido para 3 + 3 instancias contra las 47 conexiones útiles |
 | Arranque de instancias | Máquinas fijas | Imagen horneada `mooc-base-<sha>` |
 | Límites de tasa por IP | Multiplicados por 100 | Igual |
-| Generador | `e2-standard-4` con IP externa, en `us-central1-a` | Igual |
+| Generador | `e2-standard-4` con IP externa, en `us-central1-a` | Igual. **Se redujo a `e2-standard-2` después de medir**, al ver que su CPU nunca pasó del 20,5 %; ninguna corrida de este informe usó esa máquina más pequeña |
 | Herramienta | k6 2.3.0 | Igual |
 | Guiones | Tag `entrega-2` | Mismo recorrido, mezcla, pausas y tasas. La aleatoriedad pasa de `Math.random` a la Web Crypto API, con la misma distribución uniforme |
 | Imágenes de la aplicación | `ef646a192a82` | **`d4738e9e7919`**, con imagen horneada `mooc-base-d4738e9e7919`. Las mismas en los tres escenarios |

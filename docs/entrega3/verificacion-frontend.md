@@ -1,5 +1,8 @@
 # Verificación funcional del frontend. Entrega 3
 
+Santiago Chica Castano, Josue Briceño Urquijo, Daniel Alfredo Reales Paba y
+Michael Javier Patiño Pantoja.
+
 Recorridos mínimos de estudiante y profesor, la ruta de la interfaz que los
 resuelve y la evidencia que los comprueba. La interfaz se sirve desde el grupo
 de API, en el mismo origen que `/api/v1`. Su despliegue, la sesión y el CORS
