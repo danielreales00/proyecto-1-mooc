@@ -56,7 +56,8 @@ async function logout() {
 async function apiStatus(method, path, body) {
   return page.evaluate(
     async ([m, p, b]) => {
-      const response = await fetch(`/api/v1${p}`, {
+      // La API puede estar en otro origen (Cloud Run): la de /config.js.
+      const response = await fetch(`${globalThis.MOOC_API || ""}/api/v1${p}`, {
         method: m,
         headers: {
           Authorization: `Bearer ${sessionStorage.getItem("mooc.session")}`,

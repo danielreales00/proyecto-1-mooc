@@ -60,7 +60,7 @@ module "gcs" {
   region             = var.region
   borrar_con_objetos = !var.proteger_borrado
   # El navegador sube las partes y reproduce HLS directo desde Cloud Storage.
-  frontend_origins = [local.url.frontend]
+  frontend_origins = local.origenes_frontend
 
   depends_on = [google_project_service.apis]
 }

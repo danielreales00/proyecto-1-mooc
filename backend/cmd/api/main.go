@@ -185,7 +185,9 @@ func run() error {
 	mux.HandleFunc("GET /healthz", health.live)
 	mux.HandleFunc("GET /readyz", health.ready(log))
 	// Solo red interna: Compose no publica este puerto fuera.
-	mux.Handle("GET /metrics", metrics.Handler())
+	if cfg.MetricsEnabled {
+		mux.Handle("GET /metrics", metrics.Handler())
+	}
 
 	// La API sirve su propio contrato (RT-05, entregable §8).
 	mux.HandleFunc("GET /openapi.yaml", func(w http.ResponseWriter, r *http.Request) {

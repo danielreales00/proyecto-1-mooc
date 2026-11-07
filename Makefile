@@ -293,10 +293,11 @@ ssh: ## SSH por IAP: make ssh MAQUINA=mooc-cola [CMD="sudo docker ps"]
 	@$(SSH_NUBE) $(MAQUINA) $(if $(CMD),--command '$(CMD)')
 
 # --- Verificación contra la nube (A4) ---------------------------------------
-# Nombre público del balanceador: `make tf ENTORNO=entrega3 ARGS="output nombre_publico"`.
-# Se fijó tras el primer apply de entrega3; la IP del balanceador se conserva
-# entre sesiones.
-NUBE_HOST := 34-160-11-22.sslip.io
+# Entrega 4 (ADR-0020): el backend y el frontend son dos servicios de Cloud Run
+# con URL deterministas (`make tf ENTORNO=entrega4 ARGS=output`). Postman y k6
+# llaman al backend; la prueba de navegador abre el frontend.
+NUBE_HOST     := mooc-backend-568765476410.us-central1.run.app
+NUBE_FRONTEND := mooc-frontend-568765476410.us-central1.run.app
 VERSION_IMAGENES := $(shell sed -n 's/^version_imagenes *= *"\(.*\)"/\1/p' infra/environments/entrega3/terraform.tfvars)
 NUBE_RED  := mooc-nube
 GCLOUD    := docker run --rm -v mooc-gcloud:/root/.config/gcloud $(GCLOUD_IMAGE) gcloud
@@ -617,7 +618,7 @@ frontend-e2e-nube: tunel-mailpit ## Recorrido de navegador contra la nube (crea 
 	@mkdir -p docs/entrega3/evidencias/frontend
 	@set -o pipefail; clave=$$($(GCLOUD) secrets versions access latest --secret=seed-password); \
 	docker run --rm --ipc=host --network $(NUBE_RED) \
-		-e BASE_URL=https://$(NUBE_HOST) -e MAILPIT_URL=http://mooc-tunel:8025 \
+		-e BASE_URL=https://$(NUBE_FRONTEND) -e MAILPIT_URL=http://mooc-tunel:8025 \
 		-e DEMO_PASSWORD="$$clave" -e EVIDENCIAS=/evidencias \
 		-v "$(PWD)/frontend":/src -v "$(PWD)/docs/entrega3/evidencias/frontend":/evidencias -w /src \
 		mooc-browser sh -c "npm ci --no-audit --no-fund >/dev/null && node tests/e2e.mjs" \

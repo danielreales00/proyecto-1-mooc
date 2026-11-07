@@ -46,7 +46,7 @@ arranque de los procesos y la infraestructura.
 
 | Servicio | CPU | Memoria | Concurrencia | Tiempo máximo | Instancias |
 | --- | --- | --- | --- | --- | --- |
-| `mooc-frontend` | 1 | 256 MiB | 80 | 30 s | 0 a 3 |
+| `mooc-frontend` | 1 | 512 MiB | 80 | 30 s | 0 a 3 |
 | `mooc-backend` | 1 | 2 GiB | 20 | 60 s | 0 a 3 |
 | `mooc-workers` | 2 | 4 GiB | 1 | 600 s | 0 a 3 |
 

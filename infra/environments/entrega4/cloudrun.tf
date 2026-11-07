@@ -21,6 +21,8 @@ locals {
     i => "${module.registry.url}/${i}:${var.version_imagenes}"
   }
 
+  origenes_frontend = distinct([local.url.frontend, google_cloud_run_v2_service.frontend.uri])
+
   redis_addr = "${module.red.ip_interna_cola}:6379"
   smtp_addr  = "${module.red.ip_interna_cola}:1025"
 
@@ -43,11 +45,16 @@ locals {
   }
 
   env_backend = merge(local.env_comun, {
-    REDIS_ADDR           = local.redis_addr
-    REDIS_TLS            = "false"
-    DB_MAX_CONNS         = tostring(var.db_max_conns_api)
-    CORS_ORIGINS         = local.url.frontend
+    REDIS_ADDR   = local.redis_addr
+    REDIS_TLS    = "false"
+    DB_MAX_CONNS = tostring(var.db_max_conns_api)
+    # Las dos URL con que Cloud Run publica el frontend: la determinista y la
+    # de su primera versión. El navegador llega por cualquiera.
+    CORS_ORIGINS         = join(",", local.origenes_frontend)
     RATE_LIMIT_IP_FACTOR = tostring(var.factor_limite_ip)
+    # Sin proxy delante, /metrics sería público. Cloud Monitoring ya tiene las
+    # métricas del servicio.
+    METRICS_ENABLED = "false"
   })
 
   env_workers = merge(local.env_comun, {
@@ -263,6 +270,15 @@ resource "google_cloud_run_v2_job" "migrate" {
 
       containers {
         image = local.imagen.migrate
+        # config.Load exige la misma configuración que la API, aunque migrar
+        # solo use la base.
+        dynamic "env" {
+          for_each = local.env_backend
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
         env {
           name = "DATABASE_URL"
           value_source {
@@ -301,9 +317,12 @@ resource "google_cloud_run_v2_job" "seed" {
 
       containers {
         image = local.imagen.seed
-        env {
-          name  = "APP_ENV"
-          value = "production"
+        dynamic "env" {
+          for_each = local.env_backend
+          content {
+            name  = env.key
+            value = env.value
+          }
         }
         env {
           name  = "SEED_FORCE"

@@ -101,6 +101,10 @@ type Config struct {
 	// reaper lo dé por no publicado. Con Pub/Sub un trabajo puede esperar
 	// turno más tiempo sin estar perdido.
 	ReaperEdadMinima time.Duration
+	// MetricsEnabled publica /metrics en la API. Prometheus lo lee en local. En
+	// Cloud Run no hay proxy que lo oculte de Internet, y las métricas del
+	// servicio ya están en Cloud Monitoring: se apaga.
+	MetricsEnabled bool
 	// CORSOrigins son los orígenes del frontend que pueden llamar a la API
 	// desde el navegador. Vacío: la API y la interfaz comparten origen.
 	CORSOrigins []string
@@ -186,6 +190,7 @@ func Load() (Config, error) {
 		PubSubMaxEntregas: optInt("PUBSUB_MAX_ENTREGAS", 5),
 		ReaperEdadMinima:  optDuration("REAPER_EDAD_MINIMA", 30*time.Second),
 		CORSOrigins:       lista(os.Getenv("CORS_ORIGINS")),
+		MetricsEnabled:    optBool("METRICS_ENABLED", true),
 	}
 
 	if c.QueueBackend != "pubsub" && c.RedisAddr == "" {
