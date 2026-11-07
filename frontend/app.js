@@ -1,4 +1,10 @@
-import { Client, escapeHTML as e, safeURL } from "./api.js";
+import {
+  API_BASE,
+  API_ORIGIN,
+  Client,
+  escapeHTML as e,
+  safeURL,
+} from "./api.js";
 const api = new Client();
 const main = document.querySelector("#main");
 let user = null,
@@ -1318,7 +1324,7 @@ async function media() {
     });
     action("asset-content", async () => {
       const response = await fetch(
-        `/api/v1/assets/${encodeURIComponent(data.id)}/content`,
+        `${API_BASE}/assets/${encodeURIComponent(data.id)}/content`,
         { headers: { Authorization: `Bearer ${api.token}` } },
       );
       if (!response.ok)
@@ -1416,6 +1422,9 @@ async function route() {
     window.scrollTo(0, 0);
   }
 }
+// La documentación de la API vive en el backend, que puede estar en otro origen.
+const docs = document.querySelector('a[href="/docs"]');
+if (docs) docs.href = API_ORIGIN + "/docs";
 window.addEventListener("hashchange", route);
 window.addEventListener("pagehide", () => cleanup());
 if (api.token) {

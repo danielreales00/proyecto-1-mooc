@@ -94,6 +94,54 @@ prueba-cola: ## Publicación idempotente de trabajos contra el Redis del stack
 		-v "$(PWD)/backend":/src -w /src $(GO_CACHE) \
 		$(GO_IMAGE) go test -count=1 -run TestPublicarNoDuplica -v ./internal/adapters/queue/
 
+# Pub/Sub de punta a punta en local (ADR-0020): el emulador, una API que publica
+# en el topic y el worker de Cloud Run recibiendo por push, sobre el stack que ya
+# corre. Pasa la colección con la cadena de medios y comprueba que una reentrega
+# de un trabajo terminado se confirma sin repetirlo.
+EMULADOR_PUBSUB := gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+EN_PUBSUB := -e QUEUE_BACKEND=pubsub -e PUBSUB_EMULATOR_HOST=mooc-pubsub-emu:8085 \
+	-e PUBSUB_PROJECT=local -e PUBSUB_TOPIC=mooc-trabajos -e PORT=8080
+CURL_STACK := docker run --rm --network mooc_default curlimages/curl -s
+
+.PHONY: prueba-pubsub
+prueba-pubsub: env ## Pub/Sub con el emulador: API que publica y worker de Cloud Run por push
+	@docker build -q --target api -t mooc-api-pubsub backend >/dev/null
+	@docker build -q --target workers-cloudrun -t mooc-workers-cloudrun backend >/dev/null
+	@docker rm -f mooc-pubsub-emu mooc-api-pubsub mooc-workers-push >/dev/null 2>&1 || true
+	@docker run -d --name mooc-pubsub-emu --network mooc_default $(EMULADOR_PUBSUB) \
+		gcloud beta emulators pubsub start --host-port=0.0.0.0:8085 --project=local >/dev/null
+	@timeout 120 bash -c 'until $(CURL_STACK) -o /dev/null http://mooc-pubsub-emu:8085/; do sleep 2; done' \
+		|| { echo "el emulador de Pub/Sub no arrancó"; exit 1; }
+	@$(CURL_STACK) -o /dev/null -X PUT http://mooc-pubsub-emu:8085/v1/projects/local/topics/mooc-trabajos
+	@$(CURL_STACK) -o /dev/null -X PUT -H 'Content-Type: application/json' \
+		-d '{"topic":"projects/local/topics/mooc-trabajos","ackDeadlineSeconds":600,"pushConfig":{"pushEndpoint":"http://mooc-workers-push:8080/pubsub/push"}}' \
+		http://mooc-pubsub-emu:8085/v1/projects/local/subscriptions/mooc-workers
+	@docker run -d --name mooc-workers-push --network mooc_default --env-file .env $(EN_PUBSUB) \
+		-e CLAMAV_ADDR=127.0.0.1:3310 mooc-workers-cloudrun >/dev/null
+	@docker run -d --name mooc-api-pubsub --network mooc_default --env-file .env $(EN_PUBSUB) mooc-api-pubsub >/dev/null
+	@echo "── esperando a clamd y al worker"
+	@timeout 240 bash -c 'until docker logs mooc-workers-push 2>&1 | grep -q "worker push escuchando"; do sleep 3; done' \
+		|| { docker logs mooc-workers-push 2>&1 | tail -20; echo "el worker no arrancó"; exit 1; }
+	@set -e; trap 'docker rm -f mooc-pubsub-emu mooc-api-pubsub mooc-workers-push >/dev/null 2>&1' EXIT; \
+	$(HERRAMIENTAS) newman run postman/mooc.postman_collection.json \
+		-e postman/mooc.postman_environment.json --working-dir postman \
+		--env-var base_url=http://mooc-api-pubsub:8080 --env-var mailpit_url=http://localhost:8026 \
+		--folder "SEG-1 · Identidad" --folder "SEG-2 · Autoría y publicación" \
+		--folder "SEG-3 · Carga multimedia" --delay-request 300; \
+	clave=$$(docker compose exec -T postgres psql -U $${POSTGRES_USER:-mooc} -d $${POSTGRES_DB:-mooc} -qtA \
+		-c "SELECT job_key FROM platform.job_runs WHERE status='succeeded' ORDER BY finished_at DESC LIMIT 1"); \
+	datos=$$(printf '{"job_key":"%s","data":{}}' "$$clave" | base64 -w0); \
+	tipo=$$(docker compose exec -T postgres psql -U $${POSTGRES_USER:-mooc} -d $${POSTGRES_DB:-mooc} -qtA \
+		-c "SELECT type FROM platform.job_runs WHERE job_key='$$clave'"); \
+	$(CURL_STACK) -o /dev/null -X POST -H 'Content-Type: application/json' \
+		-d "{\"messages\":[{\"data\":\"$$datos\",\"attributes\":{\"tipo\":\"$$tipo\"}}]}" \
+		http://mooc-pubsub-emu:8085/v1/projects/local/topics/mooc-trabajos:publish; \
+	sleep 5; \
+	echo "── reentrega de $$clave"; \
+	docker logs mooc-workers-push 2>&1 | grep -q "entrega repetida de un trabajo terminado.*$$clave" \
+		&& echo "  confirmada sin repetir el trabajo" \
+		|| { echo "  la reentrega no se confirmó como repetida"; exit 1; }
+
 .PHONY: migraciones-concurrentes
 migraciones-concurrentes: env ## Tres `migrate` simultáneos sobre una base vacía
 	@pg="$(COMPOSE) exec -T postgres psql -U $${POSTGRES_USER:-mooc} -d $${POSTGRES_DB:-mooc} -qtA"; \
@@ -207,7 +255,7 @@ prueba-gcs: ## Suite del almacén contra Cloud Storage real, firmando como mooc-
 		$(GO_IMAGE) go test -count=1 -v ./internal/adapters/gcs/
 
 REGISTRO := us-central1-docker.pkg.dev/$(GCP_PROYECTO)/mooc
-IMAGENES := api worker worker-media migrate buckets seed frontend
+IMAGENES := api worker worker-media workers-cloudrun migrate buckets seed frontend
 
 .PHONY: publicar
 publicar: ## Construye las imágenes para linux/amd64 y las sube a Artifact Registry con el SHA
@@ -411,6 +459,10 @@ tf: ## terraform de un entorno: make tf ENTORNO=dev ARGS="plan"
 	@# configuración sigue en el tag entrega-2.
 	@test "$(ENTORNO)" != entrega2 \
 		|| { echo "entrega2 está congelado: su estado pasó a entrega3 (ver el tag entrega-2)"; exit 1; }
+	@# entrega3 cedió su estado a entrega4 (ADR-0020). Su configuración sigue en
+	@# el tag entrega-3.
+	@test "$(ENTORNO)" != entrega3 \
+		|| { echo "entrega3 está congelado: su estado pasó a entrega4 (ver el tag entrega-3)"; exit 1; }
 	@test -d infra/environments/$(ENTORNO) \
 		|| { echo "no existe infra/environments/$(ENTORNO)"; exit 1; }
 	@# Terraform se autentica con las credenciales por defecto de la aplicación,

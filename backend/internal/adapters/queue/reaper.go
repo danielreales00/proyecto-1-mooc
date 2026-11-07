@@ -30,7 +30,7 @@ import (
 // esperando turno no se vuelve a encolar (ver Publisher.Republicar).
 type Reaper struct {
 	db        *pgxpool.Pool
-	publisher *Publisher
+	publisher Publicador
 	log       *slog.Logger
 
 	// EdadMinima evita reencolar algo que se acaba de publicar y aún no ha
@@ -41,7 +41,7 @@ type Reaper struct {
 	SinHeartbeat time.Duration
 }
 
-func NewReaper(db *pgxpool.Pool, p *Publisher, log *slog.Logger) *Reaper {
+func NewReaper(db *pgxpool.Pool, p Publicador, log *slog.Logger) *Reaper {
 	return &Reaper{
 		db: db, publisher: p, log: log,
 		EdadMinima:   30 * time.Second,

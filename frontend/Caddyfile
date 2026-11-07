@@ -4,5 +4,12 @@
 	header X-Content-Type-Options nosniff
 	header Referrer-Policy strict-origin-when-cross-origin
 	header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: http: data:; media-src 'self' blob: https: http:; connect-src 'self' https: http:; frame-src 'self' https: http:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+	# Origen del backend, de la variable API_URL del contenedor. Vacía en local,
+	# donde la interfaz y la API comparten origen detrás del proxy (ADR-0020).
+	handle /config.js {
+		header Content-Type "text/javascript; charset=utf-8"
+		header Cache-Control "no-store"
+		respond `window.MOOC_API = "{$API_URL}";`
+	}
 	file_server
 }

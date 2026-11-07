@@ -88,6 +88,22 @@ type Config struct {
 	// Lo que el worker espera a los trabajos en curso al apagarse. Va por
 	// debajo del stop_grace_period del contenedor (ADR-0019, D6).
 	WorkerShutdownTimeout time.Duration
+
+	// QueueBackend elige el transporte de los trabajos: "asynq" (Redis, local y
+	// Entrega 3) o "pubsub" (Cloud Run, Entrega 4). ADR-0020.
+	QueueBackend string
+	// Proyecto y topic de Pub/Sub. MaxEntregas es el máximo de entregas de la
+	// suscripción: en la última, el worker manda el trabajo a la DLQ.
+	PubSubProject     string
+	PubSubTopic       string
+	PubSubMaxEntregas int
+	// ReaperEdadMinima es cuánto espera un trabajo 'queued' antes de que el
+	// reaper lo dé por no publicado. Con Pub/Sub un trabajo puede esperar
+	// turno más tiempo sin estar perdido.
+	ReaperEdadMinima time.Duration
+	// CORSOrigins son los orígenes del frontend que pueden llamar a la API
+	// desde el navegador. Vacío: la API y la interfaz comparten origen.
+	CORSOrigins []string
 }
 
 type Buckets struct {
@@ -124,7 +140,7 @@ func Load() (Config, error) {
 		DatabaseURL: req("DATABASE_URL"),
 		DBMaxConns:  optInt32("DB_MAX_CONNS", 10),
 
-		RedisAddr:      req("REDIS_ADDR"),
+		RedisAddr:      opt("REDIS_ADDR", ""),
 		RedisPassword:  os.Getenv("REDIS_PASSWORD"),
 		RedisTLS:       optBool("REDIS_TLS", false),
 		RedisQueueDB:   optInt("REDIS_QUEUE_DB", 0),
@@ -163,6 +179,24 @@ func Load() (Config, error) {
 		// 8 s es el valor por defecto de asynq y cabe en los 10 s que da
 		// `docker compose stop`. En la nube lo sube compose.worker.yml.
 		WorkerShutdownTimeout: optDuration("WORKER_SHUTDOWN_TIMEOUT", 8*time.Second),
+
+		QueueBackend:      strings.ToLower(opt("QUEUE_BACKEND", "asynq")),
+		PubSubProject:     opt("PUBSUB_PROJECT", os.Getenv("GOOGLE_CLOUD_PROJECT")),
+		PubSubTopic:       opt("PUBSUB_TOPIC", "mooc-trabajos"),
+		PubSubMaxEntregas: optInt("PUBSUB_MAX_ENTREGAS", 5),
+		ReaperEdadMinima:  optDuration("REAPER_EDAD_MINIMA", 30*time.Second),
+		CORSOrigins:       lista(os.Getenv("CORS_ORIGINS")),
+	}
+
+	if c.QueueBackend != "pubsub" && c.RedisAddr == "" {
+		missing = append(missing, "REDIS_ADDR")
+	}
+	// Con Pub/Sub, Redis solo lo usa la API (sesiones, caché y límites). Los
+	// workers de Cloud Run no lo necesitan y no lo configuran.
+	if c.QueueBackend == "pubsub" {
+		if c.PubSubProject == "" {
+			missing = append(missing, "PUBSUB_PROJECT")
+		}
 	}
 
 	if c.ObjectStore == "gcs" {
@@ -246,6 +280,17 @@ func optDuration(key string, def time.Duration) time.Duration {
 // escucha ahí. En Compose no existe esa variable y manda `HTTP_ADDR`. El orden
 // importa: si algún día ambas están puestas, la del entorno de ejecución gana,
 // porque es la única que no se puede desobedecer.
+// lista separa una variable por comas, sin espacios ni elementos vacíos.
+func lista(v string) []string {
+	var out []string
+	for _, x := range strings.Split(v, ",") {
+		if x = strings.TrimSpace(x); x != "" {
+			out = append(out, x)
+		}
+	}
+	return out
+}
+
 func direccionHTTP() string {
 	if p := os.Getenv("PORT"); p != "" {
 		return ":" + p

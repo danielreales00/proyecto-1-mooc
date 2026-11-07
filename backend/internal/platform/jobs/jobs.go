@@ -155,3 +155,23 @@ func Kill(ctx context.Context, db dbx.DB, jobKey, reason string) error {
 		 WHERE job_key = $1`, jobKey, reason)
 	return err
 }
+
+// Estado devuelve el estado registrado de un trabajo. existe es false si la
+// job_key no está en platform.job_runs.
+func Estado(ctx context.Context, db dbx.DB, jobKey string) (estado string, existe bool, err error) {
+	err = db.QueryRow(ctx,
+		`SELECT status FROM platform.job_runs WHERE job_key = $1`, jobKey).Scan(&estado)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("leer el estado de %s: %w", jobKey, err)
+	}
+	return estado, true, nil
+}
+
+// Terminado dice si el trabajo ya no se va a ejecutar más: completado o en la
+// DLQ. Una entrega repetida de un trabajo terminado se confirma sin repetirlo.
+func Terminado(estado string) bool {
+	return estado == "succeeded" || estado == "dead"
+}

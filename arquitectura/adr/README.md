@@ -31,6 +31,7 @@ Un ADR **Propuesto** no se implementa: está esperando que el equipo lo discuta.
 | [0016](0016-despliegue-iaas-en-dos-maquinas.md) | Despliegue IaaS en dos máquinas para la Entrega 2 | Aceptado, corregido por el 0019 | `RT-01`, `RT-06`, `CE-01` |
 | [0018](0018-analisis-de-calidad-con-sonarqube-en-el-ci.md) | Análisis de calidad con SonarQube Community en el CI | Aceptado | Calidad y deuda técnica (Entrega 3) |
 | [0019](0019-arquitectura-elastica-iaas.md) | Arquitectura elástica IaaS para la Entrega 3 | Propuesto | `RT-01`, `RT-06`, `CE-01` |
+| [0020](0020-cloud-run-y-pubsub.md) | Cloud Run y Cloud Pub/Sub para la Entrega 4 | Aceptado | `RT-01`, `RT-06`, `CE-01`, `CA-03` |
 
 ## Decisiones aún no tomadas
 

@@ -42,6 +42,7 @@ Añadidas en la Entrega 2:
 | Dependencia | Para qué | Por qué no la stdlib |
 | --- | --- | --- |
 | `cloud.google.com/go/storage` | Adaptador nativo de Cloud Storage | Lo decide ADR-0015 (D1): la interoperabilidad S3 exige claves HMAC. Resuelve autenticación con la identidad de la máquina, reintentos con *backoff* y firma V4 con signBlob, que a mano es tan arriesgada como la de S3 |
+| `cloud.google.com/go/pubsub/v2` | Publicar los trabajos en Cloud Pub/Sub desde la API y los workers | Lo decide ADR-0020: la Entrega 4 sustituye asynq por Pub/Sub. Resuelve autenticación con la identidad del servicio, reintentos y el emulador local, que a mano exigirían reimplementar gRPC o la API REST con OAuth |
 | `google.golang.org/api` | `iterator.Done` al listar objetos | Viene con la anterior; se importa un solo paquete |
 
 El precio es el árbol indirecto: gRPC, OpenTelemetry y los clientes generados

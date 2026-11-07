@@ -28,6 +28,7 @@ import (
 	"mooc/backend/internal/adapters/postgres"
 	"mooc/backend/internal/adapters/queue"
 	"mooc/backend/internal/adapters/rediscli"
+	"mooc/backend/internal/adapters/transporte"
 	"mooc/backend/internal/modules/audit"
 	"mooc/backend/internal/modules/badges"
 	"mooc/backend/internal/modules/identity"
@@ -71,17 +72,23 @@ func run() error {
 
 	runner := queue.NewRunner(pool, log)
 
+	// Los trabajos que un trabajo encola (verificar → escanear → transcodificar)
+	// salen por el mismo transporte que los de la API (ADR-0020).
+	publisher, err := transporte.Abrir(ctx, cfg, log)
+	if err != nil {
+		return err
+	}
+	defer publisher.Close()
 	// El reaper recupera los trabajos que quedaron registrados en PostgreSQL
 	// pero nunca llegaron a la cola, y los que un worker dejó a medias
 	// (ADR-0004). Sin él, la promesa "perder Redis no pierde trabajo" solo se
 	// cumple a medias.
-	publisher := queue.NewPublisher(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisQueueDB, cfg.RedisTLS)
-	defer publisher.Close()
-	queue.NewReaper(pool, publisher, log).Start(ctx, 30*time.Second)
+	reaper := queue.NewReaper(pool, publisher, log)
+	reaper.EdadMinima = cfg.ReaperEdadMinima
 	// Las tablas que solo crecen: trabajos completados, claves de
-	// idempotencia vencidas y evidencias de progreso viejas. Cada hora basta;
-	// con varios workers, el candado deja que pode uno solo.
-	postgres.NewPodador(pool, log).Start(ctx, time.Hour)
+	// idempotencia vencidas y evidencias de progreso viejas. Con varios
+	// workers, el candado deja que pode uno solo.
+	podador := postgres.NewPodador(pool, log)
 	emails := identity.NewEmailWorker(
 		mailer.New(cfg.SMTPAddr, cfg.MailFrom, cfg.SMTPUser, cfg.SMTPPassword), cfg.PublicBaseURL, log)
 
@@ -105,6 +112,23 @@ func run() error {
 	metrics.Inicializar(jobs.TypeEmailSend, jobs.TypeBadgeIssue, jobs.TypeMediaProbe,
 		jobs.TypeMediaScan, jobs.TypeMediaTranscode)
 
+	manejadores := map[string]queue.Handler{
+		jobs.TypeEmailSend:  emails.Handle,
+		jobs.TypeBadgeIssue: badgeSvc.Handle,
+		jobs.TypeMediaProbe: mediaSvc.Verificar,
+		jobs.TypeMediaScan:  mediaSvc.Escanear,
+		// Con asynq solo lo atiende el worker de medios: la transcodificación
+		// viaja por la cola `bulk` y el worker normal no la consume.
+		jobs.TypeMediaTranscode: mediaSvc.Transcodificar,
+	}
+
+	if cfg.QueueBackend == "pubsub" {
+		return servirPush(ctx, cfg, log, pool, runner, manejadores, reaper, podador)
+	}
+
+	reaper.Start(ctx, 30*time.Second)
+	podador.Start(ctx, time.Hour)
+
 	// Profundidad, antigüedad y tasa de la cola, que el informe de capacidad
 	// exige. Solo las colas que consume este proceso: worker y worker-media
 	// comparten Redis, y si los dos exportaran todas, cada serie saldría doble.
@@ -115,13 +139,9 @@ func run() error {
 	defer colector.Close()
 
 	mux := asynq.NewServeMux()
-	mux.HandleFunc(jobs.TypeEmailSend, runner.Wrap(jobs.TypeEmailSend, emails.Handle))
-	mux.HandleFunc(jobs.TypeBadgeIssue, runner.Wrap(jobs.TypeBadgeIssue, badgeSvc.Handle))
-	mux.HandleFunc(jobs.TypeMediaProbe, runner.Wrap(jobs.TypeMediaProbe, mediaSvc.Verificar))
-	mux.HandleFunc(jobs.TypeMediaScan, runner.Wrap(jobs.TypeMediaScan, mediaSvc.Escanear))
-	// Solo lo atiende de verdad el worker de medios: la transcodificación viaja
-	// por la cola `bulk` y el worker normal no la consume (ver docker-compose).
-	mux.HandleFunc(jobs.TypeMediaTranscode, runner.Wrap(jobs.TypeMediaTranscode, mediaSvc.Transcodificar))
+	for tipo, h := range manejadores {
+		mux.HandleFunc(tipo, runner.Wrap(tipo, h))
+	}
 
 	// Los trabajos corren con un contexto propio, que se cancela un poco antes
 	// de que venza el ShutdownTimeout. Así el trabajo cortado sale por el camino
@@ -284,7 +304,7 @@ func (b almacenBridge) Mover(ctx context.Context, ob, ok, db, dk string) error {
 	return b.s.Mover(ctx, ob, ok, db, dk)
 }
 
-type publicadorBridge struct{ p *queue.Publisher }
+type publicadorBridge struct{ p queue.Publicador }
 
 func (b publicadorBridge) Publish(ctx context.Context, key, tipo, cola string,
 	payload map[string]any, traceID string) error {

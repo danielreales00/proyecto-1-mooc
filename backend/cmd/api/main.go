@@ -27,6 +27,7 @@ import (
 	"mooc/backend/internal/adapters/queue"
 	"mooc/backend/internal/adapters/rediscli"
 	"mooc/backend/internal/adapters/sessions"
+	"mooc/backend/internal/adapters/transporte"
 	"mooc/backend/internal/modules/admin"
 	"mooc/backend/internal/modules/assessment"
 	"mooc/backend/internal/modules/audit"
@@ -104,7 +105,11 @@ func run() error {
 		return err
 	}
 
-	publisher := queue.NewPublisher(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisQueueDB, cfg.RedisTLS)
+	// asynq en local y en la Entrega 3, Pub/Sub en Cloud Run (ADR-0020).
+	publisher, err := transporte.Abrir(ctx, cfg, log)
+	if err != nil {
+		return err
+	}
 	defer publisher.Close()
 
 	// --- módulos ----------------------------------------------------------
@@ -190,6 +195,7 @@ func run() error {
 	})
 
 	handler := httpx.Chain(mux,
+		httpx.CORS(cfg.CORSOrigins),
 		httpx.RequestID(),
 		httpx.Recover(log),
 		metrics.Middleware(),
@@ -229,7 +235,7 @@ func run() error {
 // La composición vive en cmd/, que es el único sitio que conoce a ambos lados
 // (ADR-0001).
 type queueBridge struct {
-	p *queue.Publisher
+	p queue.Publicador
 }
 
 func (b queueBridge) Publish(ctx context.Context, j identity.JobRef, traceID string) error {
@@ -241,7 +247,7 @@ func (b queueBridge) Publish(ctx context.Context, j identity.JobRef, traceID str
 // learningBridge adapta el mismo publicador a la firma que declara learning.
 // Son dos puertos distintos porque cada módulo define el suyo; el adaptador
 // vive aquí, en la composición (ADR-0001).
-type learningBridge struct{ p *queue.Publisher }
+type learningBridge struct{ p queue.Publicador }
 
 func (b learningBridge) Publish(ctx context.Context, key, tipo, cola string,
 	payload map[string]any, traceID string) error {

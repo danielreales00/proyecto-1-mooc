@@ -1,3 +1,8 @@
+// Origen del backend. Vacío cuando la interfaz y la API comparten origen
+// (local y Entrega 3). En Cloud Run lo fija /config.js, que el contenedor del
+// frontend genera con la variable API_URL.
+export const API_ORIGIN = globalThis.MOOC_API || "";
+export const API_BASE = API_ORIGIN + "/api/v1";
 export class ApiError extends Error {
   constructor(status, problem) {
     super(problem.detail || problem.title || `Error ${status}`);
@@ -78,7 +83,7 @@ export class Client {
 }
 async function send(path, method, headers, body, signal) {
   try {
-    return await fetch(`/api/v1${path}`, {
+    return await fetch(API_BASE + path, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),

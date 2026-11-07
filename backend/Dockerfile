@@ -53,6 +53,21 @@ COPY --from=builder /out/worker /usr/local/bin/worker
 EXPOSE 8081
 ENTRYPOINT ["worker"]
 
+# --- workers-cloudrun -------------------------------------------------------
+# El servicio de workers de Cloud Run (ADR-0020, D4): un solo contenedor con el
+# worker, FFmpeg y ClamAV. Parte de la imagen oficial de ClamAV porque trae las
+# firmas: el mismo tag da el mismo veredicto en local y en la nube (ADR-0011).
+# clamd corre como el usuario clamav y el worker como root del contenedor, que
+# en Cloud Run no tiene privilegios sobre la máquina.
+FROM clamav/clamav:1.4 AS workers-cloudrun
+RUN apk add --no-cache ffmpeg ca-certificates tzdata
+COPY cloudrun/clamd.conf /etc/clamav/clamd.conf
+COPY cloudrun/arranque-worker.sh /usr/local/bin/arranque-worker.sh
+COPY --from=builder /out/worker /usr/local/bin/worker
+ENV QUEUE_BACKEND=pubsub CLAMAV_ADDR=127.0.0.1:3310
+EXPOSE 8080
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/arranque-worker.sh"]
+
 # --- migrate ----------------------------------------------------------------
 FROM base AS migrate
 COPY --from=builder /out/migrate /usr/local/bin/migrate
