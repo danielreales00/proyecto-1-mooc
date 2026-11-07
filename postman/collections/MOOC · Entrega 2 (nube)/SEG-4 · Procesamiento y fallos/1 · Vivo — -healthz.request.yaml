@@ -1,7 +1,7 @@
 $kind: http-request
 name: 1 · Vivo — /healthz
 description: "Sonda de vida. No comprueba dependencias: para eso está /readyz."
-url: "{{base_url}}/healthz"
+url: "{{base_url}}/readyz"
 method: GET
 headers:
   Accept: "*/*"

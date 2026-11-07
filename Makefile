@@ -423,6 +423,13 @@ carga-metricas: ## Exporta de Cloud Monitoring las métricas de una corrida
 		> capacity-planning/resultados/$(ETIQUETA)-metricas.json
 	@echo "capacity-planning/resultados/$(ETIQUETA)-metricas.json"
 
+# Uso: make escalado-cloudrun DESDE=2026-11-08T00:00:00Z HASTA=2026-11-08T00:30:00Z
+.PHONY: escalado-cloudrun
+escalado-cloudrun: ## Línea de tiempo de instancias y mensajes pendientes en Cloud Run (Entrega 4)
+	@test -n "$(DESDE)" -a -n "$(HASTA)" || { echo 'uso: make escalado-cloudrun DESDE=.. HASTA=..'; exit 1; }
+	@docker run --rm -v mooc-gcloud:/root/.config/gcloud -v "$(CURDIR)/capacity-planning/metricas":/m:ro \
+		-w /m --entrypoint python3 $(GCLOUD_IMAGE) escalado_cloudrun.py $(DESDE) $(HASTA)
+
 # Uso: make carga-tabla ARGS="e1 e1-L0 e1-L1"   o   ARGS="detalle e1-L2"
 .PHONY: carga-tabla
 carga-tabla: ## Filas de las tablas de resultados a partir de los archivos de cada corrida
@@ -447,6 +454,7 @@ postman-nube: tunel-mailpit ## Colección entera contra la URL pública (tarda ~
 	docker run --rm --network $(NUBE_RED) -e DEMO_PASSWORD="$$clave" \
 		-v "$(CURDIR)":/repo -w /repo/postman --entrypoint sh mooc-herramientas -c \
 		'newman run mooc-entrega2.postman_collection.json -e mooc-entrega2.postman_environment.json \
+			--env-var base_url=https://$(NUBE_HOST) \
 			--env-var mailpit_url=http://mooc-tunel:8025 \
 			--env-var demo_password="$$DEMO_PASSWORD" \
 			--delay-request 11000'; \

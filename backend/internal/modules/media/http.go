@@ -287,6 +287,13 @@ func (a *API) contenido(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Un navegador en otro origen no puede seguir la redirección: la petición
+	// CORS redirigida llega al almacén con Origin: null. Le basta la URL.
+	if strings.Contains(r.Header.Get("Accept"), "application/json") {
+		httpx.JSON(w, http.StatusOK, map[string]string{"url": destino.String()})
+		return
+	}
+
 	// #nosec G710 -- el destino se acaba de validar contra el host del almacén
 	// configurado; no proviene de la petición.
 	http.Redirect(w, r, destino.String(), http.StatusFound)

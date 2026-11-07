@@ -2755,12 +2755,12 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/healthz",
+              "raw": "{{base_url}}/readyz",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "healthz"
+                "readyz"
               ]
             },
             "description": "Sonda de vida. No comprueba dependencias: para eso está /readyz."
@@ -2771,8 +2771,10 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('200: el proceso responde', () => pm.response.to.have.status(200));",
-                  "console.log('Liveness: solo dice que el proceso está en pie.');"
+                  "// Cloud Run reserva en su capa de entrada las rutas que terminan en «z»,",
+                  "// como /healthz: no llegan al contenedor. La vida del proceso se comprueba",
+                  "// por /readyz, que también exige que el proceso responda (ADR-0020).",
+                  "pm.test('200: el proceso responde', () => pm.response.to.have.status(200));"
                 ]
               }
             }

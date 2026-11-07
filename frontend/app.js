@@ -1,10 +1,4 @@
-import {
-  API_BASE,
-  API_ORIGIN,
-  Client,
-  escapeHTML as e,
-  safeURL,
-} from "./api.js";
+import { API_ORIGIN, Client, escapeHTML as e, safeURL } from "./api.js";
 const api = new Client();
 const main = document.querySelector("#main");
 let user = null,
@@ -1323,14 +1317,12 @@ async function media() {
       notice("Carga cancelada.");
     });
     action("asset-content", async () => {
-      const response = await fetch(
-        `${API_BASE}/assets/${encodeURIComponent(data.id)}/content`,
-        { headers: { Authorization: `Bearer ${api.token}` } },
+      // La URL firmada en JSON y no la redirección: con la API en otro
+      // origen, el navegador no puede seguir una redirección CORS al almacén.
+      const content = await api.get(
+        `/assets/${encodeURIComponent(data.id)}/content`,
       );
-      if (!response.ok)
-        throw new Error("El contenido todavía no está disponible.");
-      const url = safeURL(response.url);
-      await response.body?.cancel();
+      const url = safeURL(content.url);
       modal(
         `<h2>Contenido del archivo</h2><a href="${url}" download="${e(a.original_filename)}" class="button">Descargar archivo</a>`,
       );

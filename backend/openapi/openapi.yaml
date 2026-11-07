@@ -1391,7 +1391,21 @@ paths:
         Responde `302` hacia una URL firmada de 15 minutos, emitida **después**
         de verificar rol, propiedad e inscripción (CA-06). Nunca devuelve los
         bytes por la API.
+
+        Con `Accept: application/json` responde `200` con la misma URL en el
+        cuerpo. Es lo que usa el navegador cuando la interfaz vive en otro
+        origen: al seguir una redirección CORS hacia el almacén, el navegador
+        envía `Origin: null` y el almacén la rechaza.
       responses:
+        "200":
+          description: La URL firmada, para clientes que piden JSON
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [url]
+                properties:
+                  url: { type: string, format: uri }
         "302":
           description: Redirección a la URL firmada
           headers:
