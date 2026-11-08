@@ -32,7 +32,7 @@ arranque de los procesos y la infraestructura.
 | D1 | Adaptador `pubsub` junto al de asynq, elegido con `QUEUE_BACKEND`. Local y CI siguen con asynq, la nube usa Pub/Sub | Los módulos publican por una interfaz y no cambian. El stack local sigue probando el dominio entero en segundos |
 | D2 | El worker atiende la suscripción push en `POST /pubsub/push`. Responde 2xx solo cuando el trabajo terminó y quedó persistido | Es la confirmación que pide el enunciado. Un error o un corte provocan la reentrega |
 | D3 | Reentregas con el reclamo atómico de `job_runs`. Si otro worker tiene el trabajo en curso, se responde 409 y Pub/Sub reintenta. Si ya terminó, se responde 2xx sin repetirlo | Ningún efecto se duplica y ningún mensaje se pierde porque otro worker se cayera a medias |
-| D4 | Política de reintentos de 10 a 600 s, plazo de confirmación de 600 s, cinco entregas y un topic de mensajes muertos | El plazo cubre la transcodificación más larga medida (196 s). Al quinto intento el trabajo queda `dead` en la base y el mensaje en el topic de muertos |
+| D4 | Política de reintentos de 10 a 600 s, plazo de confirmación de 600 s, cinco entregas y un topic de mensajes muertos | 600 s es el máximo de Pub/Sub para push, y la transcodificación más larga medida en Cloud Run con 4 vCPU fue de 437 s. Al quinto intento el trabajo queda `dead` en la base y el mensaje en el topic de muertos |
 | D5 | Un solo servicio de workers con FFmpeg y ClamAV en la misma imagen. `clamd` arranca antes que el worker | Un contenedor de aplicación por instancia. Las firmas van en la imagen (ADR-0011) |
 | D6 | Workers con ingreso interno y `roles/run.invoker` solo para la cuenta de la suscripción y la de Cloud Scheduler | Nadie más puede invocarlos, ni desde Internet ni desde el proyecto |
 | D7 | Redis sigue en `mooc-cola` para sesiones, caché y límites de tasa, alcanzado con salida directa a la VPC. Mailpit sigue ahí | Pub/Sub sustituye la mensajería, no el resto de usos de Redis (ADR-0006) |
@@ -48,11 +48,12 @@ arranque de los procesos y la infraestructura.
 | --- | --- | --- | --- | --- | --- |
 | `mooc-frontend` | 1 | 512 MiB | 80 | 30 s | 0 a 3 |
 | `mooc-backend` | 1 | 2 GiB | 20 | 60 s | 0 a 3 |
-| `mooc-workers` | 2 | 4 GiB | 1 | 600 s | 0 a 3 |
+| `mooc-workers` | 4 | 4 GiB | 1 | 600 s | 0 a 3 |
 
 El backend tiene 2 GiB y concurrencia 20 porque cada inicio de sesión reserva
 64 MiB para argon2id, y en la Entrega 2 una ráfaga de inicios agotó la memoria.
-Los workers procesan un trabajo a la vez porque FFmpeg ocupa los dos núcleos.
+Los workers procesan un trabajo a la vez porque FFmpeg ocupa todos los núcleos.
+Tienen 4 vCPU porque con 2 un video del perfil C no cabía en los 600 s.
 Con tres instancias hay tres trabajos en curso y el resto espera en Pub/Sub,
 que es la métrica de mensajes pendientes.
 

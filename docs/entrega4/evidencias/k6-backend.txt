@@ -1,0 +1,21 @@
+fase 20 rps 3m desde 2026-11-08T00:19:44Z
+    http_req_duration..............: med=102.75ms p(95)=114.73ms p(99)=125.93ms max=213.36ms
+    http_reqs......................: 3600   19.994191/s
+fase 600 rps 8m desde 2026-11-08T00:22:45Z
+    fallos.........................: 164    0.341434/s
+    http_req_duration..............: med=106.51ms p(95)=863.99ms p(99)=2.67s max=20s   
+    http_reqs......................: 287682 598.929569/s
+    dropped_iterations.............: 319    0.664131/s
+fase 20 rps 4m desde 2026-11-08T00:30:47Z
+    http_req_duration..............: med=102.67ms p(95)=111.66ms p(99)=119.04ms max=344.24ms
+    http_reqs......................: 4800   19.995816/s
+fin 2026-11-08T00:34:48Z
+fase 1500 rps 7m desde 2026-11-08T00:38:46Z
+    fallos.........................: 132755 301.699981/s
+    http_req_duration..............: med=1.73s    p(95)=20s    p(99)=20.36s max=30.9s 
+    http_reqs......................: 463518 1053.394388/s
+    dropped_iterations.............: 166483 378.35048/s
+fase 20 rps 4m desde 2026-11-08T00:46:10Z
+    http_req_duration..............: med=102.68ms p(95)=117.75ms p(99)=125.92ms max=239.53ms
+    http_reqs......................: 4800   19.995534/s
+fin 2026-11-08T00:50:11Z

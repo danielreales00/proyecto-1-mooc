@@ -623,14 +623,14 @@ frontend-test: ## Pruebas del cliente HTTP de la interfaz en un contenedor
 .PHONY: frontend-e2e-nube
 frontend-e2e-nube: tunel-mailpit ## Recorrido de navegador contra la nube (crea datos sintéticos)
 	docker build -q -f frontend/tests/Dockerfile -t mooc-browser frontend/tests >/dev/null
-	@mkdir -p docs/entrega3/evidencias/frontend
+	@mkdir -p docs/entrega4/evidencias/frontend
 	@set -o pipefail; clave=$$($(GCLOUD) secrets versions access latest --secret=seed-password); \
 	docker run --rm --ipc=host --network $(NUBE_RED) \
 		-e BASE_URL=https://$(NUBE_FRONTEND) -e MAILPIT_URL=http://mooc-tunel:8025 \
 		-e DEMO_PASSWORD="$$clave" -e EVIDENCIAS=/evidencias \
-		-v "$(PWD)/frontend":/src -v "$(PWD)/docs/entrega3/evidencias/frontend":/evidencias -w /src \
+		-v "$(PWD)/frontend":/src -v "$(PWD)/docs/entrega4/evidencias/frontend":/evidencias -w /src \
 		mooc-browser sh -c "npm ci --no-audit --no-fund >/dev/null && node tests/e2e.mjs" \
-		| tee docs/entrega3/evidencias/frontend/nube-$$(date -u +%Y%m%dT%H%MZ).log
+		| tee docs/entrega4/evidencias/frontend/nube-$$(date -u +%Y%m%dT%H%MZ).log
 
 .PHONY: frontend-e2e
 frontend-e2e: ## Recorrido de navegador contra el stack local (crea datos sintéticos)

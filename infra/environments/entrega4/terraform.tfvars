@@ -29,7 +29,7 @@ tipo_cola       = "e2-small"
 disco_cola_gb   = 20
 
 # Qué imágenes corren: el SHA que imprimió `make publicar`.
-version_imagenes = "8048683a3abb"
+version_imagenes = "0f1c56adc00f"
 
 # Pools por proceso contra las 47 conexiones útiles de db-g1-small: con tres
 # instancias de cada servicio, 3 × 8 + 3 × 3 = 33, más las de los trabajos de
@@ -67,11 +67,12 @@ backend = {
   tiempo_maximo_s = 60
 }
 
-# Un trabajo por instancia: FFmpeg ocupa los dos núcleos. 4 GiB para clamd
-# (cerca de 1 GiB con las firmas) y FFmpeg. 600 s cubren la transcodificación
-# más larga medida (196 s) y es el plazo de confirmación de la suscripción.
+# Un trabajo por instancia: FFmpeg ocupa todos los núcleos. 4 GiB para clamd
+# (cerca de 1 GiB con las firmas) y FFmpeg. 600 s es el plazo de confirmación
+# de la suscripción, el máximo de Pub/Sub para push. Con 2 vCPU un video del
+# perfil C tardó de 518 a más de 600 s en Cloud Run, así que van 4.
 workers = {
-  cpu             = "2"
+  cpu             = "4"
   memoria         = "4Gi"
   concurrencia    = 1
   tiempo_maximo_s = 600

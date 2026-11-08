@@ -1,5 +1,21 @@
 # Plataforma MOOC
 
+## Entregables de la Entrega 4
+
+| # | Entregable | Dónde |
+| --- | --- | --- |
+| 1 | **Plataforma en Cloud Run**: frontend, backend y workers, de 0 a 3 instancias cada uno | Frontend `https://mooc-frontend-568765476410.us-central1.run.app` y API `https://mooc-backend-568765476410.us-central1.run.app`. Se enciende para la sustentación |
+| 2 | **Guía reproducible de despliegue**, con imágenes, servicios, topic, suscripción y permisos | [`docs/entrega4/despliegue.md`](docs/entrega4/despliegue.md) |
+| 3 | **Diagrama y documento de arquitectura** | [`docs/entrega4/arquitectura.md`](docs/entrega4/arquitectura.md) |
+| 4 | **Evidencias de funcionamiento**: URL, límites de instancias y una tarea seguida en los registros | [`docs/entrega4/evidencias/`](docs/entrega4/evidencias/README.md) |
+| 5 | **Verificación del escalamiento**: instancias ante carga y mensajes pendientes | [`docs/entrega4/evidencias/README.md#5-escalamiento-con-carga-controlada`](docs/entrega4/evidencias/README.md#5-escalamiento-con-carga-controlada) |
+| 6 | **Decisión de arquitectura** | [ADR-0020](arquitectura/adr/0020-cloud-run-y-pubsub.md) |
+| 7 | **Release** | Tag [`entrega-4`](../../tree/entrega-4) |
+| 8 | **Video de sustentación** | Pendiente |
+
+Las credenciales no se publican. El acceso para el equipo docente se comunica
+por el medio privado del curso.
+
 ## Entregables de la Entrega 3
 
 | # | Entregable | Dónde |

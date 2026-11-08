@@ -1,0 +1,15 @@
+inicio 2026-11-08T00:51:46Z
+time="2026-11-08T00:52:10Z" level=info msg="video 5: asset 01a1b8a3-de9d-7175-84d3-6fb1b9cc8589 confirmado 2026-11-08T00:52:10.713Z" source=console
+time="2026-11-08T00:52:10Z" level=info msg="video 2: asset 01a1b8a3-de7e-7916-bde7-8660ad78144a confirmado 2026-11-08T00:52:10.965Z" source=console
+time="2026-11-08T00:52:11Z" level=info msg="video 1: asset 01a1b8a3-de7f-79b5-b98d-b9645e568a0e confirmado 2026-11-08T00:52:11.989Z" source=console
+time="2026-11-08T00:52:12Z" level=info msg="video 3: asset 01a1b8a3-de7b-78e3-98a4-014bf1e4eb2e confirmado 2026-11-08T00:52:12.084Z" source=console
+time="2026-11-08T00:52:14Z" level=info msg="video 4: asset 01a1b8a3-de76-767f-a8c2-c5b359cdbbb7 confirmado 2026-11-08T00:52:14.786Z" source=console
+time="2026-11-08T01:01:15Z" level=info msg="video 1: asset 01a1b8a3-de7f-79b5-b98d-b9645e568a0e terminó en ready 2026-11-08T01:01:15.102Z" source=console
+time="2026-11-08T01:11:46Z" level=info msg="video 3: asset 01a1b8a3-de7b-78e3-98a4-014bf1e4eb2e terminó en ready 2026-11-08T01:11:46.779Z" source=console
+time="2026-11-08T01:20:18Z" level=info msg="video 4: asset 01a1b8a3-de76-767f-a8c2-c5b359cdbbb7 terminó en ready 2026-11-08T01:20:18.369Z" source=console
+time="2026-11-08T01:20:24Z" level=info msg="video 5: asset 01a1b8a3-de9d-7175-84d3-6fb1b9cc8589 terminó en ready 2026-11-08T01:20:24.533Z" source=console
+time="2026-11-08T01:20:44Z" level=info msg="video 2: asset 01a1b8a3-de7e-7916-bde7-8660ad78144a terminó en ready 2026-11-08T01:20:44.981Z" source=console
+    checks_failed......: 0.00%   0 out of 130
+    http_req_failed................: 0.00%  0 out of 1461
+fin 2026-11-08T01:20:45Z
+

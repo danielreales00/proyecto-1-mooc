@@ -31,7 +31,7 @@ locals {
     APP_ENV              = "production"
     LOG_LEVEL            = "info"
     LOG_FORMAT           = "gcp"
-    PUBLIC_BASE_URL      = local.url.frontend
+    PUBLIC_BASE_URL      = local.url.backend # la API sirve manifiestos y enlaces
     OBJECT_STORE         = "gcs"
     S3_BUCKET_ORIGINALS  = module.gcs.nombres["originals"]
     S3_BUCKET_DERIVED    = module.gcs.nombres["derived"]

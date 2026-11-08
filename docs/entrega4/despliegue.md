@@ -90,7 +90,7 @@ semilla crea las cuentas sintéticas con la contraseña del secreto
 | --- | --- | --- | --- | --- | --- | --- |
 | `mooc-frontend` | 1 | 512 MiB | 80 | 30 s | 0 a 3 | Público |
 | `mooc-backend` | 1 | 2 GiB | 20 | 60 s | 0 a 3 | Público |
-| `mooc-workers` | 2 | 4 GiB | 1 | 600 s | 0 a 3 | Interno |
+| `mooc-workers` | 4 | 4 GiB | 1 | 600 s | 0 a 3 | Interno |
 
 | Pub/Sub | Valor |
 | --- | --- |
@@ -123,8 +123,25 @@ make gcloud ARGS="logging read 'resource.type=\"cloud_run_revision\" AND jsonPay
   --format='value(timestamp,resource.labels.service_name,jsonPayload.message)'"
 ```
 
-El estado final queda en `platform.job_runs` (`make psql-nube`), o en el recurso
-que originó la tarea, como el estado de un archivo.
+El estado final queda en `platform.job_runs` y en el recurso que originó la
+tarea, que la API expone: el estado de un archivo o la insignia de una
+inscripción.
+
+### Comprobar una reentrega
+
+Se publica en el topic una copia de un trabajo ya terminado, con su misma
+`job_key`. Hace falta un usuario con permiso de publicación (el dueño del
+proyecto lo tiene):
+
+```bash
+K=badge.issue:<id-de-la-inscripción>
+make gcloud ARGS="pubsub topics publish mooc-trabajos \
+  --message='{\"job_key\":\"$K\",\"trace_id\":\"reentrega-manual\"}' \
+  --attribute=tipo=badge.issue,cola=critical,job_key=$K"
+```
+
+El worker responde 204 y registra «entrega repetida de un trabajo terminado; se
+confirma sin repetirlo», sin un segundo «trabajo iniciado».
 
 ## 8. Apagar entre sesiones
 

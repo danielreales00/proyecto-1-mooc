@@ -1,0 +1,42 @@
+# Suscripción push
+ackDeadlineSeconds: 600
+deadLetterPolicy:
+  deadLetterTopic: projects/mooc-509602/topics/mooc-trabajos-muertos
+  maxDeliveryAttempts: 5
+messageRetentionDuration: 604800s
+name: projects/mooc-509602/subscriptions/mooc-workers
+pushConfig:
+  oidcToken:
+    audience: https://mooc-workers-568765476410.us-central1.run.app
+    serviceAccountEmail: mooc-pubsub-push@mooc-509602.iam.gserviceaccount.com
+  pushEndpoint: https://mooc-workers-568765476410.us-central1.run.app/pubsub/push
+retryPolicy:
+  maximumBackoff: 600s
+  minimumBackoff: 10s
+topic: projects/mooc-509602/topics/mooc-trabajos
+
+# Quién puede invocar mooc-workers
+bindings:
+- members:
+  - serviceAccount:mooc-programador@mooc-509602.iam.gserviceaccount.com
+  - serviceAccount:mooc-pubsub-push@mooc-509602.iam.gserviceaccount.com
+  role: roles/run.invoker
+
+# Quién puede invocar mooc-backend
+bindings:
+- members:
+  - allUsers
+  role: roles/run.invoker
+
+# Quién puede invocar mooc-frontend
+bindings:
+- members:
+  - allUsers
+  role: roles/run.invoker
+
+# Quién publica en mooc-trabajos
+bindings:
+- members:
+  - serviceAccount:mooc-web@mooc-509602.iam.gserviceaccount.com
+  - serviceAccount:mooc-worker@mooc-509602.iam.gserviceaccount.com
+  role: roles/pubsub.publisher

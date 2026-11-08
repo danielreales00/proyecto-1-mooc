@@ -19,6 +19,8 @@ SERVICIOS = ("mooc-frontend", "mooc-backend", "mooc-workers")
 CONSULTAS = {
     "instancias": 'sum by (service_name) (run_googleapis_com:container_instance_count{monitored_resource="cloud_run_revision"})',
     "peticiones_s": 'sum by (service_name) (rate(run_googleapis_com:request_count{monitored_resource="cloud_run_revision"}[1m]))',
+    # Percentil 90 de la utilización de CPU de las instancias de cada servicio.
+    "cpu": 'histogram_quantile(0.9, sum by (service_name, le) (rate(run_googleapis_com:container_cpu_utilizations_bucket{monitored_resource="cloud_run_revision"}[1m])))',
     "pendientes": 'sum by (subscription_id) (pubsub_googleapis_com:subscription_num_undelivered_messages{subscription_id="mooc-workers"})',
     "antiguedad_s": 'max by (subscription_id) (pubsub_googleapis_com:subscription_oldest_unacked_message_age{subscription_id="mooc-workers"})',
 }
@@ -43,17 +45,19 @@ def main():
     t = token()
     inst = por_minuto(consultar(t, CONSULTAS["instancias"], desde, hasta), "service_name")
     pet = por_minuto(consultar(t, CONSULTAS["peticiones_s"], desde, hasta), "service_name")
+    cpu = por_minuto(consultar(t, CONSULTAS["cpu"], desde, hasta), "service_name")
     pend = por_minuto(consultar(t, CONSULTAS["pendientes"], desde, hasta), "subscription_id")
     edad = por_minuto(consultar(t, CONSULTAS["antiguedad_s"], desde, hasta), "subscription_id")
 
-    print("| UTC | Instancias frontend / backend / workers | Peticiones/s frontend / backend / workers | Mensajes pendientes | Antigüedad del más viejo (s) |")
-    print("| --- | --- | --- | --- | --- |")
+    print("| UTC | Instancias frontend / backend / workers | Peticiones/s frontend / backend / workers | CPU p90 backend / workers | Mensajes pendientes | Antigüedad del más viejo (s) |")
+    print("| --- | --- | --- | --- | --- | --- |")
     for minuto in sorted(set(inst) | set(pet) | set(pend)):
         i = " / ".join(f"{inst.get(minuto, {}).get(s, 0):.0f}" for s in SERVICIOS)
         p = " / ".join(f"{pet.get(minuto, {}).get(s, 0):.1f}" for s in SERVICIOS)
+        c = " / ".join(f"{100 * cpu.get(minuto, {}).get(s, 0):.0f} %" for s in SERVICIOS[1:])
         n = pend.get(minuto, {}).get("mooc-workers")
         a = edad.get(minuto, {}).get("mooc-workers")
-        print(f"| {minuto} | {i} | {p} | {'-' if n is None else f'{n:.0f}'} | {'-' if a is None else f'{a:.0f}'} |")
+        print(f"| {minuto} | {i} | {p} | {c} | {'-' if n is None else f'{n:.0f}'} | {'-' if a is None else f'{a:.0f}'} |")
 
 
 if __name__ == "__main__":

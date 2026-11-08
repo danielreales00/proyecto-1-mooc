@@ -1,0 +1,9 @@
+d-b9645e568a0e:v1 00:52:33 01:01:12 519 s 4-rsl trabajo completado
+4-014bf1e4eb2e:v1 00:52:48 01:02:48 600 s 4-rsl trabajo interrumpido; vuelve a la cola
+7-8660ad78144a:v1 00:52:54 01:02:55 601 s 4-rsl trabajo interrumpido; vuelve a la cola
+4-014bf1e4eb2e:v1 01:03:02 01:11:44 522 s 4-rsl trabajo completado
+7-8660ad78144a:v1 01:03:08 01:13:09 601 s 4-rsl trabajo interrumpido; vuelve a la cola
+2-c5b359cdbbb7:v1 01:05:14 01:15:14 600 s 4-rsl trabajo interrumpido; vuelve a la cola
+2-c5b359cdbbb7:v1 01:15:28 01:20:14 286 s 5-bfd trabajo completado
+3-6fb1b9cc8589:v1 01:15:37 01:20:24 287 s 5-bfd trabajo completado
+7-8660ad78144a:v1 01:13:24 01:20:41 437 s 5-bfd trabajo completado

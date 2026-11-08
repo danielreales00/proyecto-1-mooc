@@ -1,0 +1,82 @@
+# mooc-frontend
+metadata:
+  annotations:
+    run.googleapis.com/ingress: all
+  name: mooc-frontend
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: '3'
+        autoscaling.knative.dev/minScale: '0'
+        run.googleapis.com/cpu-throttling: 'false'
+        run.googleapis.com/sessionAffinity: 'false'
+    spec:
+      containerConcurrency: 80
+      containers:
+      - image: us-central1-docker.pkg.dev/mooc-509602/mooc/frontend:0f1c56adc00f
+        resources:
+          limits:
+            cpu: '1'
+            memory: 512Mi
+      serviceAccountName: mooc-frontend@mooc-509602.iam.gserviceaccount.com
+      timeoutSeconds: 30
+status:
+  url: https://mooc-frontend-jrcol6huzq-uc.a.run.app
+# mooc-backend
+metadata:
+  annotations:
+    run.googleapis.com/ingress: all
+  name: mooc-backend
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: '3'
+        autoscaling.knative.dev/minScale: '0'
+        run.googleapis.com/cpu-throttling: 'false'
+        run.googleapis.com/network-interfaces: '[{"network":"projects/mooc-509602/global/networks/mooc","subnetwork":"projects/mooc-509602/regions/us-central1/subnetworks/mooc-us-central1"}]'
+        run.googleapis.com/secrets: secret-alias-1:projects/mooc-509602/secrets/database-url
+        run.googleapis.com/sessionAffinity: 'false'
+        run.googleapis.com/vpc-access-egress: private-ranges-only
+    spec:
+      containerConcurrency: 20
+      containers:
+      - image: us-central1-docker.pkg.dev/mooc-509602/mooc/api:0f1c56adc00f
+        resources:
+          limits:
+            cpu: '1'
+            memory: 2Gi
+      serviceAccountName: mooc-web@mooc-509602.iam.gserviceaccount.com
+      timeoutSeconds: 60
+status:
+  url: https://mooc-backend-jrcol6huzq-uc.a.run.app
+# mooc-workers
+metadata:
+  annotations:
+    run.googleapis.com/ingress: internal
+  name: mooc-workers
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: '3'
+        autoscaling.knative.dev/minScale: '0'
+        run.googleapis.com/cpu-throttling: 'false'
+        run.googleapis.com/execution-environment: gen2
+        run.googleapis.com/network-interfaces: '[{"network":"projects/mooc-509602/global/networks/mooc","subnetwork":"projects/mooc-509602/regions/us-central1/subnetworks/mooc-us-central1"}]'
+        run.googleapis.com/secrets: secret-alias-1:projects/mooc-509602/secrets/database-url
+        run.googleapis.com/sessionAffinity: 'false'
+        run.googleapis.com/vpc-access-egress: private-ranges-only
+    spec:
+      containerConcurrency: 1
+      containers:
+      - image: us-central1-docker.pkg.dev/mooc-509602/mooc/workers-cloudrun:0f1c56adc00f
+        resources:
+          limits:
+            cpu: '2'
+            memory: 4Gi
+      serviceAccountName: mooc-worker@mooc-509602.iam.gserviceaccount.com
+      timeoutSeconds: 600
+status:
+  url: https://mooc-workers-jrcol6huzq-uc.a.run.app

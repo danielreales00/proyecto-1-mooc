@@ -1,0 +1,4 @@
+2026-11-08T00:17:51.295241Z	mooc-backend	trabajo publicado	01a1b884-c46f-78fd-a143-532c0d95093c
+2026-11-08T00:17:51.365285Z	mooc-workers	trabajo iniciado	01a1b884-c46f-78fd-a143-532c0d95093c
+2026-11-08T00:17:51.483367Z	mooc-workers	trabajo completado	01a1b884-c46f-78fd-a143-532c0d95093c
+2026-11-08T00:21:11.691488Z	mooc-workers	entrega repetida de un trabajo terminado; se confirma sin repetirlo	reentrega-manual

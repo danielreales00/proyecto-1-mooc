@@ -56,7 +56,7 @@ lo reclama. Confirmar la copia habría perdido el trabajo.
 
 | Parámetro | Valor | Por qué |
 | --- | --- | --- |
-| Plazo de confirmación | 600 s | Supera la transcodificación más larga medida, 196 s |
+| Plazo de confirmación | 600 s | Es el máximo de Pub/Sub para push. La transcodificación más larga tiene que caber dentro |
 | Tiempo máximo de solicitud del worker | 600 s | Igual al plazo: Cloud Run no corta antes de que Pub/Sub reintente |
 | Reintentos | De 10 a 600 s, exponencial | Pub/Sub espera más tras cada fallo |
 | Entregas máximas | 5 | En la quinta, el worker marca el trabajo `dead` en la base y Pub/Sub manda el mensaje al topic de muertos |
@@ -66,7 +66,13 @@ lo reclama. Confirmar la copia habría perdido el trabajo.
 La imagen de workers de Cloud Run trae el binario del worker, FFmpeg y ClamAV
 con sus firmas. `clamd` arranca antes que el worker en el mismo contenedor. Es
 un contenedor de aplicación por instancia, y la concurrencia es 1 porque FFmpeg
-ocupa los dos núcleos.
+ocupa todos los núcleos.
+
+Cada instancia tiene 4 vCPU. Con 2, como las máquinas de la Entrega 2, un video
+del perfil C tardó 519 s en Cloud Run y otros dos superaron los 600 s y se
+cortaron. En la máquina virtual el mismo video tardaba 196 s. Con 4 vCPU tardó
+de 286 a 437 s el 8 de noviembre, dentro del plazo de confirmación
+(`docs/entrega4/evidencias/transcodificaciones.txt`).
 
 ### D5 — Acceso
 
