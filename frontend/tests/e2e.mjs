@@ -235,6 +235,8 @@ try {
     .getByLabel("Título", { exact: true })
     .fill("Imagen de prueba");
   await imageForm.getByLabel("Tipo", { exact: true }).selectOption("image");
+  // Un archivo ya subido desde la biblioteca se enlaza por su ID.
+  await imageForm.getByText("Usar un archivo ya subido").click();
   await imageForm.getByLabel("ID del archivo").fill(assetId);
   await imageForm.getByLabel("Obligatorio", { exact: true }).uncheck();
   await imageForm
@@ -244,44 +246,36 @@ try {
     .locator("summary")
     .filter({ hasText: "Imagen de prueba" })
     .waitFor();
-  await goto("/media", "De tu archivo al aula.");
-  await page
-    .locator("[name=file]")
-    .setInputFiles(
-      fileURLToPath(new URL("./fixtures/video.mp4", import.meta.url)),
-    );
-  await page.locator("#upload [name=kind]").selectOption("video");
-  await page.getByRole("button", { name: "Cargar archivo ↗" }).click();
-  await page.getByText(/Carga completa. ID/).waitFor();
-  const videoId = (await page.locator("#upload-status").textContent()).match(
-    /ID ([0-9a-f-]+)/,
-  )[1];
-  await page.locator("#asset-search [name=id]").fill(videoId);
-  let ready = false;
-  for (let i = 0; i < 60; i++) {
-    await page
-      .locator("#asset-search")
-      .getByRole("button", { name: "Consultar estado" })
-      .click();
-    await page.waitForTimeout(500);
-    if (
-      await page.locator("#asset .chip").filter({ hasText: "Listo" }).count()
-    ) {
-      ready = true;
-      break;
-    }
-    await page.waitForTimeout(1000);
-  }
-  assert.ok(ready, "el video debe completar escaneo y transcodificación");
-  await goto(`/studio/${courseId}/1`, name);
+  // El video se sube desde el editor del curso: el ID se llena solo y el
+  // estado avanza sin consultarlo a mano.
   await page
     .locator("summary")
     .filter({ hasText: /^Agregar recurso$/ })
     .click();
   const videoForm = page.locator('form[id^="add-resource-"]');
-  await videoForm.getByLabel("Título", { exact: true }).fill("Video de prueba");
   await videoForm.getByLabel("Tipo", { exact: true }).selectOption("video");
-  await videoForm.getByLabel("ID del archivo").fill(videoId);
+  await videoForm
+    .locator("[name=upload]")
+    .setInputFiles(
+      fileURLToPath(new URL("./fixtures/video.mp4", import.meta.url)),
+    );
+  await page.waitForFunction(
+    () =>
+      document.querySelector('form[id^="add-resource-"] [name=asset_id]')
+        ?.value,
+    null,
+    { timeout: 60000 },
+  );
+  assert.equal(
+    await videoForm.getByLabel("Título", { exact: true }).inputValue(),
+    "video",
+    "el título se toma del nombre del archivo",
+  );
+  await videoForm.getByLabel("Título", { exact: true }).fill("Video de prueba");
+  await videoForm
+    .locator(".pipeline li.done", { hasText: "Listo" })
+    .waitFor({ timeout: 120000 });
+  await captura("profesor-video-subido-desde-el-editor");
   await videoForm.getByLabel("Obligatorio", { exact: true }).uncheck();
   await videoForm
     .getByRole("button", { name: "Agregar recurso", exact: true })

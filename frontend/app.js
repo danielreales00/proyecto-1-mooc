@@ -171,7 +171,7 @@ function header() {
     .map((item) => navLinkHTML(item, actual))
     .join("");
   $("#header").innerHTML =
-    `<a class="brand" href="#/" aria-label="MOOC inicio">mooc<span>✳</span></a><nav aria-label="Principal">${nav}</nav><div class="actions">${sessionActionsHTML()}</div>`;
+    `<a class="brand" href="#/" aria-label="MOOC inicio">mooc<span aria-hidden="true"></span></a><nav aria-label="Principal">${nav}</nav><div class="actions">${sessionActionsHTML()}</div>`;
   action("logout", async () => {
     await cleanup();
     cleanup = async () => {};
@@ -202,7 +202,7 @@ function cardHTML(c, i) {
     "Explorar curso ↗",
     "text",
   );
-  return `<article class="card"><div class="card-art"><span>${e(c.language?.toUpperCase() || "CURSO")}</span><b aria-hidden="true">${["↗", "◉", "✳"][i % 3]}</b></div><span class="chip">${e(c.category || "Aprendizaje")}</span><h3>${e(c.title)}</h3><p>${e(c.summary)}</p><div class="meta">${e(c.enrolled_count ?? 0)} estudiantes · Versión ${e(c.version_number)}</div><div class="actions">${explore}</div></article>`;
+  return `<article class="card"><div class="card-art tone-${i % 3}"><span>${e(c.language?.toUpperCase() || "CURSO")}</span><b aria-hidden="true">${e((c.category || c.title || "M").trim().charAt(0).toUpperCase())}</b></div><span class="chip">${e(c.category || "Aprendizaje")}</span><h3>${e(c.title)}</h3><p>${e(c.summary)}</p><div class="meta">${e(c.enrolled_count ?? 0)} estudiantes · Versión ${e(c.version_number)}</div><div class="actions">${explore}</div></article>`;
 }
 function cards(items) {
   if (!items.length)
@@ -211,7 +211,7 @@ function cards(items) {
 }
 async function home() {
   show(
-    `<section class="hero"><div class="eyebrow">CONOCIMIENTO SIN LÍMITES</div><h1>Aprender nos<br>transforma.</h1><p class="lead">Una nueva habilidad. Otra perspectiva. Tu próximo paso empieza con lo que aprendes hoy.</p><div class="actions" style="justify-content:center">${link("/catalog", "Encuentra tu próximo curso ↗")}${link(user ? "/learning" : "/register", user ? "Continúa aprendiendo" : "Empieza a aprender", "text")}</div></section><div class="split"><section class="feature"><div class="eyebrow">A TU RITMO</div><h2>Grandes ideas.<br>Pequeños pasos.</h2><p>Avanza con lecturas, videos y actividades. Retoma tu aprendizaje donde lo dejaste.</p><div class="orbit" aria-hidden="true"></div></section><section class="feature stone"><span class="big-mark" aria-hidden="true">✳</span><div class="eyebrow">LOGROS QUE CUENTAN</div><h2>Haz visible<br>lo que sabes.</h2><p>Completa tus cursos y comparte insignias que cualquiera puede verificar.</p>${link("/verify", "Verificar una insignia ↗", "text")}</section></div><div class="section-head"><div><div class="eyebrow">EXPLORA POSIBILIDADES</div><h2>El siguiente capítulo es tuyo.</h2></div>${link("/catalog", "Ver todos los cursos ↗", "text")}</div><div id="courses" class="loading">Cargando cursos</div>`,
+    `<section class="hero"><div class="eyebrow">CONOCIMIENTO SIN LÍMITES</div><h1>Aprender nos<br>transforma.</h1><p class="lead">Una nueva habilidad. Otra perspectiva. Tu próximo paso empieza con lo que aprendes hoy.</p><div class="actions" style="justify-content:center">${link("/catalog", "Encuentra tu próximo curso ↗")}${link(user ? "/learning" : "/register", user ? "Continúa aprendiendo" : "Empieza a aprender", "text")}</div></section><div class="split"><section class="feature"><div class="eyebrow">A TU RITMO</div><h2>Grandes ideas.<br>Pequeños pasos.</h2><p>Avanza con lecturas, videos y actividades. Retoma tu aprendizaje donde lo dejaste.</p><div class="orbit" aria-hidden="true"></div></section><section class="feature stone"><span class="seal" aria-hidden="true"></span><div class="eyebrow">LOGROS QUE CUENTAN</div><h2>Haz visible<br>lo que sabes.</h2><p>Completa tus cursos y comparte insignias que cualquiera puede verificar.</p>${link("/verify", "Verificar una insignia ↗", "text")}</section></div><div class="section-head"><div><div class="eyebrow">EXPLORA POSIBILIDADES</div><h2>El siguiente capítulo es tuyo.</h2></div>${link("/catalog", "Ver todos los cursos ↗", "text")}</div><div id="courses" class="loading">Cargando cursos</div>`,
   );
   try {
     const d = await api.get("/catalog/courses?limit=3");
@@ -803,10 +803,45 @@ async function studioCourse(id) {
     location.hash = `/studio/${id}/${v.version_number}`;
   });
 }
+// Los campos dependen del tipo: el archivo para los recursos con binario y el
+// enlace para los externos. El CSS los muestra según `data-type`.
 function resourceFields(r = {}) {
-  return `<div class="form-grid">${field("title", "Título", r.title)}${select("type", "Tipo", ["rich_text", "image", "video", "audio", "pdf", "slides", "download", "iframe", "quiz", "link"], r.type || "rich_text")}${field("asset_id", "ID del archivo", r.asset_id || "", "text", false)}${field("external_url", "Enlace externo", r.external_url || "", "url", false)}</div>${check("visible", "Visible", r.visible ?? true)}${check("required", "Obligatorio", r.required ?? true)}${check("downloadable", "Permitir descarga", r.downloadable ?? false)}<label>Contenido Markdown<textarea name="content_md">${e(r.content_md || "")}</textarea></label>`;
+  const type = r.type || "rich_text";
+  return `<div class="resource-fields" data-type="${e(type)}"><div class="form-grid">${field("title", "Título", r.title)}${select("type", "Tipo", ["rich_text", "image", "video", "audio", "pdf", "slides", "download", "iframe", "quiz", "link"], type)}</div><div class="needs-asset">${dropHTML("upload", "o haz clic para elegirlo. Se sube al momento y el ID se llena solo.")}<div class="upload-state" aria-live="polite"></div><details class="advanced"><summary>Usar un archivo ya subido</summary>${field("asset_id", "ID del archivo", r.asset_id || "", "text", false)}</details>${check("downloadable", "Permitir descarga", r.downloadable ?? false)}</div><div class="needs-url">${field("external_url", "Enlace externo", r.external_url || "", "url", false)}</div>${check("visible", "Visible", r.visible ?? true)}${check("required", "Obligatorio", r.required ?? true)}<label>Contenido Markdown<textarea name="content_md">${e(r.content_md || "")}</textarea></label></div>`;
+}
+// El tipo de archivo que pide cada tipo de recurso.
+const RESOURCE_KIND = { image: "image", video: "video", audio: "audio", pdf: "pdf", slides: "pdf", download: "file" };
+function bindResourceUpload(form) {
+  const zone = form?.querySelector(".drop");
+  if (!zone) return;
+  const state = $(".upload-state", form);
+  const submit = form.querySelector("[type=submit]");
+  form.elements.type.addEventListener("change", (event) => {
+    $(".resource-fields", form).dataset.type = event.target.value;
+  });
+  bindDrop(zone, async (file) => {
+    const type = form.elements.type.value;
+    const kind =
+      type === "slides" && kindOf(file) !== "pdf" ? "file" : RESOURCE_KIND[type] || kindOf(file);
+    submit.disabled = true;
+    try {
+      const id = await uploadFile(file, kind, (text, f) => (state.innerHTML = progressHTML(text, f)));
+      form.elements.asset_id.value = id;
+      if (!form.elements.title.value)
+        form.elements.title.value = file.name.replace(/\.[^.]+$/, "");
+      const note =
+        '<p class="meta">Archivo subido. Ya puedes guardar el recurso: el aula lo mostrará cuando esté listo.</p>';
+      state.innerHTML = note;
+      void watchAsset(id, (a) => (state.innerHTML = pipelineHTML(a) + note)).catch(() => {});
+    } catch (err) {
+      if (err.name !== "AbortError") state.innerHTML = errorHTML(err);
+    } finally {
+      submit.disabled = false;
+    }
+  });
 }
 function resourceData(data, form) {
+  delete data.upload;
   return {
     ...data,
     visible: form.elements.visible.checked,
@@ -836,7 +871,7 @@ function resourceEditorHTML(r, draft) {
         : "";
     body = `<form id="resource-${r.id}">${resourceFields(r)}<button class="primary" type="submit">Guardar recurso</button></form>${quiz}`;
   }
-  return `<details class="resource-editor"><summary>${e(r.title)} · ${e(r.type)} · ${e(r.processing_status)}</summary>${body}</details>`;
+  return `<details class="resource-editor"><summary>${e(r.title)} · ${e(status(r.type))}${r.processing_status && r.processing_status !== "n/a" ? " · " + e(status(r.processing_status)) : ""}</summary>${body}</details>`;
 }
 function unitEditorHTML(u, draft) {
   const resources = (u.resources || [])
@@ -872,6 +907,7 @@ function versionHTML(id, n, d, draft) {
   );
 }
 function bindResourceForm(id, n, r) {
+  bindResourceUpload($(`#resource-${r.id}`));
   bindForm(`#resource-${r.id}`, async (data, form) => {
     const body = resourceData(data, form);
     const content = body.content_md;
@@ -888,6 +924,7 @@ function bindResourceForm(id, n, r) {
   });
 }
 function bindUnitForms(id, n, u) {
+  bindResourceUpload($(`#add-resource-${u.id}`));
   bindForm(`#add-resource-${u.id}`, async (data, form) => {
     await api.post(`/units/${u.id}/resources`, resourceData(data, form));
     await version(id, n);
@@ -1197,20 +1234,12 @@ async function adminUser(id) {
 }
 // SHA-256 incremental, por bloques de 8 MiB y en orden: el archivo nunca
 // está entero en memoria.
-async function hashFile(
-  file,
-  output,
-  offset = 0,
-  hash = window.sha256.create(),
-) {
+async function hashFile(file, onProgress, offset = 0, hash = window.sha256.create()) {
   if (offset >= file.size) return hash.hex();
   const block = 8 * 1024 * 1024;
   hash.update(await file.slice(offset, offset + block).arrayBuffer());
-  const pct = Math.round(
-    (Math.min(offset + block, file.size) / file.size) * 100,
-  );
-  output.textContent = "Verificando archivo… " + pct + "%";
-  return hashFile(file, output, offset + block, hash);
+  onProgress(Math.min(offset + block, file.size) / file.size);
+  return hashFile(file, onProgress, offset + block, hash);
 }
 async function uploadPart(file, ticket, number) {
   const signed = await api.post(`/assets/${ticket.asset_id}/upload/parts`, {
@@ -1218,14 +1247,11 @@ async function uploadPart(file, ticket, number) {
   });
   const response = await fetch(safeURL(signed.parts[0].url), {
     method: "PUT",
-    body: file.slice(
-      (number - 1) * ticket.part_size,
-      number * ticket.part_size,
-    ),
+    body: file.slice((number - 1) * ticket.part_size, number * ticket.part_size),
   });
   if (!response.ok)
     throw new Error(
-      "No se pudo cargar esta parte. Puedes reanudar con el mismo archivo y el ID de carga.",
+      "No se pudo cargar una parte. Vuelve a elegir el mismo archivo para reanudar.",
     );
   const etag = response.headers.get("ETag");
   if (!etag)
@@ -1234,83 +1260,210 @@ async function uploadPart(file, ticket, number) {
     );
   return etag;
 }
-// Sube las partes que faltan una tras otra: si la carga se corta, las que
-// ya entraron quedan registradas y se reanuda desde la siguiente.
-async function uploadParts(file, ticket, missing, received, output) {
-  if (!missing.length) return received;
-  const [number, ...rest] = missing;
-  output.textContent = `Cargando parte ${number} de ${ticket.total_parts} · ID ${ticket.asset_id}`;
-  received.push({
-    part_number: number,
-    etag: await uploadPart(file, ticket, number),
+// Tres partes a la vez. Las que ya entraron quedan registradas en el
+// servidor: si la carga se corta, se reanuda desde las que faltan.
+async function uploadParts(file, ticket, missing, received, onPart) {
+  const queue = [...missing];
+  const worker = async () => {
+    for (let n = queue.shift(); n !== undefined; n = queue.shift()) {
+      received.push({ part_number: n, etag: await uploadPart(file, ticket, n) });
+      onPart(received.length);
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  return received.sort((a, b) => a.part_number - b.part_number);
+}
+const megas = (n) => (n / 1048576).toFixed(n < 10 * 1048576 ? 1 : 0) + " MB";
+// Tipo de archivo de la API a partir del MIME del navegador.
+function kindOf(file) {
+  const [group] = (file.type || "").split("/");
+  if (["video", "audio", "image"].includes(group)) return group;
+  return file.type === "application/pdf" ? "pdf" : "file";
+}
+// Cargas recientes de esta persona en este navegador. Es una comodidad: si el
+// almacenamiento no está disponible, la lista sale vacía y nada se rompe.
+function recentUploads() {
+  try {
+    return JSON.parse(localStorage.getItem("mooc.recent." + user.id)) || [];
+  } catch {
+    return [];
+  }
+}
+function rememberUpload(item) {
+  try {
+    const list = recentUploads().filter((x) => x.id !== item.id);
+    localStorage.setItem(
+      "mooc.recent." + user.id,
+      JSON.stringify([item, ...list].slice(0, 8)),
+    );
+  } catch {
+    // Sin almacenamiento local no hay lista de recientes.
+  }
+}
+// Sube un archivo de punta a punta: huella, inicio o reanudación, partes y
+// cierre. `report(texto, fracción)` recibe el avance. Devuelve el ID.
+async function uploadFile(file, kind, report, resumeId = "") {
+  const sha256 = await hashFile(file, (f) =>
+    report(`Preparando ${file.name}`, f * 0.05),
+  );
+  let ticket;
+  if (resumeId) {
+    const asset = await api.get(`/assets/${encodeURIComponent(resumeId)}`);
+    if (asset.size_bytes !== file.size || asset.declared_sha256 !== sha256)
+      throw new Error("Selecciona el archivo original para reanudar.");
+    ticket = await api.get(`/assets/${encodeURIComponent(resumeId)}/upload`);
+  } else {
+    ticket = await api.post("/assets/init", {
+      filename: file.name,
+      content_type: file.type || "application/octet-stream",
+      size_bytes: file.size,
+      sha256,
+      kind,
+    });
+  }
+  sessionStorage.setItem("mooc.upload." + user.id, ticket.asset_id);
+  const missing = ticket.missing_parts || ticket.parts.map((p) => p.part_number);
+  const done = ticket.total_parts - missing.length;
+  const progress = (count) => {
+    const sent = Math.min((done + count) * ticket.part_size, file.size);
+    report(
+      `Subiendo ${megas(sent)} de ${megas(file.size)}`,
+      0.05 + 0.95 * (sent / file.size),
+    );
+  };
+  progress(0);
+  const received = await uploadParts(
+    file,
+    ticket,
+    missing,
+    ticket.received_parts || [],
+    (count) => progress(count - (ticket.received_parts || []).length),
+  );
+  await api.post(`/assets/${ticket.asset_id}/complete`, {
+    parts: received.map((p) => ({ part_number: p.part_number, etag: p.etag })),
   });
-  return uploadParts(file, ticket, rest, received, output);
+  sessionStorage.removeItem("mooc.upload." + user.id);
+  rememberUpload({ id: ticket.asset_id, name: file.name, kind, size: file.size });
+  return ticket.asset_id;
+}
+// Video y audio pasan por FFmpeg y terminan en `ready`. El resto termina al
+// pasar la revisión antivirus (`clean`).
+const transcodes = (a) => a.kind === "video" || a.kind === "audio";
+const isFinal = (a) =>
+  ["ready", "failed", "rejected", "infected"].includes(a.status) ||
+  (a.status === "clean" && !transcodes(a));
+const STEP = { uploading: 0, uploaded: 0, scanning: 1, clean: 2, processing: 2, ready: 3 };
+function pipelineHTML(a) {
+  if (["failed", "rejected", "infected"].includes(a.status))
+    return `<p class="error">${e(status(a.status))}${a.last_error ? ". " + e(a.last_error) : ""}</p>`;
+  const steps = transcodes(a)
+    ? ["Subido", "Revisión antivirus", "Procesamiento", "Listo"]
+    : ["Subido", "Revisión antivirus", "Listo"];
+  const at = isFinal(a) ? steps.length : Math.min(STEP[a.status] ?? 0, steps.length - 1);
+  return `<ol class="pipeline">${steps
+    .map((label, i) => `<li class="${i < at ? "done" : i === at ? "now" : ""}">${label}</li>`)
+    .join("")}</ol>`;
+}
+// Consulta el estado cada 3 s hasta un estado final o hasta que la persona
+// cambia de página.
+async function watchAsset(id, render) {
+  const run = pageRun;
+  for (;;) {
+    const a = await api.get(`/assets/${encodeURIComponent(id)}`);
+    if (run !== pageRun) return a;
+    render(a);
+    if (isFinal(a)) return a;
+    await new Promise((r) => setTimeout(r, 3000));
+    if (run !== pageRun) return a;
+  }
+}
+function progressHTML(text, fraction) {
+  return `<div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(fraction * 100)}"><span style="width:${(fraction * 100).toFixed(1)}%"></span></div><p class="meta">${e(text)} · ${Math.round(fraction * 100)} %</p>`;
+}
+// Zona para soltar un archivo, sobre un input de archivo que el teclado y el
+// lector de pantalla siguen viendo.
+const dropHTML = (name, hint) =>
+  `<label class="drop"><input type="file" name="${name}" class="visually-hidden"><strong>Arrastra el archivo aquí</strong><span>${hint}</span></label>`;
+function bindDrop(zone, onFile) {
+  const input = zone.querySelector("input[type=file]");
+  input.addEventListener("change", () => input.files[0] && onFile(input.files[0]));
+  zone.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    zone.classList.add("over");
+  });
+  zone.addEventListener("dragleave", () => zone.classList.remove("over"));
+  zone.addEventListener("drop", (event) => {
+    event.preventDefault();
+    zone.classList.remove("over");
+    const file = event.dataTransfer.files[0];
+    if (!file) return;
+    const list = new DataTransfer();
+    list.items.add(file);
+    input.files = list.files;
+    onFile(file);
+  });
+}
+function recentRowHTML(r) {
+  return `<article class="row" data-asset="${e(r.id)}"><div><h3>${e(r.name)}</h3><p class="meta">${e(status(r.kind))} · ${megas(r.size)} · ID ${e(r.id)}</p><div class="asset-state"></div></div><div class="actions">${button("Copiar ID", "copy-id", "outline")}</div></article>`;
 }
 async function media() {
   if (!requireUser(["teacher", "admin"])) return;
-  const uploadKey = "mooc.upload." + user.id;
+  const recent = recentUploads();
+  const resume = sessionStorage.getItem("mooc.upload." + user.id) || "";
   show(
-    link("/studio", "← Estudio", "text") +
+    link("/studio", "← Estudio", "text back") +
       title(
         "Biblioteca de medios",
         "De tu archivo al aula.",
-        "Carga videos y documentos. El servidor verifica y procesa cada archivo antes de publicarlo.",
+        "Sube videos, imágenes y documentos. El servidor los revisa y los prepara antes de que lleguen al aula. También puedes subirlos directamente desde el editor del curso.",
       ) +
-      `<form id="upload" class="panel"><label>Archivo<input type="file" name="file" required ></label>${select("kind", "Tipo", ["video", "audio", "image", "pdf", "file"], "video")}${field("asset_id", "ID de carga para reanudar (opcional)", sessionStorage.getItem(uploadKey) || "", "text", false)}<button class="primary" type="submit">Cargar archivo ↗</button><output id="upload-status"></output></form><form id="asset-search">${field("id", "Consultar archivo por ID")}<button class="primary" type="submit">Consultar estado</button></form><div id="asset"></div>`,
+      `<form id="upload" class="panel">${dropHTML("file", "o haz clic para elegirlo. Videos, audio, imágenes y PDF.")}<div class="form-grid">${select("kind", "Tipo", ["video", "audio", "image", "pdf", "file"], "video")}${field("asset_id", "ID de carga para reanudar (opcional)", resume, "text", false)}</div><button class="primary" type="submit">Cargar archivo ↗</button><output id="upload-status"></output><div id="upload-pipeline"></div></form>` +
+      `<div class="section-head"><h2>Tus cargas recientes</h2></div><div id="recent">${recent.length ? recent.map(recentRowHTML).join("") : empty("Aquí verás los archivos que subas desde este navegador.")}</div>` +
+      `<section class="panel"><h2>Consultar un archivo</h2><form id="asset-search">${field("id", "Consultar archivo por ID")}<button class="primary" type="submit">Consultar estado</button></form><div id="asset"></div></section>`,
   );
-  bindForm("#upload", async (data, form) => {
-    const file = form.elements.file.files[0];
-    const output = $("#upload-status");
-    output.textContent = "Verificando archivo…";
-    const sha256 = await hashFile(file, output);
-    let ticket;
-    if (data.asset_id) {
-      ticket = await api.get(
-        `/assets/${encodeURIComponent(data.asset_id)}/upload`,
-      );
-      const asset = await api.get(
-        `/assets/${encodeURIComponent(data.asset_id)}`,
-      );
-      if (asset.size_bytes !== file.size || asset.declared_sha256 !== sha256)
-        throw new Error("Selecciona el archivo original para reanudar.");
-    } else {
-      ticket = await api.post("/assets/init", {
-        filename: file.name,
-        content_type: file.type || "application/octet-stream",
-        size_bytes: file.size,
-        sha256,
-        kind: data.kind,
-      });
-      form.elements.asset_id.value = ticket.asset_id;
-      sessionStorage.setItem(uploadKey, ticket.asset_id);
-    }
-    const missing =
-      ticket.missing_parts || ticket.parts.map((p) => p.part_number);
-    const received = await uploadParts(
-      file,
-      ticket,
-      missing,
-      ticket.received_parts || [],
-      output,
-    );
-    await api.post(`/assets/${ticket.asset_id}/complete`, {
-      parts: received.map((p) => ({
-        part_number: p.part_number,
-        etag: p.etag,
-      })),
-    });
-    output.textContent = `Carga completa. ID ${ticket.asset_id}. El servidor está procesando el archivo.`;
-    form.elements.file.value = "";
-    form.elements.asset_id.value = "";
-    sessionStorage.removeItem(uploadKey);
+  const form = $("#upload");
+  bindDrop($(".drop", form), (file) => {
+    form.elements.kind.value = kindOf(file);
+    $("strong", form).textContent = `${file.name} · ${megas(file.size)}`;
   });
+  bindForm("#upload", async (data) => {
+    const file = form.elements.file.files[0];
+    if (!file) throw new Error("Elige o arrastra un archivo.");
+    const output = $("#upload-status");
+    const id = await uploadFile(
+      file,
+      data.kind,
+      (text, f) => (output.innerHTML = progressHTML(text, f)),
+      data.asset_id,
+    );
+    output.textContent = `Carga completa. ID ${id}. El servidor está procesando el archivo.`;
+    form.elements.asset_id.value = "";
+    form.elements.file.value = "";
+    $("strong", form).textContent = "Arrastra el archivo aquí";
+    const list = $("#recent");
+    list.querySelector(`[data-asset="${id}"]`)?.remove();
+    list.querySelector(".empty")?.remove();
+    list.insertAdjacentHTML("afterbegin", recentRowHTML(recentUploads()[0]));
+    bindRecent();
+    void watchAsset(id, (a) => ($("#upload-pipeline").innerHTML = pipelineHTML(a))).catch(() => {});
+  });
+  function bindRecent() {
+    action("copy-id", async (el) => {
+      const id = el.closest("[data-asset]").dataset.asset;
+      await navigator.clipboard.writeText(id);
+      notice("ID copiado.");
+    });
+  }
+  bindRecent();
+  for (const r of recent)
+    void watchAsset(r.id, (a) => {
+      const slot = $(`[data-asset="${r.id}"] .asset-state`);
+      if (slot) slot.innerHTML = pipelineHTML(a);
+    }).catch(() => {});
   bindForm("#asset-search", async (data) => {
     const a = await api.get(`/assets/${encodeURIComponent(data.id)}`);
-    const failure = a.last_error
-      ? '<p class="error">' + e(a.last_error) + "</p>"
-      : "";
     $("#asset").innerHTML =
-      `<div class="panel"><h2>${e(a.original_filename)}</h2><span class="chip">${e(status(a.status))}</span><p>ID: ${e(a.id)}</p>${failure}<p>Usa este ID al agregar un recurso al curso.</p><div class="actions">${button("Actualizar estado", "refresh-asset", "outline")}${button("Abrir contenido", "asset-content", "text")}${button("Cancelar carga", "abort-upload", "text danger")}</div></div>`;
+      `<div class="inline-result"><h3>${e(a.original_filename)}</h3><span class="chip">${e(status(a.status))}</span><p class="meta">ID ${e(a.id)}</p>${pipelineHTML(a)}<div class="actions">${button("Actualizar estado", "refresh-asset", "outline")}${button("Abrir contenido", "asset-content", "text")}${button("Cancelar carga", "abort-upload", "text danger")}</div></div>`;
     action("refresh-asset", () => $("#asset-search").requestSubmit());
     action("abort-upload", async () => {
       await api.post(`/assets/${encodeURIComponent(data.id)}/abort`);
@@ -1319,9 +1472,7 @@ async function media() {
     action("asset-content", async () => {
       // La URL firmada en JSON y no la redirección: con la API en otro
       // origen, el navegador no puede seguir una redirección CORS al almacén.
-      const content = await api.get(
-        `/assets/${encodeURIComponent(data.id)}/content`,
-      );
+      const content = await api.get(`/assets/${encodeURIComponent(data.id)}/content`);
       const url = safeURL(content.url);
       modal(
         `<h2>Contenido del archivo</h2><a href="${url}" download="${e(a.original_filename)}" class="button">Descargar archivo</a>`,
