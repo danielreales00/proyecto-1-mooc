@@ -29,7 +29,7 @@ tipo_cola       = "e2-small"
 disco_cola_gb   = 20
 
 # Qué imágenes corren: el SHA que imprimió `make publicar`.
-version_imagenes = "0f1c56adc00f"
+version_imagenes = "b548ec19b40f"
 
 # Pools por proceso contra las 47 conexiones útiles de db-g1-small: con tres
 # instancias de cada servicio, 3 × 8 + 3 × 3 = 33, más las de los trabajos de

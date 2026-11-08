@@ -30,7 +30,7 @@ cambio y su motivo están en la sección 5.
 | Prueba | Resultado | Archivo |
 | --- | --- | --- |
 | Colección de Postman contra el backend (`make postman-nube`) | 72 peticiones, 146 aserciones, 0 fallos | [`postman-nube.log`](postman-nube.log) |
-| Recorrido de navegador contra el frontend (`make frontend-e2e-nube`) | Pasa. Profesor publica un curso, estudiante se inscribe, ve la lección, la imagen, el video HLS y el archivo | [`frontend/`](frontend/), capturas y [registro](frontend/nube-20261108T0003Z.log) |
+| Recorrido de navegador contra el frontend (`make frontend-e2e-nube`) | Pasa con las imágenes `b548ec19b40f`. Profesor sube el video desde el editor y publica el curso, estudiante se inscribe, ve la lección, la imagen, el video HLS y el archivo | [`frontend/`](frontend/), capturas y [registro](frontend/nube-20261108T0306Z.log) |
 
 ## 3. Una tarea de punta a punta
 
