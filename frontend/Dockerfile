@@ -5,5 +5,6 @@ RUN adduser -D -H -u 10001 web && chown -R web /data /config
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY index.html styles.css app.js api.js /srv/
 COPY vendor /srv/vendor
+COPY docs /srv/docs
 USER web
 EXPOSE 8080

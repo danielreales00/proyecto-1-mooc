@@ -1565,9 +1565,10 @@ async function route() {
     window.scrollTo(0, 0);
   }
 }
-// La documentación de la API vive en el backend, que puede estar en otro origen.
+// En local el proxy sirve Swagger en /docs. Con la API en otro origen, como en
+// Cloud Run, lo sirve la propia interfaz en /docs/.
 const docs = document.querySelector('a[href="/docs"]');
-if (docs) docs.href = API_ORIGIN + "/docs";
+if (docs && API_ORIGIN) docs.href = "/docs/";
 window.addEventListener("hashchange", route);
 window.addEventListener("pagehide", () => cleanup());
 if (api.token) {
