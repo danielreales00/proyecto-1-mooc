@@ -100,6 +100,18 @@ semilla crea las cuentas sintéticas con la contraseña del secreto
 | Reintentos | Exponencial de 10 a 600 s |
 | Entregas máximas | 5, después al topic `mooc-trabajos-muertos` |
 
+| Cuenta de servicio | Usada por | Permisos |
+| --- | --- | --- |
+| `mooc-web` | `mooc-backend`, `mooc-migrate`, `mooc-seed` | Publica en `mooc-trabajos`, lee `database-url`, firma URL sobre sí misma, objetos según bucket |
+| `mooc-worker` | `mooc-workers` | Publica en `mooc-trabajos`, lee `database-url`, objetos según bucket |
+| `mooc-frontend` | `mooc-frontend` | Ninguno sobre datos |
+| `mooc-pubsub-push` | Token OIDC de la suscripción | `roles/run.invoker` sobre `mooc-workers` |
+| `mooc-programador` | Cloud Scheduler (reaper y poda) | `roles/run.invoker` sobre `mooc-workers` |
+
+`mooc-workers` tiene ingreso interno y solo esas dos últimas cuentas pueden
+invocarlo. Frontend y backend admiten `allUsers` porque son la aplicación
+pública. Los permisos se definen en `identidades.tf` y `pubsub.tf`.
+
 ## 7. Verificación
 
 ```bash

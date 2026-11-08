@@ -17,13 +17,13 @@ arranque de los procesos y la infraestructura.
 
 ## Rúbrica y estado
 
-| Criterio | Puntos | Qué lo demuestra | Estado al 7 de noviembre |
+| Criterio | Puntos | Qué lo demuestra | Estado al 8 de noviembre |
 | --- | --- | --- | --- |
-| Despliegue e integración | 30 | Frontend, backend y workers en Cloud Run, integrados con Cloud SQL, Cloud Storage y Pub/Sub | No empezado |
-| Pub/Sub y workers | 25 | Flujo completo autenticado, confirmación tras persistir, reentregas sin efectos duplicados | La idempotencia ya existe (ADR-0008). Falta el adaptador |
-| Escalamiento | 20 | Máximo de 3 por servicio y métricas de instancias y mensajes pendientes con carga controlada | No empezado |
-| Configuración y acceso | 15 | Cuentas mínimas, workers solo invocables por la suscripción, secretos en Secret Manager | Secret Manager y cuentas por papel ya existen |
-| Documentación y video | 10 | Guía reproducible, diagrama, evidencias y video de hasta 20 minutos | No empezado |
+| Despliegue e integración | 30 | Frontend, backend y workers en Cloud Run, integrados con Cloud SQL, Cloud Storage y Pub/Sub | Desplegado. Postman y el recorrido de navegador pasan en la nube |
+| Pub/Sub y workers | 25 | Flujo completo autenticado, confirmación tras persistir, reentregas sin efectos duplicados | Hecho. Una tarea seguida en los registros y una reentrega confirmada sin repetirse |
+| Escalamiento | 20 | Máximo de 3 por servicio y métricas de instancias y mensajes pendientes con carga controlada | Hecho. Backend y workers llegaron a 3 instancias |
+| Configuración y acceso | 15 | Cuentas mínimas, workers solo invocables por la suscripción, secretos en Secret Manager | Hecho. Workers internos e invocables por dos cuentas |
+| Documentación y video | 10 | Guía reproducible, diagrama, evidencias y video de hasta 20 minutos | Guía, diagrama y evidencias hechos. Falta el video |
 
 ## Decisiones
 

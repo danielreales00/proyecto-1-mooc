@@ -14,7 +14,7 @@ spec:
     spec:
       containerConcurrency: 80
       containers:
-      - image: us-central1-docker.pkg.dev/mooc-509602/mooc/frontend:0f1c56adc00f
+      - image: us-central1-docker.pkg.dev/mooc-509602/mooc/frontend:67f908dd4ac2
         resources:
           limits:
             cpu: '1'
@@ -42,7 +42,7 @@ spec:
     spec:
       containerConcurrency: 20
       containers:
-      - image: us-central1-docker.pkg.dev/mooc-509602/mooc/api:0f1c56adc00f
+      - image: us-central1-docker.pkg.dev/mooc-509602/mooc/api:67f908dd4ac2
         resources:
           limits:
             cpu: '1'
@@ -71,10 +71,10 @@ spec:
     spec:
       containerConcurrency: 1
       containers:
-      - image: us-central1-docker.pkg.dev/mooc-509602/mooc/workers-cloudrun:0f1c56adc00f
+      - image: us-central1-docker.pkg.dev/mooc-509602/mooc/workers-cloudrun:67f908dd4ac2
         resources:
           limits:
-            cpu: '2'
+            cpu: '4'
             memory: 4Gi
       serviceAccountName: mooc-worker@mooc-509602.iam.gserviceaccount.com
       timeoutSeconds: 600

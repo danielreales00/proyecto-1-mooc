@@ -6,7 +6,8 @@ Michael Javier Patiño Pantoja.
 | Servicio | URL |
 | --- | --- |
 | Interfaz web | <https://mooc-frontend-568765476410.us-central1.run.app> |
-| API y documentación | <https://mooc-backend-568765476410.us-central1.run.app> (`/api/v1`, `/docs`) |
+| Documentación de la API | <https://mooc-frontend-568765476410.us-central1.run.app/docs/> |
+| API | <https://mooc-backend-568765476410.us-central1.run.app> (`/api/v1`, `/openapi.yaml`) |
 
 ## Qué cambió desde la Entrega 3
 

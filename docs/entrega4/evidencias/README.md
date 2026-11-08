@@ -1,7 +1,7 @@
 # Evidencias. Entrega 4
 
 Recogidas el 7 y el 8 de noviembre de 2026 (UTC) sobre el despliegue de
-`docs/entrega4/despliegue.md`, imágenes `0f1c56adc00f`. Cada archivo de esta
+`docs/entrega4/despliegue.md`. Las imágenes desplegadas son las `67f908dd4ac2`. Cada archivo de esta
 carpeta sale de una orden que se puede repetir. La orden está junto a cada
 tabla.
 
@@ -9,8 +9,8 @@ tabla.
 
 | Servicio | URL | Acceso |
 | --- | --- | --- |
-| Frontend | <https://mooc-frontend-568765476410.us-central1.run.app> | Público |
-| Backend | <https://mooc-backend-568765476410.us-central1.run.app> (`/api/v1`, `/docs`, `/readyz`) | Público |
+| Frontend | <https://mooc-frontend-568765476410.us-central1.run.app>, con la documentación de la API en `/docs/` | Público |
+| Backend | <https://mooc-backend-568765476410.us-central1.run.app> (`/api/v1`, `/openapi.yaml`, `/readyz`) | Público |
 | Workers | `https://mooc-workers-568765476410.us-central1.run.app` | Interno. Desde Internet responde 404 |
 
 La configuración leída de Cloud Run está en [`servicios.yaml`](servicios.yaml)
@@ -22,8 +22,8 @@ La configuración leída de Cloud Run está en [`servicios.yaml`](servicios.yaml
 | `mooc-backend` | 0 | 3 | 1 | 2 GiB | 20 | 60 s | `mooc-web` |
 | `mooc-workers` | 0 | 3 | 4 | 4 GiB | 1 | 600 s | `mooc-worker` |
 
-`servicios.yaml` se capturó antes de subir los workers a 4 vCPU y muestra 2. El
-cambio y su motivo están en la sección 5.
+Los workers tienen 4 vCPU desde el 8 de noviembre. El cambio y su motivo están
+en la sección 5.
 
 ## 2. Funcionamiento de punta a punta
 
