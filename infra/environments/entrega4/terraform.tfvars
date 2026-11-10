@@ -18,11 +18,11 @@ cloudsql_disco_gb = 10
 
 # Para detener la base entre sesiones: false y `make tf ENTORNO=entrega4
 # ARGS=apply`. Se versiona, así el equipo ve en git si debería estar encendida.
-cloudsql_encendida = true
+cloudsql_encendida = false
 
 # La máquina de la cola (Redis de sesiones y Mailpit) y el disparo del reaper.
 # Los servicios de Cloud Run escalan a cero solos y no cobran sin peticiones.
-entorno_encendido = true
+entorno_encendido = false
 
 imagen_maquinas = "debian-cloud/debian-12"
 tipo_cola       = "e2-small"
