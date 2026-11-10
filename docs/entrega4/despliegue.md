@@ -17,9 +17,38 @@ en [`arquitectura.md`](arquitectura.md).
 
 ## 2. Estado de Terraform
 
-El entorno `entrega4` hereda el estado de `entrega3`, así que la base, los
-buckets, los secretos, el registro y la cola no se recrean. Se copia una sola
-vez:
+### Desde un proyecto vacío
+
+Terraform crea todo, incluidos los secretos: la contraseña de la base y la de
+las cuentas sintéticas se generan en el `apply` y van directo a Secret
+Manager, sin pasar por el repositorio ni por el plan. Fuera de Terraform solo
+quedan el proyecto, su facturación y el bucket del estado.
+
+```bash
+make gcloud ARGS="projects create <proyecto>"
+make gcloud ARGS="billing projects link <proyecto> --billing-account=<cuenta>"
+make gcloud ARGS="storage buckets create gs://mooc-tfstate-<proyecto> \
+  --location us-central1 --uniform-bucket-level-access"
+make gcloud ARGS="storage buckets update gs://mooc-tfstate-<proyecto> --versioning"
+```
+
+Con otro proyecto se cambian `project_id` en `terraform.tfvars` y el bucket en
+`backend.tf`. Los servicios de Cloud Run necesitan sus imágenes antes de
+crearse, así que el primer `apply` crea solo el registro y sus dependencias:
+
+```bash
+make tf ENTORNO=entrega4 ARGS="init"
+make tf ENTORNO=entrega4 ARGS="plan -target=module.registry -out=p.tfplan"
+make tf ENTORNO=entrega4 ARGS="apply p.tfplan"
+```
+
+Después siguen las secciones 3 a 5.
+
+### Desde el estado de la Entrega 3
+
+Es el caso de este proyecto. El entorno `entrega4` hereda el estado de
+`entrega3`, así que la base, los buckets, los secretos, el registro y la cola
+no se recrean. Se copia una sola vez:
 
 ```bash
 make gcloud ARGS="storage cp gs://mooc-tfstate-mooc-509602/entrega3/default.tfstate \
@@ -86,11 +115,15 @@ semilla crea las cuentas sintéticas con la contraseña del secreto
 
 ## 6. Configuración de los servicios
 
-| Servicio | CPU | Memoria | Concurrencia | Tiempo máximo | Instancias | Ingreso |
-| --- | --- | --- | --- | --- | --- | --- |
-| `mooc-frontend` | 1 | 512 MiB | 80 | 30 s | 0 a 3 | Público |
-| `mooc-backend` | 1 | 2 GiB | 20 | 60 s | 0 a 3 | Público |
-| `mooc-workers` | 4 | 4 GiB | 1 | 600 s | 0 a 3 | Interno |
+| Servicio | Región | Mínimo | Máximo | CPU | Memoria | Concurrencia | Tiempo máximo | Ingreso |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `mooc-frontend` | `us-central1` | 0 | 3 | 1 | 512 MiB | 80 | 30 s | Público |
+| `mooc-backend` | `us-central1` | 0 | 3 | 1 | 2 GiB | 20 | 60 s | Público |
+| `mooc-workers` | `us-central1` | 0 | 3 | 4 | 4 GiB | 1 | 600 s | Interno |
+
+Un contenedor de aplicación por instancia. Ninguna réplica guarda estado en su
+disco: los datos viven en Cloud SQL, los archivos en Cloud Storage y las
+sesiones en Redis. Los valores salen de `terraform.tfvars`.
 
 | Pub/Sub | Valor |
 | --- | --- |
@@ -121,8 +154,10 @@ make postman-nube                          # la colección entera contra el back
 make frontend-e2e-nube                     # el recorrido de navegador contra el frontend
 ```
 
-`/readyz` responde `ok` para PostgreSQL, Redis y el almacén. Una petición a los
-workers desde Internet recibe 404, porque su ingreso es interno.
+`/readyz` responde `ok` para PostgreSQL, Redis y el almacén. La documentación
+de la API está en `https://mooc-frontend-568765476410.us-central1.run.app/docs/`.
+Una petición a los workers desde Internet recibe 404, porque su ingreso es
+interno.
 
 ### Seguir una tarea
 

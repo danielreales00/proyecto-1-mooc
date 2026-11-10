@@ -430,6 +430,36 @@ escalado-cloudrun: ## Línea de tiempo de instancias y mensajes pendientes en Cl
 	@docker run --rm -v mooc-gcloud:/root/.config/gcloud -v "$(CURDIR)/capacity-planning/metricas":/m:ro \
 		-w /m --entrypoint python3 $(GCLOUD_IMAGE) escalado_cloudrun.py $(DESDE) $(HASTA)
 
+# Los tres videos de carga en esta máquina, con el FFmpeg de la imagen local de
+# worker-media. No se versionan. Si ya existen, no se regeneran.
+.PHONY: medios-local
+medios-local: ## Genera en local los videos de carga A, B y C (capacity-planning/medios)
+	docker compose build worker-media >/dev/null
+	docker run --rm --user root -v "$(CURDIR)/capacity-planning/medios":/m --entrypoint sh mooc-worker-media /m/generar.sh
+
+# Cargas controladas contra Cloud Run desde esta máquina (Entrega 4). k6 corre
+# en un contenedor. La contraseña de las cuentas sintéticas se lee de Secret
+# Manager y viaja como variable de entorno, nunca como argumento.
+# Uso: make carga-api-nube [TASA=600] [DURACION=6m]
+.PHONY: carga-api-nube
+carga-api-nube: ## Lecturas del catálogo a tasa constante contra el backend en Cloud Run
+	@echo "k6 desde $$(date -u +%FT%TZ): $(or $(TASA),600) peticiones/s durante $(or $(DURACION),6m)"
+	@docker run --rm -v "$(CURDIR)/capacity-planning/k6":/k6:ro $(K6_IMAGE) run -q --no-color \
+		-e BASE_URL=https://$(NUBE_HOST) -e TASA=$(or $(TASA),600) -e DURACION=$(or $(DURACION),6m) \
+		/k6/escalado-api.js 2>&1 | grep -E "http_req_duration|http_reqs|fallos|dropped"
+	@echo "fin $$(date -u +%FT%TZ)"
+
+# Uso: make carga-medios-nube [VIDEOS=5] [PERFIL=b]
+.PHONY: carga-medios-nube
+carga-medios-nube: ## Sube VIDEOS videos a la vez contra Cloud Run y espera a que terminen
+	@echo "k6 desde $$(date -u +%FT%TZ): $(or $(VIDEOS),5) videos del perfil $(or $(PERFIL),b)"
+	@CLAVE=$$($(GCLOUD) secrets versions access latest --secret=seed-password) \
+	docker run --rm -e CLAVE -v "$(CURDIR)/capacity-planning/k6":/k6:ro -v "$(CURDIR)/capacity-planning/medios":/medios:ro \
+		$(K6_IMAGE) run -q --no-color -e BASE_URL=https://$(NUBE_HOST) \
+		-e VIDEOS=$(or $(VIDEOS),5) -e PERFIL=$(or $(PERFIL),b) /k6/escalado-medios.js 2>&1 \
+		| grep -E "video [0-9]|checks_failed|http_req_failed|ERRO"
+	@echo "fin $$(date -u +%FT%TZ)"
+
 # Uso: make carga-tabla ARGS="e1 e1-L0 e1-L1"   o   ARGS="detalle e1-L2"
 .PHONY: carga-tabla
 carga-tabla: ## Filas de las tablas de resultados a partir de los archivos de cada corrida

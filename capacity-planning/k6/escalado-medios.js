@@ -1,8 +1,8 @@
-// Ciclo de escalado de los workers (Sesión C, C4): N videos del perfil C
+// Ciclo de escalado de los workers (Sesión C, C4): N videos de un perfil (C por defecto)
 // subidos a la vez. Cada usuario virtual sube uno y espera su estado terminal;
 // la consola deja la hora de cada confirmación y de cada final.
 //
-//   k6 run -e BASE_URL=https://<host> -e CLAVE=... [-e VIDEOS=5] escalado-medios.js
+//   k6 run -e BASE_URL=https://<host> -e CLAVE=... [-e VIDEOS=5] [-e PERFIL=c] escalado-medios.js
 //
 // Los videos y su manifiesto salen de make carga-medios, montados en /medios.
 import { open as abrir } from 'k6/experimental/fs';
@@ -11,8 +11,11 @@ import { login } from './comun.js';
 import { subir, esperar } from './medios.js';
 
 const N = Number(__ENV.VIDEOS || 5);
-const meta = open('/medios/manifiesto.jsonl').trim().split('\n').map((l) => JSON.parse(l)).find((m) => m.perfil === 'c');
-const archivo = await abrir('/medios/c.mp4');
+// PERFIL=b sube el video de 1 min en 720p, más corto que el C, para una
+// demostración en vivo.
+const PERFIL = __ENV.PERFIL || 'c';
+const meta = open('/medios/manifiesto.jsonl').trim().split('\n').map((l) => JSON.parse(l)).find((m) => m.perfil === PERFIL);
+const archivo = await abrir(`/medios/${PERFIL}.mp4`);
 
 export const options = {
   scenarios: { videos: { executor: 'per-vu-iterations', vus: N, iterations: 1, maxDuration: '60m' } },
@@ -25,12 +28,12 @@ export function setup() {
 
 export default async function subirVideo(d) {
   const n = exec.vu.idInTest;
-  const a = await subir(archivo, meta, d.token, 'c');
+  const a = await subir(archivo, meta, d.token, PERFIL);
   if (!a) {
     console.log(`video ${n}: la subida falló`);
     return;
   }
   console.log(`video ${n}: asset ${a.id} confirmado ${new Date(a.confirmada).toISOString()}`);
-  const estado = esperar(a, d.token, 'c', 55 * 60);
+  const estado = esperar(a, d.token, PERFIL, 55 * 60);
   console.log(`video ${n}: asset ${a.id} terminó en ${estado} ${new Date().toISOString()}`);
 }
