@@ -223,9 +223,10 @@ Todo por el frontend, en la pestaña 1.
    publicación**. La versión queda inmutable.
 9. **Salir.**
 
-> El video tarda en procesarse. Si al llegar al paso 8 sigue en
-> «Procesamiento», hacer el paso 7 con calma y volver. No esperar en silencio
-> delante de la cámara.
+> El video tarda unos 50 s en procesarse con un worker ya encendido, medido el
+> 13 de noviembre, y un minuto más si el worker arranca en frío. Si al llegar al
+> paso 8 sigue en «Procesamiento», hacer el paso 7 con calma y volver. No
+> esperar en silencio delante de la cámara.
 
 ### Estudiante (2 min)
 
@@ -244,10 +245,12 @@ Todo por el frontend, en la pestaña 1.
 ## Bloque 3. Una tarea por Pub/Sub (3 min)
 
 **Al empezar este bloque, Santiago lanza la carga de los workers en la terminal
-2.** Son cinco videos a la vez. La orden espera a que todos terminen:
+2.** Son nueve videos a la vez. Cada uno tarda unos 50 s en procesarse y hay
+tres workers, así que la cola dura tres turnos, unos cuatro minutos. La orden
+espera a que todos terminen:
 
 ```bash
-make carga-medios-nube VIDEOS=5 PERFIL=b
+make carga-medios-nube VIDEOS=9 PERFIL=b
 ```
 
 ### El recorrido de la tarea
@@ -353,6 +356,8 @@ directo no enseñó algo, se dice y se usa esta tabla.**
 ### Los workers y los mensajes pendientes
 
 Va al final del bloque para que la carga del bloque 3 lleve unos cinco minutos.
+Si la cola ya se vació, el gráfico de la pestaña 3 conserva el pico de mensajes
+pendientes de los últimos minutos.
 Cloud Monitoring publica con unos tres minutos de retraso. Repetir
 `make escalado-cloudrun` con `HASTA` en la hora actual, o enseñar la pestaña 3.
 Deben verse los workers en 3 y **mensajes pendientes** en la suscripción: tres
