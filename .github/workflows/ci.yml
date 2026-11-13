@@ -15,7 +15,7 @@ on:
 env:
   # Parche exacto: con solo "1.26", setup-go reutiliza la versión de la caché
   # del runner aunque tenga vulnerabilidades corregidas (GO-2026-6617).
-  GO_VERSION: "1.26.10"
+  GO_VERSION: "1.26.11"
 
 jobs:
   # --- build y lint ---------------------------------------------------------

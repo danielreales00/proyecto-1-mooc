@@ -4,7 +4,7 @@
 # y en Windows; las órdenes se escriben y se ven igual que siempre.
 SHELL := /bin/bash
 COMPOSE := docker compose
-GO_IMAGE := golang:1.26.10-alpine
+GO_IMAGE := golang:1.26.11-alpine
 
 # Herramientas de seguridad con versión fija, por lo mismo que las imágenes: el
 # CI y la máquina de cada quien deben ejecutar exactamente lo mismo. Subirlas es
