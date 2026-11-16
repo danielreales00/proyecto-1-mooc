@@ -11,7 +11,7 @@
 | 5 | **Verificación del escalamiento**: instancias ante carga y mensajes pendientes | [`docs/entrega4/evidencias/README.md#5-escalamiento-con-carga-controlada`](docs/entrega4/evidencias/README.md#5-escalamiento-con-carga-controlada) |
 | 6 | **Decisión de arquitectura** | [ADR-0020](arquitectura/adr/0020-cloud-run-y-pubsub.md) |
 | 7 | **Release** | Tag [`entrega-4`](../../tree/entrega-4) |
-| 8 | **Video de sustentación** | Pendiente |
+| 8 | **Video de sustentación** | [youtu.be/_FXjV5mIN84](https://youtu.be/_FXjV5mIN84) |
 
 Las credenciales no se publican. El acceso para el equipo docente se comunica
 por el medio privado del curso.
@@ -39,7 +39,10 @@ IaaS](#entrega-3--aplicación-elástica-iaas).
 
 ---
 
-**Video Entrega 2: [https://youtu.be/b-06APPZTCM](https://youtu.be/b-06APPZTCM)**
+**Videos de sustentación:**
+[Entrega 4](https://youtu.be/_FXjV5mIN84) ·
+[Entrega 3](https://www.youtube.com/watch?v=_RsKRuP7awg) ·
+[Entrega 2](https://youtu.be/b-06APPZTCM)
 
 Plataforma web de cursos masivos abiertos en línea. Un profesor autorizado crea
 un curso estructurado en módulos, unidades y recursos, y lo publica como una
