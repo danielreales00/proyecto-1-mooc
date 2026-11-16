@@ -354,6 +354,29 @@ tardaba 196 s. Con 4 vCPU las transcodificaciones siguientes tardaron de 286 a
 `make psql-nube` entraba a la base desde una máquina de API de la Entrega 3, que
 ya no existe. Queda sin sustituto en esta entrega.
 
+### Calidad del código al cerrar la Entrega 4
+
+La Entrega 3 cerró con **cero hallazgos abiertos**. El análisis sobre el commit
+de esta entrega devuelve **siete**, todos introducidos por el trabajo de la 4
+—el frontend nuevo y el worker de Pub/Sub— y ninguno de seguridad:
+
+| Severidad | Regla | Dónde | Qué |
+| --- | --- | --- | --- |
+| Critical | `css:S4657` | `frontend/styles.css:483` | La forma abreviada `text-decoration` pisa `text-decoration-color`. Es el único con riesgo de defecto visible |
+| Major | `css:S4666` | `frontend/styles.css:879` y `:882` | `.progress` y `.progress span` declarados dos veces |
+| Major | `go:S107` | `backend/cmd/worker/push.go:26` | Función con 8 parámetros sobre los 7 permitidos |
+| Major | `javascript:S3358` | `frontend/app.js:1364` | Ternario anidado |
+| Major | `javascript:S7721` | `frontend/app.js:1450` | `bindRecent` declarada dentro de otra función |
+| Minor | `javascript:S9382` | `frontend/app.js:1269` | `await` dentro de un bucle |
+
+La rúbrica de esta entrega no puntúa calidad de código, y ninguno justifica
+tocar el frontend después de grabar el video: el código entregado debe ser el
+que se demuestra. **Se registran aquí como la línea base de la Entrega 5**, con
+el `css:S4657` como el primero a mirar, porque una forma abreviada que pisa una
+propiedad larga sí puede verse en pantalla.
+
+Duplicación 1,3 %, mantenibilidad A, deuda estimada 37 minutos.
+
 ## 12. Glosario
 
 | Término | Significado |

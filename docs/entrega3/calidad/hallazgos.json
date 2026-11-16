@@ -1,1 +1,326 @@
-[]
+[
+  {
+    "key": "1e24969b-d762-4d49-a567-e7faedab8d48",
+    "rule": "css:S4657",
+    "severity": "CRITICAL",
+    "component": "mooc:frontend/styles.css",
+    "project": "mooc",
+    "line": 483,
+    "hash": "69ded7c7a65056f41f2c107110ab7ebb",
+    "textRange": {
+      "startLine": 483,
+      "endLine": 483,
+      "startOffset": 2,
+      "endOffset": 17
+    },
+    "flows": [],
+    "status": "OPEN",
+    "message": "Overridden property \"text-decoration-color\" by shorthand \"text-decoration\"",
+    "effort": "5min",
+    "debt": "5min",
+    "author": "danielrealesp@gmail.com",
+    "tags": [],
+    "creationDate": "2026-10-13T22:36:17+0000",
+    "updateDate": "2026-11-16T02:52:20+0000",
+    "type": "BUG",
+    "scope": "MAIN",
+    "quickFixAvailable": false,
+    "messageFormattings": [],
+    "codeVariants": [],
+    "cleanCodeAttribute": "LOGICAL",
+    "cleanCodeAttributeCategory": "INTENTIONAL",
+    "impacts": [
+      {
+        "softwareQuality": "RELIABILITY",
+        "severity": "HIGH"
+      }
+    ],
+    "issueStatus": "OPEN",
+    "prioritizedRule": false,
+    "fromSonarQubeUpdate": false,
+    "internalTags": [],
+    "linkedTicketStatus": "NOT_LINKED"
+  },
+  {
+    "key": "effcf2be-d5f1-4f28-b984-ce153659bfff",
+    "rule": "css:S4666",
+    "severity": "MAJOR",
+    "component": "mooc:frontend/styles.css",
+    "project": "mooc",
+    "line": 882,
+    "hash": "c4ffe74e679f27898e82899f13807575",
+    "textRange": {
+      "startLine": 882,
+      "endLine": 882,
+      "startOffset": 0,
+      "endOffset": 14
+    },
+    "flows": [],
+    "status": "OPEN",
+    "message": "Duplicate selector \".progress span\", first used at line 512",
+    "effort": "1min",
+    "debt": "1min",
+    "author": "santiago.chica1997@gmail.com",
+    "tags": [],
+    "creationDate": "2026-11-08T02:22:26+0000",
+    "updateDate": "2026-11-16T02:52:20+0000",
+    "type": "CODE_SMELL",
+    "scope": "MAIN",
+    "quickFixAvailable": false,
+    "messageFormattings": [],
+    "codeVariants": [],
+    "cleanCodeAttribute": "LOGICAL",
+    "cleanCodeAttributeCategory": "INTENTIONAL",
+    "impacts": [
+      {
+        "softwareQuality": "MAINTAINABILITY",
+        "severity": "MEDIUM"
+      }
+    ],
+    "issueStatus": "OPEN",
+    "prioritizedRule": false,
+    "fromSonarQubeUpdate": false,
+    "internalTags": [],
+    "linkedTicketStatus": "NOT_LINKED"
+  },
+  {
+    "key": "ea81f9e3-ee50-4cc8-b7eb-06a2a292083f",
+    "rule": "css:S4666",
+    "severity": "MAJOR",
+    "component": "mooc:frontend/styles.css",
+    "project": "mooc",
+    "line": 879,
+    "hash": "8376e06e74cb300235b4799f09e53ab8",
+    "textRange": {
+      "startLine": 879,
+      "endLine": 879,
+      "startOffset": 0,
+      "endOffset": 9
+    },
+    "flows": [],
+    "status": "OPEN",
+    "message": "Duplicate selector \".progress\", first used at line 505",
+    "effort": "1min",
+    "debt": "1min",
+    "author": "santiago.chica1997@gmail.com",
+    "tags": [],
+    "creationDate": "2026-11-08T02:22:26+0000",
+    "updateDate": "2026-11-16T02:52:20+0000",
+    "type": "CODE_SMELL",
+    "scope": "MAIN",
+    "quickFixAvailable": false,
+    "messageFormattings": [],
+    "codeVariants": [],
+    "cleanCodeAttribute": "LOGICAL",
+    "cleanCodeAttributeCategory": "INTENTIONAL",
+    "impacts": [
+      {
+        "softwareQuality": "MAINTAINABILITY",
+        "severity": "MEDIUM"
+      }
+    ],
+    "issueStatus": "OPEN",
+    "prioritizedRule": false,
+    "fromSonarQubeUpdate": false,
+    "internalTags": [],
+    "linkedTicketStatus": "NOT_LINKED"
+  },
+  {
+    "key": "ba873a53-c878-4858-b3c3-50a4c16a58bd",
+    "rule": "go:S107",
+    "severity": "MAJOR",
+    "component": "mooc:backend/cmd/worker/push.go",
+    "project": "mooc",
+    "line": 26,
+    "hash": "11d67e4ef9d366c290f9a1c16b4e8a2a",
+    "textRange": {
+      "startLine": 26,
+      "endLine": 26,
+      "startOffset": 5,
+      "endOffset": 15
+    },
+    "flows": [
+      {
+        "locations": [
+          {
+            "component": "mooc:backend/cmd/worker/push.go",
+            "textRange": {
+              "startLine": 28,
+              "endLine": 28,
+              "startOffset": 23,
+              "endOffset": 48
+            },
+            "msgFormattings": []
+          }
+        ]
+      }
+    ],
+    "status": "OPEN",
+    "message": "This function has 8 parameters, which is greater than the 7 authorized.",
+    "effort": "20min",
+    "debt": "20min",
+    "author": "santiago.chica1997@gmail.com",
+    "tags": [
+      "brain-overload"
+    ],
+    "creationDate": "2026-11-07T22:57:20+0000",
+    "updateDate": "2026-11-16T02:52:20+0000",
+    "type": "CODE_SMELL",
+    "scope": "MAIN",
+    "quickFixAvailable": false,
+    "messageFormattings": [],
+    "codeVariants": [],
+    "cleanCodeAttribute": "FOCUSED",
+    "cleanCodeAttributeCategory": "ADAPTABLE",
+    "impacts": [
+      {
+        "softwareQuality": "MAINTAINABILITY",
+        "severity": "MEDIUM"
+      }
+    ],
+    "issueStatus": "OPEN",
+    "prioritizedRule": false,
+    "fromSonarQubeUpdate": false,
+    "internalTags": [],
+    "linkedTicketStatus": "NOT_LINKED"
+  },
+  {
+    "key": "ab8f263c-9487-4205-b431-601e2c221214",
+    "rule": "javascript:S3358",
+    "severity": "MAJOR",
+    "component": "mooc:frontend/app.js",
+    "project": "mooc",
+    "line": 1364,
+    "hash": "020bf84de648d3357e3e9c099a810d22",
+    "textRange": {
+      "startLine": 1364,
+      "endLine": 1364,
+      "startOffset": 55,
+      "endOffset": 76
+    },
+    "flows": [],
+    "status": "OPEN",
+    "message": "Extract this nested ternary operation into an independent statement.",
+    "effort": "5min",
+    "debt": "5min",
+    "author": "santiago.chica1997@gmail.com",
+    "tags": [
+      "editable-source",
+      "confusing"
+    ],
+    "creationDate": "2026-11-08T02:22:26+0000",
+    "updateDate": "2026-11-16T02:52:20+0000",
+    "type": "CODE_SMELL",
+    "scope": "MAIN",
+    "quickFixAvailable": false,
+    "messageFormattings": [],
+    "codeVariants": [],
+    "cleanCodeAttribute": "CLEAR",
+    "cleanCodeAttributeCategory": "INTENTIONAL",
+    "impacts": [
+      {
+        "softwareQuality": "MAINTAINABILITY",
+        "severity": "MEDIUM"
+      }
+    ],
+    "issueStatus": "OPEN",
+    "prioritizedRule": false,
+    "fromSonarQubeUpdate": false,
+    "internalTags": [],
+    "linkedTicketStatus": "NOT_LINKED"
+  },
+  {
+    "key": "a8685873-00e7-4b06-ab4e-8a0e7d163024",
+    "rule": "javascript:S7721",
+    "severity": "MAJOR",
+    "component": "mooc:frontend/app.js",
+    "project": "mooc",
+    "line": 1450,
+    "hash": "5611b20bf4d6c4e59144ebed4ec12344",
+    "textRange": {
+      "startLine": 1450,
+      "endLine": 1450,
+      "startOffset": 2,
+      "endOffset": 21
+    },
+    "flows": [],
+    "status": "OPEN",
+    "message": "Move function 'bindRecent' to the outer scope.",
+    "effort": "5min",
+    "debt": "5min",
+    "author": "santiago.chica1997@gmail.com",
+    "tags": [
+      "performance",
+      "optimization",
+      "editable-source",
+      "javascript"
+    ],
+    "creationDate": "2026-11-08T02:22:26+0000",
+    "updateDate": "2026-11-16T02:52:20+0000",
+    "type": "CODE_SMELL",
+    "scope": "MAIN",
+    "quickFixAvailable": false,
+    "messageFormattings": [],
+    "codeVariants": [],
+    "cleanCodeAttribute": "EFFICIENT",
+    "cleanCodeAttributeCategory": "INTENTIONAL",
+    "impacts": [
+      {
+        "softwareQuality": "MAINTAINABILITY",
+        "severity": "MEDIUM"
+      }
+    ],
+    "issueStatus": "OPEN",
+    "prioritizedRule": false,
+    "fromSonarQubeUpdate": false,
+    "internalTags": [],
+    "linkedTicketStatus": "NOT_LINKED"
+  },
+  {
+    "key": "645e9b46-223d-44c9-b7eb-d076f3c2226b",
+    "rule": "javascript:S9382",
+    "severity": "MINOR",
+    "component": "mooc:frontend/app.js",
+    "project": "mooc",
+    "line": 1269,
+    "hash": "1b9a68b265dae77da49e978eee8df396",
+    "textRange": {
+      "startLine": 1269,
+      "endLine": 1269,
+      "startOffset": 44,
+      "endOffset": 77
+    },
+    "flows": [],
+    "status": "OPEN",
+    "message": "Unexpected `await` inside a loop.",
+    "effort": "5min",
+    "debt": "5min",
+    "author": "santiago.chica1997@gmail.com",
+    "tags": [
+      "async",
+      "performance",
+      "es2017",
+      "promise"
+    ],
+    "creationDate": "2026-11-08T02:22:26+0000",
+    "updateDate": "2026-11-16T02:52:20+0000",
+    "type": "CODE_SMELL",
+    "scope": "MAIN",
+    "quickFixAvailable": false,
+    "messageFormattings": [],
+    "codeVariants": [],
+    "cleanCodeAttribute": "EFFICIENT",
+    "cleanCodeAttributeCategory": "INTENTIONAL",
+    "impacts": [
+      {
+        "softwareQuality": "MAINTAINABILITY",
+        "severity": "LOW"
+      }
+    ],
+    "issueStatus": "OPEN",
+    "prioritizedRule": false,
+    "fromSonarQubeUpdate": false,
+    "internalTags": [],
+    "linkedTicketStatus": "NOT_LINKED"
+  }
+]
