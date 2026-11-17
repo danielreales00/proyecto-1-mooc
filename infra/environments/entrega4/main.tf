@@ -15,6 +15,10 @@ module "red" {
   cuenta_cola     = google_service_account.cola.email
 
   depends_on = [google_project_service.apis]
+
+  # La salida a Internet solo la usan las maquinas, asi que sigue al mismo
+  # interruptor: con el entorno apagado, la NAT deja de cobrar.
+  salida_encendida = var.entorno_encendido
 }
 
 module "secretos" {

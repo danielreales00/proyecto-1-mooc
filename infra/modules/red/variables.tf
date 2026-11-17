@@ -36,3 +36,15 @@ variable "cuenta_cola" {
   description = "Correo de la cuenta de servicio de la máquina de la cola."
   type        = string
 }
+
+# La salida a Internet solo hace falta cuando hay maquinas encendidas: las usan
+# para bajar imagenes de Docker Hub, paquetes y el repositorio del agente. Las
+# APIs de Google no pasan por aqui —la subred tiene acceso privado— y Cloud Run
+# sale con `private-ranges-only`, sin enrutar Internet por la VPC.
+#
+# Cloud NAT cobra por hora y por pasarela, haya trafico o no, del orden de 30
+# USD al mes. Con el entorno apagado eso es gasto puro.
+variable "salida_encendida" {
+  type    = bool
+  default = true
+}

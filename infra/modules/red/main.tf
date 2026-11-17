@@ -63,14 +63,18 @@ resource "google_compute_address" "cola_interna" {
 # imágenes de Docker Hub, paquetes del sistema, el repositorio del agente.
 
 resource "google_compute_router" "salida" {
+  count = var.salida_encendida ? 1 : 0
+
   name    = "${var.nombre}-router"
   region  = var.region
   network = google_compute_network.vpc.id
 }
 
 resource "google_compute_router_nat" "salida" {
+  count = var.salida_encendida ? 1 : 0
+
   name                               = "${var.nombre}-nat"
-  router                             = google_compute_router.salida.name
+  router                             = google_compute_router.salida[0].name
   region                             = var.region
   nat_ip_allocate_option             = "AUTO_ONLY"
   source_subnetwork_ip_ranges_to_nat = "LIST_OF_SUBNETWORKS"

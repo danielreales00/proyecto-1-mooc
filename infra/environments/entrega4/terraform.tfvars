@@ -22,7 +22,7 @@ cloudsql_encendida = false
 
 # La máquina de la cola (Redis de sesiones y Mailpit) y el disparo del reaper.
 # Los servicios de Cloud Run escalan a cero solos y no cobran sin peticiones.
-entorno_encendido = true
+entorno_encendido = false
 
 imagen_maquinas = "debian-cloud/debian-12"
 tipo_cola       = "e2-small"
