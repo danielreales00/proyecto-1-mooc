@@ -18,7 +18,7 @@ func Abrir(ctx context.Context, cfg config.Config, log *slog.Logger) (queue.Publ
 	case "asynq":
 		return queue.NewPublisher(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisQueueDB, cfg.RedisTLS), nil
 	case "pubsub":
-		return pubsub.Open(ctx, cfg.PubSubProject, cfg.PubSubTopic, log)
+		return pubsub.Open(ctx, cfg.PubSubProject, cfg.PubSubTopic, cfg.PubSubTopicos, log)
 	default:
 		return nil, fmt.Errorf("QUEUE_BACKEND desconocido: %q (asynq o pubsub)", cfg.QueueBackend)
 	}

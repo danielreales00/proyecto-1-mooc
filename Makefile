@@ -142,6 +142,72 @@ prueba-pubsub: env ## Pub/Sub con el emulador: API que publica y worker de Cloud
 		&& echo "  confirmada sin repetir el trabajo" \
 		|| { echo "  la reentrega no se confirmó como repetida"; exit 1; }
 
+# La función de insignias en local (ADR-0021). La API enruta badge.issue a su
+# propio topic y el worker deja de atenderlo. La función corre con el mismo
+# marco que en Cloud Run functions, y el script le entrega el mensaje como
+# CloudEvent, que es lo que hace Eventarc en la nube. La segunda entrega del
+# mismo evento tiene que confirmarse sin emitir otra insignia.
+FUNCION_LOCAL := mooc-funcion-local
+RUTAS_TOPICOS := -e PUBSUB_TOPICOS=badge.issue=mooc-insignias
+.PHONY: prueba-funcion
+prueba-funcion: env ## Función de insignias con el emulador: topic propio, CloudEvent y reentrega
+	@docker build -q --target api -t mooc-api-pubsub backend >/dev/null
+	@docker build -q --target workers-cloudrun -t mooc-workers-cloudrun backend >/dev/null
+	@docker rm -f mooc-pubsub-emu mooc-api-pubsub mooc-workers-push $(FUNCION_LOCAL) >/dev/null 2>&1 || true
+	@docker run -d --name mooc-pubsub-emu --network mooc_default $(EMULADOR_PUBSUB) \
+		gcloud beta emulators pubsub start --host-port=0.0.0.0:8085 --project=local >/dev/null
+	@timeout 120 bash -c 'until $(CURL_STACK) -o /dev/null http://mooc-pubsub-emu:8085/; do sleep 2; done' \
+		|| { echo "el emulador de Pub/Sub no arrancó"; exit 1; }
+	@for t in mooc-trabajos mooc-insignias; do \
+		$(CURL_STACK) -o /dev/null -X PUT http://mooc-pubsub-emu:8085/v1/projects/local/topics/$$t; done
+	@$(CURL_STACK) -o /dev/null -X PUT -H 'Content-Type: application/json' \
+		-d '{"topic":"projects/local/topics/mooc-trabajos","ackDeadlineSeconds":600,"pushConfig":{"pushEndpoint":"http://mooc-workers-push:8080/pubsub/push"}}' \
+		http://mooc-pubsub-emu:8085/v1/projects/local/subscriptions/mooc-workers
+	@# En la nube Eventarc crea su propia suscripción. Aquí la de pull la lee el script.
+	@$(CURL_STACK) -o /dev/null -X PUT -H 'Content-Type: application/json' \
+		-d '{"topic":"projects/local/topics/mooc-insignias","ackDeadlineSeconds":60}' \
+		http://mooc-pubsub-emu:8085/v1/projects/local/subscriptions/prueba-insignias
+	@docker run -d --name mooc-workers-push --network mooc_default --env-file .env $(EN_PUBSUB) \
+		$(RUTAS_TOPICOS) -e CLAMAV_ADDR=127.0.0.1:3310 mooc-workers-cloudrun >/dev/null
+	@docker run -d --name mooc-api-pubsub --network mooc_default --env-file .env $(EN_PUBSUB) \
+		$(RUTAS_TOPICOS) mooc-api-pubsub >/dev/null
+	@docker run -d --name $(FUNCION_LOCAL) --network mooc_default --env-file .env $(EN_PUBSUB) \
+		-v "$(PWD)/backend":/src -w /src $(GO_CACHE) $(GO_IMAGE) go run ./cmd/funcion >/dev/null
+	@echo "── esperando a clamd, al worker y a la función"
+	@timeout 240 bash -c 'until docker logs mooc-workers-push 2>&1 | grep -q "worker push escuchando"; do sleep 3; done' \
+		|| { docker logs mooc-workers-push 2>&1 | tail -20; echo "el worker no arrancó"; exit 1; }
+	@timeout 240 bash -c 'until docker logs $(FUNCION_LOCAL) 2>&1 | grep -q "función escuchando"; do sleep 3; done' \
+		|| { docker logs $(FUNCION_LOCAL) 2>&1 | tail -20; echo "la función no arrancó"; exit 1; }
+	@# Una sola corrida de newman, con los heartbeats espaciados 11 s como pide
+	@# SEG-7 para aprobar. Mientras corre, el script espera el badge.issue en el
+	@# topic de la función y lo entrega dos veces, antes de que SEG-8 pregunte.
+	@set -e; trap 'docker rm -f mooc-pubsub-emu mooc-api-pubsub mooc-workers-push $(FUNCION_LOCAL) mooc-entrega-evento >/dev/null 2>&1' EXIT; \
+	$(COMPOSE) run -d --name mooc-entrega-evento herramientas ./scripts/entregar-evento.py \
+		mooc-pubsub-emu:8085 projects/local/subscriptions/prueba-insignias \
+		http://$(FUNCION_LOCAL):8080/ --veces 2 --espera 900 >/dev/null; \
+	echo "── recorrido SEG-1 a SEG-8, unos 10 minutos"; \
+	$(HERRAMIENTAS) newman run postman/mooc.postman_collection.json \
+		-e postman/mooc.postman_environment.json --working-dir postman \
+		--env-var base_url=http://mooc-api-pubsub:8080 --env-var mailpit_url=http://localhost:8026 \
+		--folder "SEG-1 · Identidad" --folder "SEG-2 · Autoría y publicación" \
+		--folder "SEG-3 · Carga multimedia" --folder "SEG-5 · Catálogo, inscripción y consumo" \
+		--folder "SEG-6 · Quiz" --folder "SEG-7 · Progreso y aprobación" \
+		--folder "SEG-8 · Insignia" --delay-request 11000; \
+	echo "── Eventarc simulado: dos entregas del mismo evento a la función"; \
+	docker wait mooc-entrega-evento >/dev/null; docker logs mooc-entrega-evento 2>&1 | tail -3; \
+	echo "── el worker no atiende badge.issue"; \
+	if docker logs mooc-workers-push 2>&1 | grep -q '"msg":"trabajo iniciado".*"type":"badge.issue"'; then \
+		echo "  el worker ejecutó badge.issue"; exit 1; fi; \
+	echo "  ninguna entrega de badge.issue en el worker"; \
+	echo "── la función"; \
+	docker logs $(FUNCION_LOCAL) 2>&1 | grep -q '"msg":"trabajo completado".*badge.issue' \
+		&& echo "  emitió la insignia" \
+		|| { docker logs $(FUNCION_LOCAL) 2>&1 | tail -20; echo "  no completó el trabajo"; exit 1; }; \
+	docker logs $(FUNCION_LOCAL) 2>&1 | grep -q 'entrega repetida de un trabajo terminado.*badge.issue' \
+		&& echo "  la segunda entrega se confirmó sin repetirlo" \
+		|| { echo "  la segunda entrega no se confirmó como repetida"; exit 1; }
+
+
 .PHONY: migraciones-concurrentes
 migraciones-concurrentes: env ## Tres `migrate` simultáneos sobre una base vacía
 	@pg="$(COMPOSE) exec -T postgres psql -U $${POSTGRES_USER:-mooc} -d $${POSTGRES_DB:-mooc} -qtA"; \

@@ -6,13 +6,11 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -20,9 +18,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"mooc/backend/internal/adapters/almacenes"
 	"mooc/backend/internal/adapters/clamav"
 	"mooc/backend/internal/adapters/ffmpeg"
-	"mooc/backend/internal/adapters/gcs"
 	"mooc/backend/internal/adapters/mailer"
 	"mooc/backend/internal/adapters/objectstore"
 	"mooc/backend/internal/adapters/postgres"
@@ -92,7 +90,7 @@ func run() error {
 	emails := identity.NewEmailWorker(
 		mailer.New(cfg.SMTPAddr, cfg.MailFrom, cfg.SMTPUser, cfg.SMTPPassword), cfg.PublicBaseURL, log)
 
-	almacen, err := abrirAlmacen(cfg)
+	almacen, err := almacenes.Abrir(cfg)
 	if err != nil {
 		return err
 	}
@@ -123,6 +121,14 @@ func run() error {
 	}
 
 	if cfg.QueueBackend == "pubsub" {
+		// Un tipo con topic propio tiene otro consumidor, como la función de
+		// insignias (ADR-0021). El worker no lo atiende aunque le llegue una
+		// copia vieja: el mensaje se confirma sin ejecutarlo y la función
+		// recibe el suyo por su topic.
+		for tipo, topic := range cfg.PubSubTopicos {
+			delete(manejadores, tipo)
+			log.Info("tipo atendido fuera del worker", "type", tipo, "topic", topic)
+		}
 		return servirPush(ctx, cfg, log, pool, runner, manejadores, reaper, podador)
 	}
 
@@ -319,24 +325,3 @@ func (l asynqLogger) Info(args ...any)  { l.log.Info("asynq", "msg", args) }
 func (l asynqLogger) Warn(args ...any)  { l.log.Warn("asynq", "msg", args) }
 func (l asynqLogger) Error(args ...any) { l.log.Error("asynq", "msg", args) }
 func (l asynqLogger) Fatal(args ...any) { l.log.Error("asynq fatal", "msg", args) }
-
-// abrirAlmacen elige la implementación del almacén de objetos.
-//
-// Es el único sitio donde el proveedor se nombra. `s3` cubre MinIO en Compose
-// y cualquier almacén compatible; `gcs` es el adaptador nativo de Cloud Storage
-// (ADR-0015, D1), que se autentica con la identidad de la máquina y firma sin
-// clave descargada.
-//
-// Falla al arrancar y no a mitad de una subida: un almacén mal configurado
-// tiene que notarse en el despliegue.
-func abrirAlmacen(cfg config.Config) (objectstore.Almacen, error) {
-	switch strings.ToLower(cfg.ObjectStore) {
-	case "", "s3":
-		return objectstore.Open(cfg.S3Endpoint, cfg.S3PublicEndpoint, cfg.S3AccessKey,
-			cfg.S3SecretKey, cfg.S3UseSSL, cfg.S3Buckets.Originals)
-	case "gcs":
-		return gcs.Open(context.Background(), cfg.GCSSigner, cfg.S3Buckets.Originals)
-	default:
-		return nil, fmt.Errorf("OBJECT_STORE=%q no es una opción válida (s3, gcs)", cfg.ObjectStore)
-	}
-}

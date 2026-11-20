@@ -97,6 +97,10 @@ type Config struct {
 	PubSubProject     string
 	PubSubTopic       string
 	PubSubMaxEntregas int
+	// PubSubTopicos manda algunos tipos de trabajo a su propio topic, con
+	// otro consumidor (ADR-0021). El resto va a PubSubTopic. Formato de
+	// PUBSUB_TOPICOS: `badge.issue=mooc-insignias,tipo=topic`.
+	PubSubTopicos map[string]string
 	// ReaperEdadMinima es cuánto espera un trabajo 'queued' antes de que el
 	// reaper lo dé por no publicado. Con Pub/Sub un trabajo puede esperar
 	// turno más tiempo sin estar perdido.
@@ -188,6 +192,7 @@ func Load() (Config, error) {
 		PubSubProject:     opt("PUBSUB_PROJECT", os.Getenv("GOOGLE_CLOUD_PROJECT")),
 		PubSubTopic:       opt("PUBSUB_TOPIC", "mooc-trabajos"),
 		PubSubMaxEntregas: optInt("PUBSUB_MAX_ENTREGAS", 5),
+		PubSubTopicos:     map[string]string{},
 		ReaperEdadMinima:  optDuration("REAPER_EDAD_MINIMA", 30*time.Second),
 		CORSOrigins:       lista(os.Getenv("CORS_ORIGINS")),
 		MetricsEnabled:    optBool("METRICS_ENABLED", true),
@@ -203,6 +208,11 @@ func Load() (Config, error) {
 			missing = append(missing, "PUBSUB_PROJECT")
 		}
 	}
+	rutas, err := rutasTopicos(os.Getenv("PUBSUB_TOPICOS"))
+	if err != nil {
+		return Config{}, err
+	}
+	c.PubSubTopicos = rutas
 
 	if c.ObjectStore == "gcs" {
 		// Sin endpoint ni claves: el cliente nativo se autentica con la
@@ -285,6 +295,20 @@ func optDuration(key string, def time.Duration) time.Duration {
 // escucha ahí. En Compose no existe esa variable y manda `HTTP_ADDR`. El orden
 // importa: si algún día ambas están puestas, la del entorno de ejecución gana,
 // porque es la única que no se puede desobedecer.
+// rutasTopicos lee PUBSUB_TOPICOS: pares `tipo=topic` separados por comas.
+func rutasTopicos(v string) (map[string]string, error) {
+	rutas := map[string]string{}
+	for _, par := range lista(v) {
+		tipo, topic, ok := strings.Cut(par, "=")
+		tipo, topic = strings.TrimSpace(tipo), strings.TrimSpace(topic)
+		if !ok || tipo == "" || topic == "" {
+			return nil, fmt.Errorf("PUBSUB_TOPICOS: %q no tiene la forma tipo=topic", par)
+		}
+		rutas[tipo] = topic
+	}
+	return rutas, nil
+}
+
 // lista separa una variable por comas, sin espacios ni elementos vacíos.
 func lista(v string) []string {
 	var out []string

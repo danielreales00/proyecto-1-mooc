@@ -94,9 +94,10 @@ La función llega a Cloud SQL por su IP privada con salida directa a la VPC
 
 ### D7 — Dependencia nueva
 
-`github.com/GoogleCloudPlatform/functions-framework-go`. El runtime de Go de
-Cloud Run functions la exige para registrar la función. Se añade a la lista de
-ADR-0002 y a `scripts/arquitectura.sh`.
+`github.com/GoogleCloudPlatform/functions-framework-go` y, por la firma que
+exige, `github.com/cloudevents/sdk-go/v2`. El runtime de Go de Cloud Run
+functions los necesita para registrar la función y recibir el CloudEvent. Se
+añaden a la lista de ADR-0002 y a `scripts/arquitectura.sh`.
 
 ## Alternativas consideradas
 

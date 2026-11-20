@@ -156,6 +156,19 @@ func Kill(ctx context.Context, db dbx.DB, jobKey, reason string) error {
 	return err
 }
 
+// Intentos devuelve cuántas veces se reclamó un trabajo. TryClaim lo sube en
+// cada reclamo. La función de insignias lo usa como número de entrega, porque
+// Eventarc no lo trae en el evento (ADR-0021, D4).
+func Intentos(ctx context.Context, db dbx.DB, jobKey string) (int, error) {
+	var n int
+	err := db.QueryRow(ctx,
+		`SELECT attempt FROM platform.job_runs WHERE job_key = $1`, jobKey).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("leer los intentos de %s: %w", jobKey, err)
+	}
+	return n, nil
+}
+
 // Estado devuelve el estado registrado de un trabajo. existe es false si la
 // job_key no está en platform.job_runs.
 func Estado(ctx context.Context, db dbx.DB, jobKey string) (estado string, existe bool, err error) {

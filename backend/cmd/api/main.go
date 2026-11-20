@@ -7,20 +7,18 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"mooc/backend/internal/adapters/gcs"
+	"mooc/backend/internal/adapters/almacenes"
 	"mooc/backend/internal/adapters/objectstore"
 	"mooc/backend/internal/adapters/playback"
 	"mooc/backend/internal/adapters/postgres"
@@ -100,7 +98,7 @@ func run() error {
 		log.Warn("límites por IP multiplicados para prueba de carga", "factor", cfg.RateLimitIPFactor)
 	}
 
-	store, err := abrirAlmacen(cfg)
+	store, err := almacenes.Abrir(cfg)
 	if err != nil {
 		return err
 	}
@@ -382,26 +380,5 @@ func traducirLearning(err error) error {
 		return media.ErrNotFound
 	default:
 		return err
-	}
-}
-
-// abrirAlmacen elige la implementación del almacén de objetos.
-//
-// Es el único sitio donde el proveedor se nombra. `s3` cubre MinIO en Compose
-// y cualquier almacén compatible; `gcs` es el adaptador nativo de Cloud Storage
-// (ADR-0015, D1), que se autentica con la identidad de la máquina y firma sin
-// clave descargada.
-//
-// Falla al arrancar y no a mitad de una subida: un almacén mal configurado
-// tiene que notarse en el despliegue.
-func abrirAlmacen(cfg config.Config) (objectstore.Almacen, error) {
-	switch strings.ToLower(cfg.ObjectStore) {
-	case "", "s3":
-		return objectstore.Open(cfg.S3Endpoint, cfg.S3PublicEndpoint, cfg.S3AccessKey,
-			cfg.S3SecretKey, cfg.S3UseSSL, cfg.S3Buckets.Originals)
-	case "gcs":
-		return gcs.Open(context.Background(), cfg.GCSSigner, cfg.S3Buckets.Originals)
-	default:
-		return nil, fmt.Errorf("OBJECT_STORE=%q no es una opción válida (s3, gcs)", cfg.ObjectStore)
 	}
 }

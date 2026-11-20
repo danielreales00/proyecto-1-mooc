@@ -43,6 +43,8 @@ Añadidas en la Entrega 2:
 | --- | --- | --- |
 | `cloud.google.com/go/storage` | Adaptador nativo de Cloud Storage | Lo decide ADR-0015 (D1): la interoperabilidad S3 exige claves HMAC. Resuelve autenticación con la identidad de la máquina, reintentos con *backoff* y firma V4 con signBlob, que a mano es tan arriesgada como la de S3 |
 | `cloud.google.com/go/pubsub/v2` | Publicar los trabajos en Cloud Pub/Sub desde la API y los workers | Lo decide ADR-0020: la Entrega 4 sustituye asynq por Pub/Sub. Resuelve autenticación con la identidad del servicio, reintentos y el emulador local, que a mano exigirían reimplementar gRPC o la API REST con OAuth |
+| `github.com/GoogleCloudPlatform/functions-framework-go` | Registrar la función de insignias en el runtime de Go de Cloud Run functions | Lo decide ADR-0021. El runtime de Go exige este paquete para registrar la función y recibir el CloudEvent. No tiene sustituto en la biblioteca estándar |
+| `github.com/cloudevents/sdk-go/v2` | El tipo del CloudEvent que recibe la función | Lo decide ADR-0021. Es el tipo que exige la firma de `functions.CloudEvent`. Solo se usa en `backend/funcion.go` |
 | `google.golang.org/api` | `iterator.Done` al listar objetos | Viene con la anterior; se importa un solo paquete |
 
 El precio es el árbol indirecto: gRPC, OpenTelemetry y los clientes generados

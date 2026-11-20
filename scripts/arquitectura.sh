@@ -81,6 +81,8 @@ aprobadas=(
   github.com/prometheus/client_golang
   cloud.google.com/go/storage
   cloud.google.com/go/pubsub/v2
+  github.com/GoogleCloudPlatform/functions-framework-go
+  github.com/cloudevents/sdk-go/v2
   google.golang.org/api
 )
 directas=$(awk '/^require \(/{f=1;next}/^\)/{f=0}f && !/indirect/{print $1}' go.mod | grep -v '^$')

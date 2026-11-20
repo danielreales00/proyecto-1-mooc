@@ -2,7 +2,8 @@
 //
 // El trabajo ya está registrado en platform.job_runs cuando llega aquí: este
 // adaptador solo lo entrega al topic. La suscripción push lo lleva al servicio
-// de workers, que lo ejecuta con queue.Push.
+// de workers, que lo ejecuta con queue.Push. Los tipos con topic propio van a
+// otro consumidor, como la función de insignias (ADR-0021).
 package pubsub
 
 import (
@@ -20,25 +21,58 @@ import (
 
 type Publisher struct {
 	cliente *ps.Client
-	topic   *ps.Publisher
-	log     *slog.Logger
+	// porDefecto recibe los tipos sin ruta. rutas lleva cada tipo con topic
+	// propio a su publicador, y nombres guarda el nombre del topic para los
+	// registros.
+	porDefecto *ps.Publisher
+	rutas      map[string]*ps.Publisher
+	nombres    map[*ps.Publisher]string
+	log        *slog.Logger
 }
 
 var _ queue.Publicador = (*Publisher)(nil)
 
 // Open se autentica con la identidad del entorno: la cuenta de servicio del
 // servicio de Cloud Run, o el emulador si PUBSUB_EMULATOR_HOST está definida.
-func Open(ctx context.Context, proyecto, topic string, log *slog.Logger) (*Publisher, error) {
+//
+// rutas lleva un tipo de trabajo a su propio topic (PUBSUB_TOPICOS). Puede ser
+// nil.
+func Open(ctx context.Context, proyecto, topic string, rutas map[string]string,
+	log *slog.Logger) (*Publisher, error) {
 	cliente, err := ps.NewClient(ctx, proyecto)
 	if err != nil {
 		return nil, fmt.Errorf("cliente de Pub/Sub: %w", err)
 	}
-	t := cliente.Publisher(topic)
-	// Sin lotes de espera: la API publica después del commit y responde, y un
-	// trabajo no debe quedarse esperando a que se llene un lote.
-	t.PublishSettings.DelayThreshold = 0
-	t.PublishSettings.CountThreshold = 1
-	return &Publisher{cliente: cliente, topic: t, log: log}, nil
+	p := &Publisher{cliente: cliente, rutas: map[string]*ps.Publisher{},
+		nombres: map[*ps.Publisher]string{}, log: log}
+	porNombre := map[string]*ps.Publisher{}
+	abrir := func(nombre string) *ps.Publisher {
+		if t, ok := porNombre[nombre]; ok {
+			return t
+		}
+		t := cliente.Publisher(nombre)
+		// Sin lotes de espera: la API publica después del commit y
+		// responde, y un trabajo no debe quedarse esperando a que se llene
+		// un lote.
+		t.PublishSettings.DelayThreshold = 0
+		t.PublishSettings.CountThreshold = 1
+		porNombre[nombre] = t
+		p.nombres[t] = nombre
+		return t
+	}
+	p.porDefecto = abrir(topic)
+	for tipo, nombre := range rutas {
+		p.rutas[tipo] = abrir(nombre)
+	}
+	return p, nil
+}
+
+// topicDe elige el topic de un tipo de trabajo.
+func (p *Publisher) topicDe(tipo string) *ps.Publisher {
+	if t, ok := p.rutas[tipo]; ok {
+		return t
+	}
+	return p.porDefecto
 }
 
 // Publish espera la confirmación de Pub/Sub, no la ejecución del trabajo. Si
@@ -50,7 +84,8 @@ func (p *Publisher) Publish(ctx context.Context, j jobs.Job, traceID string) err
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	res := p.topic.Publish(ctx, &ps.Message{
+	topic := p.topicDe(j.Type)
+	res := topic.Publish(ctx, &ps.Message{
 		Data: cuerpo,
 		// El tipo decide el manejador del worker. job_key y cola van para
 		// filtrar los registros y el topic de mensajes muertos.
@@ -63,7 +98,7 @@ func (p *Publisher) Publish(ctx context.Context, j jobs.Job, traceID string) err
 	// El primer eslabón para seguir una tarea en los registros: la misma
 	// job_key y trace_id aparecen después en el worker.
 	p.log.Info("trabajo publicado", "job_key", j.Key, "type", j.Type,
-		"trace_id", traceID, "message_id", id)
+		"trace_id", traceID, "message_id", id, "topic", p.nombres[topic])
 	return nil
 }
 
@@ -75,6 +110,8 @@ func (p *Publisher) Republicar(ctx context.Context, j jobs.Job, traceID string) 
 }
 
 func (p *Publisher) Close() error {
-	p.topic.Stop()
+	for t := range p.nombres {
+		t.Stop()
+	}
 	return p.cliente.Close()
 }
