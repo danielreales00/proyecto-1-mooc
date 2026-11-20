@@ -102,7 +102,7 @@ ADR-0002 y a `scripts/arquitectura.sh`.
 
 | Alternativa | Por qué no |
 | --- | --- |
-| Un solo topic con un filtro por atributo en la suscripción de Eventarc | Los disparadores de Pub/Sub de Eventarc no filtran por atributos del mensaje. La función recibiría todos los tipos |
+| Un solo topic con un filtro por tipo en el disparador de Eventarc | No está comprobado que un disparador de Pub/Sub filtre por atributos del mensaje. Un topic propio separa a los consumidores sin depender de eso, y el worker deja de recibir la tarea por construcción |
 | Filtrar dentro de la función y confirmar lo que no es suyo | La tarea seguiría llegando también al worker. Habría dos consumidores |
 | Conector de Acceso a VPC sin servidor | Cobra por hora aunque no haya tráfico. La salida directa no |
 | Código de la función en un módulo de Go separado | Tendría que copiar o reemplazar los paquetes `internal` del backend, y el resultado de la tarea podría divergir |
