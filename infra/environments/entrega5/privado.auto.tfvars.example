@@ -1,0 +1,15 @@
+# Copiar a privado.auto.tfvars y completar. Ese archivo no se versiona: lleva
+# correos de personas y la cuenta de facturación. Terraform lo carga solo por
+# terminar en .auto.tfvars. Los valores reales circulan por el medio privado
+# del equipo.
+
+# Cuenta de facturación enlazada al proyecto (Facturación > Administrar cuentas).
+cuenta_facturacion = "XXXXXX-XXXXXX-XXXXXX"
+
+# Quién puede firmar como mooc-web desde su máquina (make prueba-gcs). Cada
+# persona del equipo que trabaje en el adaptador añade aquí su cuenta.
+firmantes_desarrollo = ["user:persona@example.com"]
+
+# Integrantes que operan el proyecto con su cuenta, sin claves descargadas
+# (ADR-0015, D3). Quien creó el proyecto ya es propietario y no va aquí.
+integrantes = ["user:persona@example.com"]

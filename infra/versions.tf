@@ -15,5 +15,10 @@ terraform {
       source  = "hashicorp/random"
       version = "~> 3.9"
     }
+    # Empaqueta el código de la función de insignias para subirlo (ADR-0021).
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.7"
+    }
   }
 }
