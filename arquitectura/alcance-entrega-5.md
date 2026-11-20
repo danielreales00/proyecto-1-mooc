@@ -90,7 +90,7 @@ recursos»).
 
 ## Decisiones propuestas
 
-Se confirman en `arquitectura/adr/0021-*.md` antes de implementar.
+Registradas en [`adr/0021`](adr/0021-insignias-en-una-cloud-run-function.md), en estado «Propuesto» hasta revisarlas.
 
 | # | Decisión | Por qué |
 | --- | --- | --- |
@@ -131,7 +131,7 @@ confirman en la fase 2, con un `plan` real.
 
 | Fase | Contenido | Se verifica con | Costo |
 | --- | --- | --- | --- |
-| F0 | Responder P1 a P5 (hecho, salvo P4 y P5) y escribir el ADR-0021 con las decisiones | El ADR revisado | Ninguno |
+| F0 | Responder P1 a P5 y escribir el ADR-0021. Hecho, salvo P4 y P5, que se confirman en F2 y F3 | El ADR revisado | Ninguno |
 | F1 | Código: la función con su prueba, el enrutamiento por tipo en el publicador, `badge.issue` fuera del worker | `make ci` y una prueba local que entrega un CloudEvent a la función | Ninguno |
 | F2 | Terraform: entorno `entrega5`, topic, función, disparador, identidades, permisos y lo manual que se pueda automatizar | `plan` revisado, sin tocar datos | Ninguno hasta aplicar |
 | F3 | Despliegue con `init`, `plan` y `apply`, y una tarea real de punta a punta | Una insignia emitida por la función y una reentrega sin duplicado | Por uso |
