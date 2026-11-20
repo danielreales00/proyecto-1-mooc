@@ -132,8 +132,8 @@ confirman en la fase 2, con un `plan` real.
 | Fase | Contenido | Se verifica con | Costo |
 | --- | --- | --- | --- |
 | F0 | Responder P1 a P5 y escribir el ADR-0021. Hecho, salvo P4 y P5, que se confirman en F2 y F3 | El ADR revisado | Ninguno |
-| F1 | Código: la función con su prueba, el enrutamiento por tipo en el publicador, `badge.issue` fuera del worker | `make ci` y una prueba local que entrega un CloudEvent a la función | Ninguno |
-| F2 | Terraform: entorno `entrega5`, topic, función, disparador, identidades, permisos y lo manual que se pueda automatizar | `plan` revisado, sin tocar datos | Ninguno hasta aplicar |
+| F1 | Código: la función con su prueba, el enrutamiento por tipo en el publicador, `badge.issue` fuera del worker. **Hecho el 20 de noviembre** | `make ci` y `make prueba-funcion`, en verde | Ninguno |
+| F2 | Terraform: entorno `entrega5`, topic, función, disparador, identidades, permisos y lo manual que se pueda automatizar. **Escrito y validado. Falta copiar el estado y el primer `plan`** | `plan` revisado, sin tocar datos | Ninguno hasta aplicar |
 | F3 | Despliegue con `init`, `plan` y `apply`, y una tarea real de punta a punta | Una insignia emitida por la función y una reentrega sin duplicado | Por uso |
 | F4 | Análisis serverless, diagrama, guía, evidencias y guion | Revisión contra la rúbrica | Ninguno |
 | F5 | Video, enlace en el README, tag `entrega-5` y apagado | El enlace y el tag | Por uso |
