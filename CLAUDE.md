@@ -19,6 +19,8 @@ Equipo de 4 personas, 4–5 entregas en 13 semanas.
 | `arquitectura/despliegue-gcp.md` | Plan ejecutable del despliegue de la Entrega 2 (dos máquinas). Línea base. |
 | `arquitectura/alcance-entrega-3.md` | Alcance de la Entrega 3: arquitectura elástica, frontend en la nube, calidad. |
 | `arquitectura/despliegue-gcp-entrega3.md` | **Plan ejecutable del despliegue elástico**: grupos, balanceador, cola, autoscalers. |
+| `arquitectura/enunciado-entrega-5.md` | Transcripción del PDF de la Entrega 5: funciones serverless y Terraform. |
+| `arquitectura/alcance-entrega-5.md` | **Alcance de la entrega en curso**: requisitos con ID (`E5-`), decisiones, preguntas abiertas y fases. |
 | `capacity-planning/pruebas_de_carga_entrega2.md` | **Definición e informe de los dos escenarios de carga.** Ruta fijada por el enunciado. |
 | `docs/entrega2/` | Documento de arquitectura entregable. Ruta fijada por el enunciado. |
 | `arquitectura/pendientes.md` | Notas de trabajo. No es entregable. |
