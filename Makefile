@@ -568,6 +568,10 @@ tf: ## terraform de un entorno: make tf ENTORNO=dev ARGS="plan"
 	@# el tag entrega-3.
 	@test "$(ENTORNO)" != entrega3 \
 		|| { echo "entrega3 está congelado: su estado pasó a entrega4 (ver el tag entrega-3)"; exit 1; }
+	@# entrega4 cedió su estado a entrega5 (ADR-0021). Su configuración sigue en
+	@# el tag entrega-4.
+	@test "$(ENTORNO)" != entrega4 \
+		|| { echo "entrega4 está congelado: su estado pasó a entrega5 (ver el tag entrega-4)"; exit 1; }
 	@test -d infra/environments/$(ENTORNO) \
 		|| { echo "no existe infra/environments/$(ENTORNO)"; exit 1; }
 	@# Terraform se autentica con las credenciales por defecto de la aplicación,
