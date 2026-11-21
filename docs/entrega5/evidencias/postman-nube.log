@@ -1,0 +1,528 @@
+túnel listo: mooc-tunel:8025
+Contra https://mooc-backend-568765476410.us-central1.run.app. Los heartbeats exigen 10 s de separación: esto tarda.
+newman
+
+MOOC · Entrega 2 (nube)
+
+❏ SEG-1 · Identidad
+↳ Salud — readyz
+  GET https://mooc-backend-568765476410.us-central1.run.app/readyz [200 OK, 368B, 1042ms]
+  ✓  200
+  ✓  postgres ok
+  ✓  redis ok
+  ✓  objectstore ok
+
+↳ Registro inválido — lista exhaustiva de errores
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/auth/register [422 unknown, 939B, 276ms]
+  ✓  422
+  ✓  application/problem+json (RFC 9457)
+  ✓  trae trace_id para correlacionar
+  ✓  acumula los tres errores
+  ✓  cada error trae código y campo
+
+↳ Registro de estudiante
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/auth/register [202 Accepted, 572B, 684ms]
+  ✓  202 Accepted — no bloquea esperando al worker
+  ✓  queda pendiente de verificación
+
+↳ Leer token del correo (Mailpit)
+  GET http://mooc-tunel:8025/api/v1/search?query=to:estudiante+1795304480834@mooc.local [200 OK, 925B, 402ms]
+  ✓  el worker entregó el correo
+  ✓  llegó en 1 intento(s)
+  GET http://mooc-tunel:8025/api/v1/message/TcSwtXJqJRcaXu3RncCaP7 [200 OK, 1.01kB, 157ms]
+  ✓  el cuerpo del correo se puede leer
+  ✓  el correo trae el token de verificación
+
+↳ Verificar el correo
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/auth/verify-email [200 OK, 460B, 140ms]
+  ✓  200
+  ✓  verificado
+
+↳ Reutilizar el token — debe fallar
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/auth/verify-email [422 unknown, 649B, 314ms]
+  ✓  422 al reutilizarlo
+
+↳ Login con contraseña incorrecta
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/auth/login [401 Unauthorized, 652B, 505ms]
+  ✓  401
+
+↳ Login
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/auth/login [200 OK, 756B, 406ms]
+  ✓  200
+  ✓  devuelve token de sesión
+  ✓  el registro público solo crea estudiantes (RF-01)
+
+↳ GET /me
+  GET https://mooc-backend-568765476410.us-central1.run.app/api/v1/me [200 OK, 581B, 129ms]
+  ✓  200
+  ✓  correo verificado
+  ✓  nunca expone el hash de la contraseña
+
+↳ GET /me sin sesión
+  GET https://mooc-backend-568765476410.us-central1.run.app/api/v1/me [401 Unauthorized, 551B, 208ms]
+  ✓  401
+
+↳ Correo duplicado
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/auth/register [409 Conflict, 627B, 130ms]
+  ✓  409 conflict
+
+↳ Cerrar sesión
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/auth/logout [204 No Content, 284B, 185ms]
+  ✓  204
+
+↳ GET /me tras cerrar sesión — revocación inmediata
+  GET https://mooc-backend-568765476410.us-central1.run.app/api/v1/me [401 Unauthorized, 556B, 274ms]
+  ✓  401 sin esperar a que expire
+
+❏ SEG-1b · Administración
+↳ Login como administradora
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/auth/login [200 OK, 734B, 315ms]
+  ✓  200
+  ✓  el rol es administrador
+
+↳ 1 · Listar usuarios
+  GET https://mooc-backend-568765476410.us-central1.run.app/api/v1/admin/users?limit=50 [200 OK, 12.7kB, 210ms]
+  ✓  200
+  ✓  están las cuentas de la semilla
+  ✓  NUNCA sale el hash de la contraseña
+  ┌
+  │ 'usuarios:', 50, '· roles:', 'student, teacher'
+  └
+
+↳ 2 · Crear un profesor
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/admin/users [201 Created, 586B, 346ms]
+  ✓  201
+  ✓  nace como profesor y activo
+  ✓  el correo se da por verificado: el administrador responde por él
+  ┌
+  │ 'La cuenta nace SIN contraseña utilizable.', 'Solo se 
+  │ activa por el enlace de la invitación.'
+  └
+
+↳ 3 · La invitación quedó registrada (outbox)
+  GET https://mooc-backend-568765476410.us-central1.run.app/api/v1/admin/jobs?type=email.send&limit=20 [200 OK, 1.57kB, 872ms]
+  ✓  200
+  ✓  el trabajo del correo existe en PostgreSQL
+  ┌
+  │ 'job_key:', 'email.send:invitation:01a2007e-a467-7605-
+  │ 901c-539decaaf927', '· estado:', 'succeeded', '· inten
+  │ to:', 1
+  │ 'Se registró en la MISMA transacción que el usuario,',
+  │  'y se publicó en la cola DESPUÉS del commit. Por eso 
+  │ existe aquí', 'aunque Redis se hubiera caído: el reape
+  │ r lo recuperaría.'
+  └
+
+↳ 4 · Sesiones de un usuario
+  GET https://mooc-backend-568765476410.us-central1.run.app/api/v1/admin/users/01a2007e-a3f7-7727-8ef7-bfdecda76893/sessions [200 OK, 331B, 271ms]
+  ✓  200
+  ✓  recién creado, no tiene ninguna sesión
+
+↳ 5 · Revocar las sesiones de un usuario
+  DELETE https://mooc-backend-568765476410.us-central1.run.app/api/v1/admin/users/01a2007e-a3f7-7727-8ef7-bfdecda76893/sessions [200 OK, 422B, 297ms]
+  ✓  200
+  ✓  responde cuántas revocó
+  ┌
+  │ 'Redis manda sobre la validez de la sesión, así que', 
+  │ 'revocar tiene efecto en la petición siguiente, sin ve
+  │ ntana de gracia.'
+  └
+
+↳ 6 · Suspender al profesor invitado
+  PATCH https://mooc-backend-568765476410.us-central1.run.app/api/v1/admin/users/01a2007e-a3f7-7727-8ef7-bfdecda76893 [200 OK, 578B, 188ms]
+  ✓  200
+  ✓  queda suspendido
+  ┌
+  │ 'Suspender corta el acceso YA: el servicio borra sus',
+  │  'sesiones de Redis tras el commit, no espera a que ex
+  │ piren.'
+  └
+
+↳ 7 · ÚLTIMO ADMINISTRADOR: degradarse a sí misma
+  PATCH https://mooc-backend-568765476410.us-central1.run.app/api/v1/admin/users/01a0e64d-55b6-717b-a448-a87b11b32275 [409 Conflict, 618B, 199ms]
+  ✓  409: el sistema no se queda sin administrador
+  ✓  el problema viene tipado
+  ✓  trae trace_id, como todo error de la API
+  ┌
+  │ 'Es la única administradora activa, así que degradarse
+  │ ', 'dejaría el sistema sin nadie que pueda administrar
+  │ lo.'
+  │ 'La comprobación va DENTRO de la transacción, con FOR 
+  │ UPDATE:', 'hacerla antes dejaría una ventana en la que
+  │  dos peticiones', 'simultáneas degradan a los dos últi
+  │ mos administradores.'
+  └
+
+↳ 8 · Auditoría: quién hizo qué
+  GET https://mooc-backend-568765476410.us-central1.run.app/api/v1/admin/audit?action=admin.user_created&limit=5 [200 OK, 2.25kB, 1647ms]
+  ✓  200
+  ✓  el alta del paso 2 quedó auditada
+  ✓  consta QUIÉN lo hizo, no solo qué pasó
+  ┌
+  │ 'acción:', 'admin.user_created', '· rol:', 'admin', '·
+  │  ip:', '190.24.96.252', '· trace:', '01a2007e-a3d3-767
+  │ 6-8cf2-9736765c5251'
+  │ 'Y esta tabla es de SOLO INSERCIÓN: un trigger de', 'P
+  │ ostgreSQL rechaza cualquier UPDATE o DELETE.'
+  └
+
+↳ 9 · Trabajos en la cola de muertos
+  GET https://mooc-backend-568765476410.us-central1.run.app/api/v1/admin/jobs?status=dead&limit=10 [200 OK, 350B, 395ms]
+  ✓  200
+  ┌
+  │ 'No hay trabajos muertos: el paso siguiente comprobará
+  │  el rechazo.'
+  └
+
+↳ 10 · Reencolar: 202 si está en la DLQ, 409 si no
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/admin/jobs/1004/requeue [409 Conflict, 614B, 656ms]
+  ✓  409: solo se reencola lo que está muerto o falló
+  ✓  el problema viene tipado
+  ┌
+  │ 'El trabajo usado ya se completó, así que se rechaza.'
+  │ , 'Reencolarlo lo ejecutaría por segunda vez sin motiv
+  │ o.'
+  └
+
+↳ 11 · RECHAZO: reencolar un trabajo ya completado
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/admin/jobs/1004/requeue [409 Conflict, 614B, 184ms]
+  ✓  409: solo se reencola lo que está muerto o falló
+  ✓  el problema viene tipado
+  ┌
+  │ 'Reencolar un trabajo que ya se completó lo ejecutaría
+  │ ', 'por segunda vez sin motivo. La guarda lo impide.'
+  │ 'El reencolado de verdad se demuestra en el bloque 8b,
+  │ ', 'sobre el trabajo que sí acaba en la DLQ.'
+  └
+
+↳ 12 · Un profesor NO puede administrar
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/auth/login [200 OK, 730B, 207ms]
+  ✓  200: el profesor entra sin problema
+
+↳ 13 · …y al intentarlo recibe 403
+  GET https://mooc-backend-568765476410.us-central1.run.app/api/v1/admin/users [403 Forbidden, 547B, 124ms]
+  ✓  403: autenticado, pero sin permiso
+  ┌
+  │ '401 sería «no sé quién eres»; 403 es «sé quién eres y
+  │ ', 'no te toca». La distinción importa.'
+  └
+
+❏ SEG-2 · Autoría y publicación
+↳ Login como profesor
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/auth/login [200 OK, 729B, 213ms]
+  ✓  200
+
+↳ Crear curso
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/courses [201 Created, 1.02kB, 225ms]
+  ✓  201
+  ✓  nace en borrador
+
+↳ Publicar un curso vacío — lista exhaustiva de errores
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/courses/01a20080-eb87-75b2-9d50-65642b0f23b5/versions/1/publish [422 unknown, 783B, 155ms]
+  ✓  422
+  ✓  problem+json
+  ✓  lista los incumplimientos
+
+↳ Añadir módulo
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/versions/01a20080-eb98-71f4-98e2-6d392bfaad02/modules [201 Created, 479B, 237ms]
+  ✓  201
+
+↳ Añadir unidad
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/modules/01a20081-4346-7cc7-962e-bea29d2a7494/units [201 Created, 476B, 153ms]
+  ✓  201
+
+↳ Añadir recurso de texto
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/units/01a20081-6f58-780f-92d9-29f4515605af/resources [201 Created, 748B, 152ms]
+  ✓  201
+  ✓  markdown normalizado
+
+↳ Añadir recurso de quiz
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/units/01a20081-6f58-780f-92d9-29f4515605af/resources [201 Created, 678B, 134ms]
+  ✓  201
+
+↳ Configurar el quiz
+  PUT https://mooc-backend-568765476410.us-central1.run.app/api/v1/resources/01a20081-c6b0-7ebb-87a9-f7412c01f87a/quiz [200 OK, 1.03kB, 189ms]
+  ✓  200
+  ✓  el profesor SÍ ve las claves
+
+↳ Previsualizar (HTML saneado)
+  GET https://mooc-backend-568765476410.us-central1.run.app/api/v1/courses/01a20080-eb87-75b2-9d50-65642b0f23b5/versions/1/preview [200 OK, 2.19kB, 137ms]
+  ✓  200
+  ✓  sin script
+
+↳ Publicar la versión
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/courses/01a20080-eb87-75b2-9d50-65642b0f23b5/versions/1/publish [200 OK, 619B, 144ms]
+  ✓  200
+  ✓  publicada
+
+↳ INMUTABILIDAD: mutar la versión publicada
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/versions/01a20080-eb98-71f4-98e2-6d392bfaad02/modules [409 Conflict, 640B, 122ms]
+  ✓  409
+  ✓  version_immutable
+
+❏ SEG-3 · Carga multimedia
+↳ Login como profesor
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/auth/login [200 OK, 730B, 226ms]
+  ✓  200
+
+↳ 1 · Declarar la carga
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/assets/init [201 Created, 1.46kB, 1178ms]
+  ✓  201
+  ✓  una sola parte para este archivo
+  ✓  la URL viene prefirmada
+  ┌
+  │ 'parte 1 →', 'https://storage.googleapis.com/mooc-5096
+  │ 02-originals/tmp/6026b5a08329f6e3849d179b01d5c04e/part
+  │ -00001'
+  └
+
+↳ 2 · Subir la parte 1  ← ELIGE EL ARCHIVO AQUÍ
+  PUT https://storage.googleapis.com/mooc-509602-originals/tmp/6026b5a08329f6e3849d179b01d5c04e/part-00001?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=mooc-web%40mooc-509602.iam.gserviceaccount.com%2F20261121%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20261121T234822Z&X-Goog-Expires=86399&X-Goog-Signature=6516c7af7a9b3b29d6d0b6abc978024b08ab24b0fe1462dad13ab680d98e9213d18934e4a20e726c1838d74f7d234fe6a33159da1b44e72b0b8816e6db0a3a4ba9a24d1c122f2a1f98ce88583bee67fd0f9f8763117f6e66ce21989bb5eb365dc318158e8eab60cc7a7fb1d2ea9143fd87f46e7549e55a43025daecae015e47cec2a23fea961116b63f6c1cc2cf9571c4cbc50b04fb90997e34bfda0ccb676490a2d5783d5fc4667da8c452c9bb37166de89f4f8d0af6bd015ce1483fba9c89c9984687044afb9b6bcbda71b9273cec629aec7314a179cfb41fb11f5c8a5f633d445a381973558e91ac0738128f61aac127dc6c4e5b8c31ae0a5535283316439&X-Goog-SignedHeaders=host [200 OK, 569B, 1782ms]
+  ✓  200
+  ✓  el almacén devolvió un ETag
+
+↳ 3 · Estado de la carga (reanudación)
+  GET https://mooc-backend-568765476410.us-central1.run.app/api/v1/assets/01a20082-cd2f-75c6-8460-9745c08b07b1/upload [200 OK, 615B, 225ms]
+  ✓  200
+  ✓  la parte 1 ya está en el almacén
+  ✓  no falta ninguna
+  ┌
+  │ 'recibidas:', 1, '· faltan:', []
+  └
+
+↳ 4 · Completar la carga
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/assets/01a20082-cd2f-75c6-8460-9745c08b07b1/complete [202 Accepted, 722B, 583ms]
+  ✓  202 Accepted
+  ✓  queda como uploaded
+
+↳ 5 · Verificación del worker
+  GET https://mooc-backend-568765476410.us-central1.run.app/api/v1/assets/01a20082-cd2f-75c6-8460-9745c08b07b1 [200 OK, 1.12kB, 160ms]
+  ✓  200
+  ✓  el archivo pasó la verificación y se transcodificó
+  ✓  la escalera HLS no hace upscaling (SEG-4)
+  ✓  el servidor detectó el tipo REAL por los bytes
+  ✓  el servidor recalculó el checksum
+  ┌
+  │ 'estado:', 'ready', '· tipo real:', 'video/mp4'
+  │ 'El cliente declaró el tipo, pero el servidor no le cr
+  │ eyó:', 'lo dedujo de los bytes y recalculó el hash.'
+  └
+
+↳ 6 · Descargar (302 a URL firmada)
+  GET https://mooc-backend-568765476410.us-central1.run.app/api/v1/assets/01a20082-cd2f-75c6-8460-9745c08b07b1/content [302 Found, 2.09kB, 193ms]
+  ✓  302: el contenido no se sirve por la API
+  ✓  redirige al almacén de objetos con una URL firmada
+  ┌
+  │ 'La API nunca sirve los bytes; delega en una URL que c
+  │ aduca.'
+  │ 'Destino:', 'https://storage.googleapis.com/mooc-50960
+  │ 2-originals/originals/01a20082-cd2f-75c6-8460-9745c08b
+  │ 07b1/original.mp4'
+  └
+
+↳ 6b · Manifiesto HLS (master)
+  GET https://mooc-backend-568765476410.us-central1.run.app/api/v1/assets/01a20082-cd2f-75c6-8460-9745c08b07b1/hls/master.m3u8 [200 OK, 510B, 140ms]
+  ✓  200
+  ✓  es un manifiesto HLS
+  ✓  anuncia solo la variante que existe
+  ✓  la variante lleva credencial de reproducción
+  ┌
+  │ 'variante:', '360p.m3u8?t=aoi1qi9R9FSJWWjR5D8H4WikeSWR
+  │ efgqGvveWyc-SQU'
+  └
+
+↳ 6c · Playlist de variante, SIN sesión
+  GET https://mooc-backend-568765476410.us-central1.run.app/api/v1/assets/01a20082-cd2f-75c6-8460-9745c08b07b1/hls/360p.m3u8?t=aoi1qi9R9FSJWWjR5D8H4WikeSWRefgqGvveWyc-SQU [200 OK, 1.36kB, 246ms]
+  ✓  200 sin cabecera de sesión
+  ✓  tiene segmentos
+  ✓  cada segmento va firmado hacia el almacén
+  ┌
+  │ 'segmentos firmados:', 1
+  └
+
+↳ 6d · EICAR: declarar la carga
+  ┌
+  │ `Using "CryptoJS" is deprecated. Use "require('crypto-
+  │ js')" instead.`
+  └
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/assets/init [201 Created, 1.46kB, 290ms]
+  ✓  201
+
+↳ 6e · EICAR: subir al almacén
+  PUT https://storage.googleapis.com/mooc-509602-originals/tmp/16a5ac452cf0c17e4a6ad1acff6891b8/part-00001?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=mooc-web%40mooc-509602.iam.gserviceaccount.com%2F20261121%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20261121T234954Z&X-Goog-Expires=86399&X-Goog-Signature=71c06dcebf9a0e209e11f892532537840611c22a52c1a3b2afe848923b1e69e9ede11a532316d4d3f15aa64f963147680c61a84f94fe86bb871fabb46b409833512b59be08e3368a995d31db2f5250c852f20405aec72d403cb99b76ce9c2d577cfb0dc4a21306f466b0cec2e3f54fd683771873e39c276ccc7af21bfd6330f31c21131b6061a0c9d5acaf634261cbecde42975f9bc04aaf59d726ddd3837a5156cddc409f99e432cd8d05553236afdcbb69899c7e2854a369af2d2d5aae0fea80a3f6792cc163d9c08546a3e5685526255109929e9ea20e4a39489253664117e58f4675d412a320b5ea2f01e378e25e3c1d12f5232bf5e9490c5f7a1d3c4d53&X-Goog-SignedHeaders=host [200 OK, 565B, 643ms]
+  ✓  200
+
+↳ 6f · EICAR: completar
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/assets/01a20084-37af-78e8-8633-bacc84441d1f/complete [202 Accepted, 706B, 480ms]
+  ✓  202 Accepted
+  ┌
+  │ 'Ahora lo verifica un worker y lo escanea el antivirus
+  │ .'
+  └
+
+↳ 6g · EICAR: el antivirus lo detecta
+  GET https://mooc-backend-568765476410.us-central1.run.app/api/v1/assets/01a20084-37af-78e8-8633-bacc84441d1f [200 OK, 837B, 117ms]
+  ✓  200
+  ✓  el antivirus lo marcó como infectado
+  ✓  no se procesó lo que no está limpio
+  ┌
+  │ 'veredicto:', 'Eicar-Test-Signature'
+  └
+
+↳ 7 · RECHAZO: checksum que no cuadra
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/assets/init [201 Created, 1.46kB, 247ms]
+  ✓  201: se acepta la declaración
+  ┌
+  │ 'El rechazo ocurre al verificar, no al declarar.'
+  └
+
+❏ SEG-4 · Procesamiento y fallos
+↳ 1 · Vivo — /healthz
+  GET https://mooc-backend-568765476410.us-central1.run.app/readyz [200 OK, 368B, 151ms]
+  ✓  200: el proceso responde
+
+↳ 2 · Listo — /readyz
+  GET https://mooc-backend-568765476410.us-central1.run.app/readyz [200 OK, 368B, 149ms]
+  ✓  200
+  ✓  las tres dependencias responden
+  ┌
+  │ 'Readiness: comprueba PostgreSQL, Redis y el almacén.'
+  │ , 'Es lo que mira el orquestador antes de mandarle trá
+  │ fico.'
+  └
+
+↳ 3 · Los contadores nacen en cero — /metrics
+
+↳ 4 · Las cuatro reglas de alerta
+
+↳ 5 · La serie de la cola de muertos
+
+↳ 6 · ¿Hay alguna alerta disparada?
+
+❏ SEG-5 · Catálogo, inscripción y consumo
+↳ Catálogo público (sin sesión)
+  GET https://mooc-backend-568765476410.us-central1.run.app/api/v1/catalog/courses?q=Cloud [200 OK, 2kB, 172ms]
+  ✓  200
+  ✓  devuelve cursos
+
+↳ Login como estudiante
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/auth/login [200 OK, 731B, 239ms]
+  ✓  200
+
+↳ Inscribirse
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/enrollments [201 Created, 588B, 151ms]
+  ✓  201
+
+↳ Contenido con progreso
+  GET https://mooc-backend-568765476410.us-central1.run.app/api/v1/enrollments/01a20086-718c-7266-8bc9-58810784d03a/content [200 OK, 1.4kB, 147ms]
+  ✓  200
+  ✓  sin claves de quiz
+
+❏ SEG-6 · Quiz
+↳ Iniciar intento (congela el snapshot)
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/enrollments/01a20086-718c-7266-8bc9-58810784d03a/quizzes/01a20081-c6b0-7ecb-b2c0-f2a765a55c97/attempts [201 Created, 911B, 170ms]
+  ✓  201
+  ✓  CA-04: NINGUNA clave en el snapshot
+  ✓  la opción solo trae stable_id y text_md
+
+↳ Guardado parcial
+  PATCH https://mooc-backend-568765476410.us-central1.run.app/api/v1/attempts/01a20086-c8f6-7914-bd23-d983b231d47c/answers [200 OK, 1.03kB, 144ms]
+  ✓  200
+
+↳ Enviar (calificación en servidor)
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/attempts/01a20086-c8f6-7914-bd23-d983b231d47c/submit [200 OK, 597B, 166ms]
+  ✓  200
+  ✓  calificado
+  ✓  la política correctness no revela las claves
+
+↳ Reenviar: idempotente
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/attempts/01a20086-c8f6-7914-bd23-d983b231d47c/submit [200 OK, 625B, 125ms]
+  ✓  200
+  ✓  misma nota
+  ✓  la respuesta se repitió, no se recalculó
+
+❏ SEG-7 · Progreso y aprobación
+↳ SEÑAL FRAUDULENTA: enviar el porcentaje
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/enrollments/01a20086-718c-7266-8bc9-58810784d03a/progress [422 unknown, 931B, 842ms]
+  ✓  422
+  ✓  progress.client_computed_value
+
+↳ Evidencia legítima: apertura
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/enrollments/01a20086-718c-7266-8bc9-58810784d03a/progress [202 Accepted, 504B, 1985ms]
+  ✓  202
+  ✓  aceptada
+
+↳ Heartbeat inmediato: rechazado por cadencia
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/enrollments/01a20086-718c-7266-8bc9-58810784d03a/progress [202 Accepted, 504B, 704ms]
+  ┌
+  │ 'heartbeat previo →', 'aceptado'
+  └
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/enrollments/01a20086-718c-7266-8bc9-58810784d03a/progress [202 Accepted, 506B, 756ms]
+  ✓  202
+  ✓  rechazada por cadencia
+  ┌
+  │ 'El servidor exige diez segundos entre heartbeats, con
+  │  SU reloj.'
+  └
+
+↳ Heartbeat espaciado (esperar >10 s)
+  POST https://mooc-backend-568765476410.us-central1.run.app/api/v1/enrollments/01a20086-718c-7266-8bc9-58810784d03a/progress [202 Accepted, 500B, 1307ms]
+  ✓  202
+  ┌
+  │ 'aceptada:', true, '· motivo:', null, '· pct:', 100
+  └
+
+↳ Progreso calculado por el servidor
+  GET https://mooc-backend-568765476410.us-central1.run.app/api/v1/enrollments/01a20086-718c-7266-8bc9-58810784d03a/progress [200 OK, 902B, 425ms]
+  ✓  200
+  ┌
+  │ 'estado:', 'approved', '·', '2/2'
+  └
+
+❏ SEG-8 · Insignia
+↳ Mis insignias
+  GET https://mooc-backend-568765476410.us-central1.run.app/api/v1/me/badges [200 OK, 2.98kB, 254ms]
+  ✓  200
+  ✓  hay insignia para esta inscripción
+
+↳ Verificación PÚBLICA (sin sesión)
+  GET https://mooc-backend-568765476410.us-central1.run.app/api/v1/verify/evu9YknsTthePSqNpJ8PZg [200 OK, 624B, 454ms]
+  ✓  200
+  ✓  CA-07: no expone el correo
+  ✓  trae nombre, curso y estado
+  ✓  la imagen está publicada y es una URL absoluta
+  ┌
+  │ 'imagen:', 'https://storage.googleapis.com/mooc-509602
+  │ -badges/badges/evu9YknsTthePSqNpJ8PZg.svg'
+  └
+
+↳ La imagen, descargada SIN credenciales
+  GET https://storage.googleapis.com/mooc-509602-badges/badges/evu9YknsTthePSqNpJ8PZg.svg [200 OK, 1.83kB, 291ms]
+  ✓  200 sin cabecera de autorización
+  ✓  es una imagen SVG
+  ✓  lleva el nombre y el código de verificación
+  ✓  CA-07: tampoco la imagen expone el correo
+  ┌
+  │ 'La imagen es pública y no lleva el correo del estudia
+  │ nte.'
+  └
+
+┌─────────────────────────┬─────────────────────┬─────────────────────┐
+│                         │            executed │              failed │
+├─────────────────────────┼─────────────────────┼─────────────────────┤
+│              iterations │                   1 │                   0 │
+├─────────────────────────┼─────────────────────┼─────────────────────┤
+│                requests │                  72 │                   0 │
+├─────────────────────────┼─────────────────────┼─────────────────────┤
+│            test-scripts │                  70 │                   0 │
+├─────────────────────────┼─────────────────────┼─────────────────────┤
+│      prerequest-scripts │                  25 │                   0 │
+├─────────────────────────┼─────────────────────┼─────────────────────┤
+│              assertions │                 146 │                   0 │
+├─────────────────────────┴─────────────────────┴─────────────────────┤
+│ total run duration: 14m 5.8s                                        │
+├─────────────────────────────────────────────────────────────────────┤
+│ total data received: 46.62kB (approx)                               │
+├─────────────────────────────────────────────────────────────────────┤
+│ average response time: 385ms [min: 117ms, max: 1985ms, s.d.: 390ms] │
+└─────────────────────────────────────────────────────────────────────┘

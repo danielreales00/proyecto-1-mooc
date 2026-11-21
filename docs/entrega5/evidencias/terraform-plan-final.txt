@@ -1,0 +1,13 @@
+ephemeral.random_password.semilla: Opening...
+module.cloudsql.ephemeral.random_password.app: Opening...
+module.cloudsql.ephemeral.random_password.app: Opening complete after 0s
+ephemeral.random_password.semilla: Opening complete after 0s
+ephemeral.random_password.semilla: Closing...
+ephemeral.random_password.semilla: Closing complete after 0s
+module.cloudsql.ephemeral.random_password.app: Closing...
+module.cloudsql.ephemeral.random_password.app: Closing complete after 0s
+
+No changes. Your infrastructure matches the configuration.
+
+Terraform has compared your real infrastructure against your configuration
+and found no differences, so no changes are needed.

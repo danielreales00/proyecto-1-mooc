@@ -1,0 +1,24 @@
+buildConfig:
+  entryPoint: EmitirInsignia
+  runtime: go126
+  serviceAccount: projects/mooc-509602/serviceAccounts/mooc-compilacion@mooc-509602.iam.gserviceaccount.com
+eventTrigger:
+  eventType: google.cloud.pubsub.topic.v1.messagePublished
+  pubsubTopic: projects/mooc-509602/topics/mooc-insignias
+  retryPolicy: RETRY_POLICY_RETRY
+  serviceAccountEmail: mooc-eventarc@mooc-509602.iam.gserviceaccount.com
+  trigger: projects/mooc-509602/locations/us-central1/triggers/mooc-insignias-090722
+  triggerRegion: us-central1
+name: projects/mooc-509602/locations/us-central1/functions/mooc-insignias
+serviceConfig:
+  availableMemory: 512Mi
+  ingressSettings: ALLOW_INTERNAL_ONLY
+  maxInstanceCount: 3
+  secretEnvironmentVariables:
+  - key: DATABASE_URL
+    projectId: mooc-509602
+    secret: database-url
+    version: latest
+  serviceAccountEmail: mooc-insignias@mooc-509602.iam.gserviceaccount.com
+  timeoutSeconds: 60
+state: ACTIVE

@@ -116,15 +116,15 @@ Registradas en [`adr/0021`](adr/0021-insignias-en-una-cloud-run-function.md), en
 
 ## Preguntas abiertas
 
-Respondidas el 20 de noviembre con la documentación oficial. P4 y P5 se
-confirman en la fase 2, con un `plan` real.
+Respondidas el 20 de noviembre con la documentación oficial. P4 se confirmó en
+el despliegue del 21 de noviembre. P5 queda por medir en la factura.
 
 | # | Pregunta | Respuesta | Fuente |
 | --- | --- | --- | --- |
 | P1 | ¿Hay runtime de Go 1.26 en Cloud Run functions? | Sí, `go126`, con retiro previsto para febrero o marzo de 2027. También existe `go127` | `cloud.google.com/functions/docs/runtime-support` |
 | P2 | ¿Salida directa a la VPC o conector? | Salida directa: `service_config.direct_vpc_network_interface` y `direct_vpc_egress`, que por omisión solo saca los rangos privados | Documentación de `google_cloudfunctions2_function` |
 | P3 | ¿Cómo limita Eventarc los reintentos? | El reintento se configura en el disparador y, por omisión, dura hasta 7 días con espera exponencial. La documentación no dice que el evento traiga el número de entrega. Se resuelve con D9 | `cloud.google.com/functions/docs/bestpractices/retries` |
-| P4 | ¿Puede Terraform ejecutar los trabajos de migración y semilla? | Sí, con `run_execution_token` en `google_cloud_run_v2_job`: un valor nuevo crea una ejecución en el `apply` y espera a que termine. El ejemplo del proveedor usa `google-beta`, así que falta confirmar con un `plan` que el proveedor estable lo acepte | Documentación de `google_cloud_run_v2_job` |
+| P4 | ¿Puede Terraform ejecutar los trabajos de migración y semilla? | Sí, con `run_execution_token` en `google_cloud_run_v2_job`: un valor nuevo crea una ejecución en el `apply` y espera a que termine. El proveedor estable `7.46` lo acepta, y el despliegue del 21 de noviembre corrió las migraciones así | Documentación de `google_cloud_run_v2_job` y el `apply` |
 | P5 | ¿Cuánto cuesta la función? | Cobra por invocación y por tiempo de CPU, sin mínimo con 0 instancias. Sin conector no hay costo fijo nuevo. Se mide en la fase 3 | Pendiente de medir |
 
 ## Fases
@@ -133,7 +133,21 @@ confirman en la fase 2, con un `plan` real.
 | --- | --- | --- | --- |
 | F0 | Responder P1 a P5 y escribir el ADR-0021. Hecho, salvo P4 y P5, que se confirman en F2 y F3 | El ADR revisado | Ninguno |
 | F1 | Código: la función con su prueba, el enrutamiento por tipo en el publicador, `badge.issue` fuera del worker. **Hecho el 20 de noviembre** | `make ci` y `make prueba-funcion`, en verde | Ninguno |
-| F2 | Terraform: entorno `entrega5`, topic, función, disparador, identidades, permisos y lo manual que se pueda automatizar. **Escrito y validado. Falta copiar el estado y el primer `plan`** | `plan` revisado, sin tocar datos | Ninguno hasta aplicar |
-| F3 | Despliegue con `init`, `plan` y `apply`, y una tarea real de punta a punta | Una insignia emitida por la función y una reentrega sin duplicado | Por uso |
+| F2 | Terraform: entorno `entrega5`, topic, función, disparador, identidades, permisos y lo manual que se pueda automatizar. **Hecho el 21 de noviembre** | `plan` revisado, sin tocar datos | Ninguno hasta aplicar |
+| F3 | Despliegue con `init`, `plan` y `apply`, y una tarea real de punta a punta. **Hecho el 21 de noviembre**: plan final sin cambios, insignia emitida por la función y reentrega sin duplicado, en `docs/entrega5/evidencias/` | Una insignia emitida por la función y una reentrega sin duplicado | Por uso |
 | F4 | Análisis serverless, diagrama, guía, evidencias y guion | Revisión contra la rúbrica | Ninguno |
 | F5 | Video, enlace en el README, tag `entrega-5` y apagado | El enlace y el tag | Por uso |
+
+## Hallazgos del primer despliegue
+
+Salieron al aplicar el 21 de noviembre y ya están corregidos en
+`infra/environments/entrega5` y en el código.
+
+| Hallazgo | Corrección |
+| --- | --- |
+| El buildpack de Go de Cloud Run functions exige un punto en el primer elemento de la ruta del módulo | El módulo pasa de `mooc/backend` a `mooc.local/backend` |
+| La compilación lee el código de un bucket de Google, `gcf-v2-sources-*`, que solo existe tras la primera función | Permiso de lectura en el proyecto, limitado por condición a esos buckets |
+| `migrations` y `openapi` son paquetes de Go, no solo archivos | El zip de la función los incluye |
+| Con Cloud SQL encendiéndose en el mismo `apply`, el backend y los workers fallaban la sonda de arranque | Los servicios y los trabajos dependen de `module.cloudsql` |
+| Una revisión fallida no se reintenta y Terraform no ve diferencias | Etiqueta `version` en la plantilla de cada servicio |
+| El número de proyecto se leía durante el `apply` por depender de APIs nuevas, y cuatro permisos se reemplazaban | Las APIs nuevas se aplican primero, con `-target`. Se documenta en la guía |
