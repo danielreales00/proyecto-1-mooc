@@ -8,8 +8,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"mooc/backend/internal/modules/badges"
-	"mooc/backend/internal/platform/dbx"
+	"mooc.local/backend/internal/modules/badges"
+	"mooc.local/backend/internal/platform/dbx"
 )
 
 type BadgeStore struct{ pool *pgxpool.Pool }

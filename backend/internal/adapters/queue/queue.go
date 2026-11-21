@@ -16,7 +16,7 @@ import (
 
 	"github.com/hibiken/asynq"
 
-	"mooc/backend/internal/platform/jobs"
+	"mooc.local/backend/internal/platform/jobs"
 )
 
 // Payload es lo que viaja dentro de la tarea de asynq. job_key es lo que el

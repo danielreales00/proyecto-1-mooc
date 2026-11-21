@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"mooc/backend/internal/platform/dbx"
+	"mooc.local/backend/internal/platform/dbx"
 )
 
 // Acciones auditadas. La lista crece con cada módulo.

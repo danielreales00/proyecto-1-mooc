@@ -17,10 +17,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"mooc/backend/internal/adapters/postgres"
-	"mooc/backend/internal/platform/config"
-	"mooc/backend/internal/platform/logging"
-	"mooc/backend/migrations"
+	"mooc.local/backend/internal/adapters/postgres"
+	"mooc.local/backend/internal/platform/config"
+	"mooc.local/backend/internal/platform/logging"
+	"mooc.local/backend/migrations"
 )
 
 // lockMigraciones identifica el bloqueo consultivo de PostgreSQL que serializa

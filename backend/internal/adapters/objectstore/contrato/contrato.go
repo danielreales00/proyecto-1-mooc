@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"mooc/backend/internal/adapters/objectstore"
+	"mooc.local/backend/internal/adapters/objectstore"
 )
 
 type Config struct {

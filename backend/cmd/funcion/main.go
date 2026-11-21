@@ -9,7 +9,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/functions-framework-go/funcframework"
 
-	funcion "mooc/backend"
+	funcion "mooc.local/backend"
 )
 
 func main() {

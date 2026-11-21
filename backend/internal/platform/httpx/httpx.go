@@ -9,7 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"mooc/backend/internal/platform/problem"
+	"mooc.local/backend/internal/platform/problem"
 )
 
 const maxBodyBytes = 1 << 20 // 1 MiB; los binarios no pasan por la API (ADR-0005)

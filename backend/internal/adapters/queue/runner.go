@@ -11,8 +11,8 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"mooc/backend/internal/platform/jobs"
-	"mooc/backend/internal/platform/metrics"
+	"mooc.local/backend/internal/platform/jobs"
+	"mooc.local/backend/internal/platform/metrics"
 )
 
 // Handler es lo que escribe cada módulo: recibe los datos del trabajo y hace

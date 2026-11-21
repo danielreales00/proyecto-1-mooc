@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"mooc/backend/internal/platform/dbx"
+	"mooc.local/backend/internal/platform/dbx"
 )
 
 // FiltroUsuarios acota el listado.

@@ -8,7 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"mooc/backend/internal/platform/idempotency"
+	"mooc.local/backend/internal/platform/idempotency"
 )
 
 // Podador borra lo que ya no sirve de las tablas que solo crecen.

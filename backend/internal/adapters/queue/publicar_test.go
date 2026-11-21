@@ -7,7 +7,7 @@ import (
 
 	"github.com/hibiken/asynq"
 
-	"mooc/backend/internal/platform/jobs"
+	"mooc.local/backend/internal/platform/jobs"
 )
 
 // Contra un Redis real (make prueba-cola). Usa la base 15 y una cola propia

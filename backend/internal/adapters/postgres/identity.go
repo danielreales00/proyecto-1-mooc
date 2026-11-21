@@ -11,8 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"mooc/backend/internal/modules/identity"
-	"mooc/backend/internal/platform/dbx"
+	"mooc.local/backend/internal/modules/identity"
+	"mooc.local/backend/internal/platform/dbx"
 )
 
 // IdentityStore implementa identity.Store (ADR-0001: los adaptadores

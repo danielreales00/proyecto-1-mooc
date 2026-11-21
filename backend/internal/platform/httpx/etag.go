@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"mooc/backend/internal/platform/problem"
+	"mooc.local/backend/internal/platform/problem"
 )
 
 // ETagDe calcula el ETag a partir del CONTENIDO, no de la marca de tiempo.

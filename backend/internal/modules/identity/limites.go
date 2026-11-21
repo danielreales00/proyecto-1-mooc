@@ -3,7 +3,7 @@ package identity
 import (
 	"time"
 
-	"mooc/backend/internal/platform/ratelimit"
+	"mooc.local/backend/internal/platform/ratelimit"
 )
 
 // Límites de los endpoints de identidad. Los números viven aquí, junto al

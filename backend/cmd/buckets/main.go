@@ -22,8 +22,8 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
-	"mooc/backend/internal/platform/config"
-	"mooc/backend/internal/platform/logging"
+	"mooc.local/backend/internal/platform/config"
+	"mooc.local/backend/internal/platform/logging"
 )
 
 // politicaLecturaPublica permite descargar los objetos de un bucket sin firma.

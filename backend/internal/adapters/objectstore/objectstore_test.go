@@ -8,8 +8,8 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 
-	"mooc/backend/internal/adapters/objectstore"
-	"mooc/backend/internal/adapters/objectstore/contrato"
+	"mooc.local/backend/internal/adapters/objectstore"
+	"mooc.local/backend/internal/adapters/objectstore/contrato"
 )
 
 // La misma suite que pasa el adaptador de GCS, contra MinIO: el contrato es

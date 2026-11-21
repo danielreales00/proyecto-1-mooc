@@ -15,8 +15,8 @@ import (
 
 	ps "cloud.google.com/go/pubsub/v2"
 
-	"mooc/backend/internal/adapters/queue"
-	"mooc/backend/internal/platform/jobs"
+	"mooc.local/backend/internal/adapters/queue"
+	"mooc.local/backend/internal/platform/jobs"
 )
 
 type Publisher struct {

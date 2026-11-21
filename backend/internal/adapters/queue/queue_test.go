@@ -6,7 +6,7 @@ import (
 
 	"github.com/hibiken/asynq"
 
-	"mooc/backend/internal/platform/jobs"
+	"mooc.local/backend/internal/platform/jobs"
 )
 
 func TestParseQueues(t *testing.T) {

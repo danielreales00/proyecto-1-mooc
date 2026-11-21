@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"mooc/backend/internal/platform/httpx"
-	"mooc/backend/internal/platform/problem"
-	"mooc/backend/internal/platform/ratelimit"
+	"mooc.local/backend/internal/platform/httpx"
+	"mooc.local/backend/internal/platform/problem"
+	"mooc.local/backend/internal/platform/ratelimit"
 )
 
 type API struct {

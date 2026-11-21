@@ -15,7 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"mooc/backend/internal/platform/dbx"
+	"mooc.local/backend/internal/platform/dbx"
 )
 
 // Colas por prioridad (ADR-0004).

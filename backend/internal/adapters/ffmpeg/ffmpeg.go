@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"strings"
 
-	"mooc/backend/internal/modules/media"
+	"mooc.local/backend/internal/modules/media"
 )
 
 // Nombres de los binarios. Constantes: nunca se construyen con datos de

@@ -11,8 +11,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"mooc/backend/internal/platform/ids"
-	"mooc/backend/internal/platform/problem"
+	"mooc.local/backend/internal/platform/ids"
+	"mooc.local/backend/internal/platform/problem"
 )
 
 type ctxKey int

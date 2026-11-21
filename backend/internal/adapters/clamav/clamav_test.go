@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"mooc/backend/internal/modules/media"
+	"mooc.local/backend/internal/modules/media"
 )
 
 // La respuesta de clamd es una línea de texto, y de cómo se lea depende que un

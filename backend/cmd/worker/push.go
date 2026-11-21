@@ -9,11 +9,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"mooc/backend/internal/adapters/postgres"
-	"mooc/backend/internal/adapters/queue"
-	"mooc/backend/internal/platform/config"
-	"mooc/backend/internal/platform/httpx"
-	"mooc/backend/internal/platform/metrics"
+	"mooc.local/backend/internal/adapters/postgres"
+	"mooc.local/backend/internal/adapters/queue"
+	"mooc.local/backend/internal/platform/config"
+	"mooc.local/backend/internal/platform/httpx"
+	"mooc.local/backend/internal/platform/metrics"
 )
 
 // servirPush es el worker de Cloud Run (ADR-0020). No consume de una cola: la

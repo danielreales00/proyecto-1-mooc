@@ -10,8 +10,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"mooc/backend/internal/platform/dbx"
-	"mooc/backend/internal/platform/ids"
+	"mooc.local/backend/internal/platform/dbx"
+	"mooc.local/backend/internal/platform/ids"
 )
 
 var (

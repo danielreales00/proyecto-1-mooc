@@ -17,8 +17,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
-	"mooc/backend/internal/modules/media"
-	"mooc/backend/internal/platform/ids"
+	"mooc.local/backend/internal/modules/media"
+	"mooc.local/backend/internal/platform/ids"
 )
 
 type Store struct{ rdb *redis.Client }

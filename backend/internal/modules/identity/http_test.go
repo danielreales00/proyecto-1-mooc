@@ -16,11 +16,11 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"mooc/backend/internal/modules/audit"
-	"mooc/backend/internal/platform/dbx"
-	"mooc/backend/internal/platform/httpx"
-	"mooc/backend/internal/platform/ids"
-	"mooc/backend/internal/platform/passwords"
+	"mooc.local/backend/internal/modules/audit"
+	"mooc.local/backend/internal/platform/dbx"
+	"mooc.local/backend/internal/platform/httpx"
+	"mooc.local/backend/internal/platform/ids"
+	"mooc.local/backend/internal/platform/passwords"
 )
 
 // ---------------------------------------------------------------- dobles ---

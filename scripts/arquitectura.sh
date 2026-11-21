@@ -16,7 +16,7 @@ ok()  { echo "  ${VERDE}✓${OFF} $*"; }
 echo "── ADR-0001 · el dominio no importa infraestructura ──"
 # domain.go es dominio puro: entidades y reglas. No puede importar adaptadores,
 # ni el framework HTTP, ni el cliente de base de datos.
-prohibidos='mooc/backend/internal/adapters|net/http|github.com/jackc/pgx|github.com/redis|github.com/minio|github.com/hibiken'
+prohibidos='mooc.local/backend/internal/adapters|net/http|github.com/jackc/pgx|github.com/redis|github.com/minio|github.com/hibiken'
 for f in internal/modules/*/domain.go; do
     [ -e "$f" ] || continue
     imports=$(awk '/^import \(/{f=1;next}/^\)/{f=0}f' "$f")

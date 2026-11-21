@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"mooc/backend/internal/platform/httpx"
-	"mooc/backend/internal/platform/metrics"
-	"mooc/backend/internal/platform/problem"
+	"mooc.local/backend/internal/platform/httpx"
+	"mooc.local/backend/internal/platform/metrics"
+	"mooc.local/backend/internal/platform/problem"
 )
 
 // Sujeto decide a quién se le cuenta la petición: la IP, la sesión, o un campo

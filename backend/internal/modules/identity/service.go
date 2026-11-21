@@ -10,11 +10,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"mooc/backend/internal/modules/audit"
-	"mooc/backend/internal/platform/dbx"
-	"mooc/backend/internal/platform/ids"
-	"mooc/backend/internal/platform/jobs"
-	"mooc/backend/internal/platform/passwords"
+	"mooc.local/backend/internal/modules/audit"
+	"mooc.local/backend/internal/platform/dbx"
+	"mooc.local/backend/internal/platform/ids"
+	"mooc.local/backend/internal/platform/jobs"
+	"mooc.local/backend/internal/platform/passwords"
 )
 
 type Config struct {

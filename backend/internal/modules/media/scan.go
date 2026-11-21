@@ -9,9 +9,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"mooc/backend/internal/modules/audit"
-	"mooc/backend/internal/platform/dbx"
-	"mooc/backend/internal/platform/jobs"
+	"mooc.local/backend/internal/modules/audit"
+	"mooc.local/backend/internal/platform/dbx"
+	"mooc.local/backend/internal/platform/jobs"
 )
 
 // Escaneo antimalware: el trabajo media.scan (ADR-0011, RF-05).

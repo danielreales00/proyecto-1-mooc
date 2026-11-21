@@ -15,12 +15,12 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"mooc/backend/internal/adapters/postgres"
-	"mooc/backend/internal/modules/identity"
-	"mooc/backend/internal/platform/config"
-	"mooc/backend/internal/platform/ids"
-	"mooc/backend/internal/platform/logging"
-	"mooc/backend/internal/platform/passwords"
+	"mooc.local/backend/internal/adapters/postgres"
+	"mooc.local/backend/internal/modules/identity"
+	"mooc.local/backend/internal/platform/config"
+	"mooc.local/backend/internal/platform/ids"
+	"mooc.local/backend/internal/platform/logging"
+	"mooc.local/backend/internal/platform/passwords"
 )
 
 // La contraseña es la misma para todas las cuentas sintéticas, a propósito: en

@@ -1,4 +1,4 @@
-module mooc/backend
+module mooc.local/backend
 
 go 1.26.0
 

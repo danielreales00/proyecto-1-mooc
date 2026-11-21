@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"mooc/backend/internal/platform/httpx"
-	"mooc/backend/internal/platform/problem"
+	"mooc.local/backend/internal/platform/httpx"
+	"mooc.local/backend/internal/platform/problem"
 )
 
 type API struct{ svc *Service }

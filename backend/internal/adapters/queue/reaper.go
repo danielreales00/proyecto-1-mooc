@@ -8,8 +8,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"mooc/backend/internal/platform/jobs"
-	"mooc/backend/internal/platform/metrics"
+	"mooc.local/backend/internal/platform/jobs"
+	"mooc.local/backend/internal/platform/metrics"
 )
 
 // Reaper cierra la otra mitad de la garantía del outbox (ADR-0004).

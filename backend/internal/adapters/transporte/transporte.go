@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"mooc/backend/internal/adapters/pubsub"
-	"mooc/backend/internal/adapters/queue"
-	"mooc/backend/internal/platform/config"
+	"mooc.local/backend/internal/adapters/pubsub"
+	"mooc.local/backend/internal/adapters/queue"
+	"mooc.local/backend/internal/platform/config"
 )
 
 func Abrir(ctx context.Context, cfg config.Config, log *slog.Logger) (queue.Publicador, error) {

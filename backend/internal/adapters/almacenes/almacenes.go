@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"strings"
 
-	"mooc/backend/internal/adapters/gcs"
-	"mooc/backend/internal/adapters/objectstore"
-	"mooc/backend/internal/platform/config"
+	"mooc.local/backend/internal/adapters/gcs"
+	"mooc.local/backend/internal/adapters/objectstore"
+	"mooc.local/backend/internal/platform/config"
 )
 
 // Abrir es el único sitio donde el proveedor se nombra. `s3` cubre MinIO en

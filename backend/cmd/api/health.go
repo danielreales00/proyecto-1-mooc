@@ -8,8 +8,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
-	"mooc/backend/internal/adapters/objectstore"
-	"mooc/backend/internal/platform/httpx"
+	"mooc.local/backend/internal/adapters/objectstore"
+	"mooc.local/backend/internal/platform/httpx"
 )
 
 // health separa vivacidad de preparación: Compose y, más adelante, Cloud Run

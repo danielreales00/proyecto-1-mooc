@@ -22,7 +22,7 @@ import (
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/iterator"
 
-	"mooc/backend/internal/adapters/objectstore"
+	"mooc.local/backend/internal/adapters/objectstore"
 )
 
 type Store struct {

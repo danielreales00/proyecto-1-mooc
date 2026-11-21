@@ -6,7 +6,7 @@ import (
 	"errors"
 	"log/slog"
 
-	"mooc/backend/internal/platform/jobs"
+	"mooc.local/backend/internal/platform/jobs"
 )
 
 // Evento atiende un trabajo que Eventarc entrega a una Cloud Run function como

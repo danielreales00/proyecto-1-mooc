@@ -7,7 +7,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"mooc/backend/internal/platform/httpx"
+	"mooc.local/backend/internal/platform/httpx"
 )
 
 // Handler sirve /metrics.

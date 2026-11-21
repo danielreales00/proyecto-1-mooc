@@ -20,9 +20,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"mooc/backend/internal/platform/dbx"
-	"mooc/backend/internal/platform/httpx"
-	"mooc/backend/internal/platform/problem"
+	"mooc.local/backend/internal/platform/dbx"
+	"mooc.local/backend/internal/platform/httpx"
+	"mooc.local/backend/internal/platform/problem"
 )
 
 // TamañoMaximoRespuesta acota lo que se guarda. Una respuesta más grande se

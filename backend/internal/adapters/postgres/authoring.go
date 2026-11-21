@@ -11,8 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"mooc/backend/internal/modules/authoring"
-	"mooc/backend/internal/platform/dbx"
+	"mooc.local/backend/internal/modules/authoring"
+	"mooc.local/backend/internal/platform/dbx"
 )
 
 type AuthoringStore struct{ pool *pgxpool.Pool }

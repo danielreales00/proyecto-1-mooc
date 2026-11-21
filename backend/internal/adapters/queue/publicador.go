@@ -3,7 +3,7 @@ package queue
 import (
 	"context"
 
-	"mooc/backend/internal/platform/jobs"
+	"mooc.local/backend/internal/platform/jobs"
 )
 
 // Publicador deja un trabajo ya registrado en platform.job_runs en manos del

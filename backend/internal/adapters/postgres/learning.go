@@ -9,8 +9,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"mooc/backend/internal/modules/learning"
-	"mooc/backend/internal/platform/dbx"
+	"mooc.local/backend/internal/modules/learning"
+	"mooc.local/backend/internal/platform/dbx"
 )
 
 type LearningStore struct{ pool *pgxpool.Pool }

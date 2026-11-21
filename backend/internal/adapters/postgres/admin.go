@@ -9,8 +9,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"mooc/backend/internal/modules/admin"
-	"mooc/backend/internal/platform/dbx"
+	"mooc.local/backend/internal/modules/admin"
+	"mooc.local/backend/internal/platform/dbx"
 )
 
 type AdminStore struct{ pool *pgxpool.Pool }

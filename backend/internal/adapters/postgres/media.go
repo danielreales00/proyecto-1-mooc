@@ -8,9 +8,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"mooc/backend/internal/modules/media"
-	"mooc/backend/internal/platform/dbx"
-	"mooc/backend/internal/platform/ids"
+	"mooc.local/backend/internal/modules/media"
+	"mooc.local/backend/internal/platform/dbx"
+	"mooc.local/backend/internal/platform/ids"
 )
 
 type MediaStore struct{ pool *pgxpool.Pool }

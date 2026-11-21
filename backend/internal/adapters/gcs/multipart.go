@@ -16,7 +16,7 @@ import (
 	"cloud.google.com/go/storage"
 	"google.golang.org/api/iterator"
 
-	"mooc/backend/internal/adapters/objectstore"
+	"mooc.local/backend/internal/adapters/objectstore"
 )
 
 // Cloud Storage no tiene carga multipart con URL firmadas por parte: su carga

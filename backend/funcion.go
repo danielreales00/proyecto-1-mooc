@@ -17,13 +17,13 @@ import (
 	"github.com/cloudevents/sdk-go/v2/event"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"mooc/backend/internal/adapters/almacenes"
-	"mooc/backend/internal/adapters/postgres"
-	"mooc/backend/internal/adapters/queue"
-	"mooc/backend/internal/modules/badges"
-	"mooc/backend/internal/platform/config"
-	"mooc/backend/internal/platform/jobs"
-	"mooc/backend/internal/platform/logging"
+	"mooc.local/backend/internal/adapters/almacenes"
+	"mooc.local/backend/internal/adapters/postgres"
+	"mooc.local/backend/internal/adapters/queue"
+	"mooc.local/backend/internal/modules/badges"
+	"mooc.local/backend/internal/platform/config"
+	"mooc.local/backend/internal/platform/jobs"
+	"mooc.local/backend/internal/platform/logging"
 )
 
 // Nombre de la función en el despliegue: el `entry_point` de Terraform.

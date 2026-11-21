@@ -15,7 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
-	"mooc/backend/internal/modules/identity"
+	"mooc.local/backend/internal/modules/identity"
 )
 
 type Store struct {

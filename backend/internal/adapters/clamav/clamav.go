@@ -21,7 +21,7 @@ import (
 	"strings"
 	"time"
 
-	"mooc/backend/internal/modules/media"
+	"mooc.local/backend/internal/modules/media"
 )
 
 // TamanoTrozo es lo que se envía en cada escritura. 64 KiB es el tamaño con el

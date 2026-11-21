@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"mooc/backend/internal/adapters/objectstore/contrato"
+	"mooc.local/backend/internal/adapters/objectstore/contrato"
 )
 
 // La suite corre contra Cloud Storage real: la parte delicada —firmar sin clave

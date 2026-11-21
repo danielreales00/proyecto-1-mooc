@@ -12,10 +12,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"mooc/backend/internal/modules/audit"
-	"mooc/backend/internal/platform/dbx"
-	"mooc/backend/internal/platform/ids"
-	"mooc/backend/internal/platform/jobs"
+	"mooc.local/backend/internal/modules/audit"
+	"mooc.local/backend/internal/platform/dbx"
+	"mooc.local/backend/internal/platform/ids"
+	"mooc.local/backend/internal/platform/jobs"
 )
 
 // Almacen es el puerto hacia el almacenamiento de objetos.
