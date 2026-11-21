@@ -18,18 +18,18 @@ cloudsql_disco_gb = 10
 
 # Para detener la base entre sesiones: false y `make tf ENTORNO=entrega5
 # ARGS=apply`. Se versiona, así el equipo ve en git si debería estar encendida.
-cloudsql_encendida = false
+cloudsql_encendida = true
 
 # La máquina de la cola (Redis de sesiones y Mailpit) y el disparo del reaper.
 # Los servicios de Cloud Run escalan a cero solos y no cobran sin peticiones.
-entorno_encendido = false
+entorno_encendido = true
 
 imagen_maquinas = "debian-cloud/debian-12"
 tipo_cola       = "e2-small"
 disco_cola_gb   = 20
 
 # Qué imágenes corren: el SHA que imprimió `make publicar`.
-version_imagenes = "67f908dd4ac2"
+version_imagenes = "a02330ee1485"
 
 # Pools por proceso contra las 47 conexiones útiles de db-g1-small: con tres
 # instancias de cada servicio, 3 × 8 + 3 × 3 = 33, más las de los trabajos de

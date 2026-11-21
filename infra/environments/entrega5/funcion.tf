@@ -35,10 +35,9 @@ data "archive_file" "funcion" {
   type        = "zip"
   source_dir  = "${path.module}/../../../backend"
   output_path = "${path.module}/.terraform/funcion-insignias.zip"
-  excludes = [
-    "bin", "tmp", "coverage.out", "Dockerfile", "cloudrun",
-    "migrations", "openapi", "seed",
-  ]
+  # Fuera solo lo que no es Go. migrations y openapi son paquetes que
+  # incrustan sus archivos, y el buildpack compila el módulo entero.
+  excludes = ["bin", "tmp", "coverage.out", "Dockerfile", "cloudrun"]
 }
 
 resource "google_storage_bucket" "fuentes" {
@@ -135,6 +134,23 @@ resource "google_project_iam_member" "compilacion" {
   member  = "serviceAccount:${google_service_account.compilacion.email}"
 }
 
+# Cloud Run functions copia el código a un bucket propio,
+# gcf-v2-sources-<número>-<región>, que crea con la primera función, y la
+# compilación lo lee de ahí. Como no existe antes del primer apply, el permiso
+# va en el proyecto, con una condición que lo limita a esos buckets: la cuenta
+# no puede leer los originales ni ningún otro.
+resource "google_project_iam_member" "compilacion_lee_fuentes_gcf" {
+  project = var.project_id
+  role    = "roles/storage.objectViewer"
+  member  = "serviceAccount:${google_service_account.compilacion.email}"
+
+  condition {
+    title       = "solo-fuentes-de-funciones"
+    description = "Solo los buckets donde Cloud Run functions guarda el código"
+    expression  = "resource.name.startsWith(\"projects/_/buckets/gcf-v2-sources-\")"
+  }
+}
+
 resource "google_storage_bucket_iam_member" "compilacion_fuentes" {
   bucket = google_storage_bucket.fuentes.name
   role   = "roles/storage.objectViewer"
@@ -203,6 +219,7 @@ resource "google_cloudfunctions2_function" "insignias" {
     google_project_service.apis,
     google_project_iam_member.compilacion,
     google_storage_bucket_iam_member.compilacion_fuentes,
+    google_project_iam_member.compilacion_lee_fuentes_gcf,
     module.secretos,
   ]
 }

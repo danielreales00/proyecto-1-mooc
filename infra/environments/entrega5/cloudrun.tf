@@ -77,6 +77,12 @@ resource "google_cloud_run_v2_service" "backend" {
   deletion_protection = false
 
   template {
+    # La versión de las imágenes en cada revisión: se ve qué código corre, y
+    # una versión nueva siempre crea una revisión nueva.
+    labels = {
+      version = var.version_imagenes
+    }
+
     service_account                  = google_service_account.web.email
     max_instance_request_concurrency = var.backend.concurrencia
     timeout                          = "${var.backend.tiempo_maximo_s}s"
@@ -129,7 +135,8 @@ resource "google_cloud_run_v2_service" "backend" {
     }
   }
 
-  depends_on = [google_project_service.apis, module.secretos]
+  # Arranca solo si llega a la base: tiene que estar encendida antes.
+  depends_on = [google_project_service.apis, module.secretos, module.cloudsql]
 }
 
 # --- workers ------------------------------------------------------------------
@@ -142,6 +149,12 @@ resource "google_cloud_run_v2_service" "workers" {
   deletion_protection = false
 
   template {
+    # La versión de las imágenes en cada revisión: se ve qué código corre, y
+    # una versión nueva siempre crea una revisión nueva.
+    labels = {
+      version = var.version_imagenes
+    }
+
     service_account                  = google_service_account.worker.email
     max_instance_request_concurrency = var.workers.concurrencia
     timeout                          = "${var.workers.tiempo_maximo_s}s"
@@ -196,7 +209,8 @@ resource "google_cloud_run_v2_service" "workers" {
     }
   }
 
-  depends_on = [google_project_service.apis, module.secretos]
+  # Arranca solo si llega a la base: tiene que estar encendida antes.
+  depends_on = [google_project_service.apis, module.secretos, module.cloudsql]
 }
 
 # --- frontend -----------------------------------------------------------------
@@ -208,6 +222,12 @@ resource "google_cloud_run_v2_service" "frontend" {
   deletion_protection = false
 
   template {
+    # La versión de las imágenes en cada revisión: se ve qué código corre, y
+    # una versión nueva siempre crea una revisión nueva.
+    labels = {
+      version = var.version_imagenes
+    }
+
     service_account                  = google_service_account.frontend.email
     max_instance_request_concurrency = var.frontend.concurrencia
     timeout                          = "${var.frontend.tiempo_maximo_s}s"
@@ -301,7 +321,8 @@ resource "google_cloud_run_v2_job" "migrate" {
     }
   }
 
-  depends_on = [google_project_service.apis, module.secretos]
+  # Corre dentro del apply: la base tiene que estar encendida antes.
+  depends_on = [google_project_service.apis, module.secretos, module.cloudsql]
 }
 
 # Las cuentas sintéticas, con la contraseña de Secret Manager (semilla.tf).
@@ -363,5 +384,6 @@ resource "google_cloud_run_v2_job" "seed" {
     }
   }
 
-  depends_on = [google_project_service.apis, module.secretos]
+  # Corre dentro del apply: la base tiene que estar encendida antes.
+  depends_on = [google_project_service.apis, module.secretos, module.cloudsql]
 }
