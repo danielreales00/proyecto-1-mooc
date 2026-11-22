@@ -135,7 +135,7 @@ el despliegue del 21 de noviembre. P5 queda por medir en la factura.
 | F1 | Código: la función con su prueba, el enrutamiento por tipo en el publicador, `badge.issue` fuera del worker. **Hecho el 20 de noviembre** | `make ci` y `make prueba-funcion`, en verde | Ninguno |
 | F2 | Terraform: entorno `entrega5`, topic, función, disparador, identidades, permisos y lo manual que se pueda automatizar. **Hecho el 21 de noviembre** | `plan` revisado, sin tocar datos | Ninguno hasta aplicar |
 | F3 | Despliegue con `init`, `plan` y `apply`, y una tarea real de punta a punta. **Hecho el 21 de noviembre**: plan final sin cambios, insignia emitida por la función y reentrega sin duplicado, en `docs/entrega5/evidencias/` | Una insignia emitida por la función y una reentrega sin duplicado | Por uso |
-| F4 | Análisis serverless, diagrama, guía, evidencias y guion. **Documentos hechos el 21 de noviembre. Falta el guion** | Revisión contra la rúbrica | Ninguno |
+| F4 | Análisis serverless, diagrama, guía, evidencias y guion. **Hecho el 21 de noviembre**. El guion está en `demo/guion-entrega5.md`, fuera del repositorio | Revisión contra la rúbrica | Ninguno |
 | F5 | Video, enlace en el README, tag `entrega-5` y apagado | El enlace y el tag | Por uso |
 
 ## Hallazgos del primer despliegue
