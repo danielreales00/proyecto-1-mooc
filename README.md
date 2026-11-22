@@ -1,5 +1,18 @@
 # Plataforma MOOC
 
+## Entregables de la Entrega 5
+
+| # | Entregable | Dónde |
+| --- | --- | --- |
+| 1 | **Análisis serverless**: componentes, oportunidades, comparación de servicios y la tarea elegida | [`docs/entrega5/analisis-serverless.md`](docs/entrega5/analisis-serverless.md) |
+| 2 | **Diagrama y documento de arquitectura**, con el cambio implementado | [`docs/entrega5/arquitectura.md`](docs/entrega5/arquitectura.md) |
+| 3 | **Código de la función** `badge.issue` | [`backend/funcion.go`](backend/funcion.go) y [`backend/internal/adapters/queue/evento.go`](backend/internal/adapters/queue/evento.go) |
+| 4 | **Terraform**, con instrucciones reproducibles | [`infra/environments/entrega5/`](infra/environments/entrega5/) y [`docs/entrega5/despliegue.md`](docs/entrega5/despliegue.md) |
+| 5 | **Evidencias** del despliegue y de una tarea de Pub/Sub a la función | [`docs/entrega5/evidencias/`](docs/entrega5/evidencias/README.md) |
+| 6 | **Decisión de arquitectura** | [ADR-0021](arquitectura/adr/0021-insignias-en-una-cloud-run-function.md) |
+| 7 | **Release** | Tag [`entrega-5`](../../tree/entrega-5) |
+| 8 | **Video de sustentación** | Pendiente |
+
 ## Entregables de la Entrega 4
 
 | # | Entregable | Dónde |

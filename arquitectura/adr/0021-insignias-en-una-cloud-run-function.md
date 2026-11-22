@@ -1,6 +1,6 @@
 # ADR-0021 — Emisión de insignias en una Cloud Run function para la Entrega 5
 
-- **Estado:** Propuesto
+- **Estado:** Aceptado. Desplegado el 2026-11-21
 - **Fecha:** 2026-11-20
 - **Requisitos:** `E5-M1` a `E5-M5`, `E5-T3`, `E5-T4`, `CA-07`
 - **Reemplaza / reemplazado por:** saca `badge.issue` del worker de ADR-0020.
