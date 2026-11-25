@@ -10,7 +10,9 @@ apartado.
 El entorno `infra/environments/entrega5` se desplegó solo con `init`, `plan` y
 `apply`, sobre el estado heredado de `entrega4`. Después del último `apply`, un
 plan con `-detailed-exitcode` no encuentra diferencias entre la configuración y
-la nube ([`terraform-plan-final.txt`](terraform-plan-final.txt)).
+la nube ([`terraform-plan-final.txt`](terraform-plan-final.txt)). La salida del
+`apply` que creó la función está en
+[`terraform-apply-funcion.txt`](terraform-apply-funcion.txt).
 
 ```bash
 make tf ENTORNO=entrega5 ARGS="plan -detailed-exitcode"

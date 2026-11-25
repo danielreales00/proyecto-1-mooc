@@ -143,6 +143,14 @@ es `infra/environments/entrega3`, que heredó el estado de `entrega2`; este
 `scripts/` van siempre con LF (`.gitattributes`): Terraform los lee del disco y
 los entrega a las máquinas tal cual.
 
+**La Entrega 5 es serverless e infraestructura como código** (`adr/0021`):
+`badge.issue` corre en la Cloud Run function `mooc-insignias`, activada por
+Eventarc desde su propio topic, y el worker ya no la atiende. El entorno de
+Terraform es `infra/environments/entrega5`, que heredó el estado de
+`entrega4`, ahora congelado. El módulo de Go se llama `mooc.local/backend`
+porque Cloud Run functions exige un punto en la ruta. `make prueba-funcion`
+prueba la función en local con el emulador de Pub/Sub.
+
 En entregas siguientes: frontend y despliegue en **GCP**. Las decisiones de hoy
 se toman sin amarrarse al proveedor; el mapeo previsto está en
 `arquitectura/disenos/ruta-a-gcp.md`.
