@@ -27,7 +27,7 @@ encendido.
 | 2 | La migración en el código | 3 | Santiago |
 | 3 | Terraform: estructura, despliegue y actualización | 5 | Michael |
 | 4 | Una insignia de Pub/Sub a la función, y su reentrega | 4 | Daniel |
-| 5 | Acceso, secretos y estado | 2 | David |
+| 5 | Acceso, secretos y estado | 2 | Santiago |
 | 6 | Cierre | 1 | Santiago |
 | | **Total** | **18,5** | |
 
@@ -59,7 +59,8 @@ conservan.
    - crea la NAT y su router;
    - enciende Cloud SQL y la cola;
    - quita la pausa de los dos trabajos de Scheduler;
-   - devuelve el token de las migraciones.
+   - devuelve el token de las migraciones. Solo crea una ejecución si la
+     versión de las imágenes es nueva: con la misma versión ya está migrada.
 
    Si dice otra cosa, no aplicar y avisar al equipo.
 
@@ -68,8 +69,8 @@ conservan.
    make tf ENTORNO=entrega5 ARGS="apply p.tfplan"
    ```
 
-   El `apply` tarda de cinco a diez minutos, porque espera a que Cloud SQL
-   arranque y a que terminen las migraciones.
+   El `apply` tarda de cinco a diez minutos, sobre todo porque espera a que
+   Cloud SQL arranque.
 
 4. Comprobar la API:
 

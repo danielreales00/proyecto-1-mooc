@@ -278,9 +278,9 @@ resource "google_cloud_run_v2_job" "migrate" {
   deletion_protection = false
 
   # Cada versión de las imágenes ejecuta las migraciones una vez, dentro del
-  # `apply`, que espera a que terminen (ADR-0021). Con la base apagada no se
-  # ejecutan: el token vuelve al encenderla. Las migraciones son hacia
-  # adelante e idempotentes, así que repetirlas no cambia nada.
+  # `apply`, que espera a que terminen (ADR-0021). La ejecución lleva la
+  # versión en el nombre: encender la base con la misma versión no la repite.
+  # Con la base apagada el token se quita para no intentar migrar.
   run_execution_token = var.cloudsql_encendida ? "v-${var.version_imagenes}" : null
 
   template {
