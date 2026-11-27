@@ -116,10 +116,11 @@ make gcloud ARGS="secrets versions access latest --secret=seed-password"
 
 1. Navegador, pestaña 1, en `https://mooc-frontend-568765476410.us-central1.run.app`,
    con la sesión cerrada.
-2. Navegador, pestaña 2, en la consola de GCP, abrir la función
-   `mooc-insignias` y la pestaña de sus activadores. Enseña el disparador de
-   Eventarc sobre el topic `mooc-insignias`. Comprobar antes de grabar dónde
-   está la pestaña, porque la consola cambia de nombre las secciones.
+2. Navegador, pestaña 2, en la consola de GCP
+   (`https://console.cloud.google.com/eventarc/triggers?project=mooc-509602`),
+   en **Eventarc → Activadores**. Es la vista del bloque 4. Comprobar antes de
+   grabar que carga y que se ve el activador `mooc-insignias-…`, porque la
+   consola cambia de nombre las secciones.
 3. Terminal 1, para Terraform y las consultas.
 4. Editor con estos archivos abiertos:
 
@@ -170,21 +171,63 @@ Con `docs/entrega5/analisis-serverless.md`:
 
 ## Bloque 2. La migración en el código (3 min)
 
-1. **`backend/funcion.go`**. Es el punto de entrada de la función. Registra
-   `EmitirInsignia`, abre la base y el almacén en la primera entrega y le pasa
-   el evento a `queue.Evento`. Decir: **la función no reimplementa la tarea.
-   Usa el mismo `badges.Service` y el mismo ejecutor que el worker**, así que
-   el resultado es el mismo.
-2. **`backend/internal/adapters/queue/evento.go`**. El comentario de `Evento`
-   resume las respuestas:
-   - devuelve `nil` y Eventarc confirma;
-   - devuelve un error y Eventarc reintenta;
-   - al quinto reclamo fallido marca el trabajo `dead` y corta. Los intentos
-     se cuentan en la base porque el evento no trae el número de entrega.
-3. **`backend/internal/adapters/pubsub/pubsub.go`**, `topicDe`. El backend
-   publica cada tipo en su topic según `PUBSUB_TOPICOS`. `badge.issue` va a
-   `mooc-insignias`. El worker, al arrancar, retira de sus manejadores los
-   tipos con otro topic, así que **deja de ejecutar la tarea**.
+**El contexto, para quien presenta.** Antes, el backend publicaba
+`badge.issue` en `mooc-trabajos` y el worker emitía la insignia. Ahora la
+publica en su propio topic, `mooc-insignias`, Eventarc despierta a la función y
+la función emite la insignia. El worker ya no la toca. Lo que hay que
+transmitir es que **cambió por dónde llega la tarea, no lo que hace la tarea**.
+
+### `backend/funcion.go`, la puerta de entrada
+
+`functions.CloudEvent("EmitirInsignia", ...)` registra la función con el nombre
+que Terraform usa como punto de entrada. En la primera entrega abre la base y
+el almacén, y después le pasa el evento a `queue.Evento`.
+
+> **Para decir:** «Este archivo es la puerta de entrada de la función. Lo
+> importante es que no reescribimos la emisión de insignias: la función llama
+> al mismo servicio y al mismo ejecutor que usaba el worker, así que la
+> insignia sale igual. Solo cambió por dónde llega la tarea.»
+
+### `backend/internal/adapters/queue/evento.go`, cómo confirma
+
+Eventarc entrega el evento y espera una respuesta. El comentario de `Evento`
+resume la tabla:
+
+| La función devuelve | Eventarc entiende | Cuándo |
+| --- | --- | --- |
+| `nil` | Listo, no lo entrego más | La insignia se emitió, o ya estaba emitida |
+| Un error | Algo falló, lo reintento | Por ejemplo, la base no respondió |
+| `nil`, tras marcar `dead` | Listo, no lo entrego más | Quinto intento fallido |
+
+> **Para decir:** «Así confirma la función. Si devolvemos `nil`, Eventarc da
+> la tarea por hecha. Si devolvemos un error, la reintenta. Para que una tarea
+> rota no se reintente para siempre, al quinto fallo la marcamos como muerta.
+> Los intentos los contamos en la base de datos, porque el evento de Eventarc
+> no dice cuántas veces se ha entregado.»
+
+### `backend/internal/adapters/pubsub/pubsub.go`, `topicDe`
+
+`PUBSUB_TOPICOS=badge.issue=mooc-insignias` dice que las insignias van a su
+propio topic y el resto a `mooc-trabajos`. `topicDe` elige el topic de cada
+tipo. El worker lee la misma variable al arrancar y quita `badge.issue` de su
+lista de tareas.
+
+> **Para decir:** «Para que el worker deje de hacer esta tarea, cada tipo se
+> publica en su propio topic. Las insignias van a `mooc-insignias`, que es el
+> que escucha la función. Y el worker, al arrancar, saca las insignias de su
+> lista. Así hay un solo responsable.»
+
+### Si preguntan por los duplicados
+
+Antes de emitir, el ejecutor **reclama** la tarea en `platform.job_runs` con una
+sola operación atómica. Si ya está terminada, el reclamo falla y la función
+responde `nil` sin hacer nada. Además, la tabla de insignias tiene una regla
+que impide dos insignias para la misma inscripción.
+
+> **Para cerrar el bloque:** «Sacamos la emisión de insignias del worker a una
+> función serverless sin reescribirla. La función usa el mismo código, la tarea
+> le llega por su propio topic gracias a Eventarc, el worker ya no la recibe y
+> la base de datos garantiza que no haya duplicados.»
 
 ## Bloque 3. Terraform (5 min)
 
@@ -270,7 +313,27 @@ Deben verse tres líneas con la misma `job_key`:
 
 Decir: **el backend publicó en Pub/Sub, Eventarc entregó el evento y la función
 escribió la insignia en Cloud SQL y su imagen en Cloud Storage. `mooc-workers`
-no aparece.** Enseñar el disparador en la pestaña 2.
+no aparece.**
+
+### En la consola de GCP (30 s)
+
+En la pestaña 2, **Eventarc → Activadores**. Hay un solo activador,
+`mooc-insignias-…`. Señalar en pantalla:
+
+| Campo | Valor que se ve | Qué decir |
+| --- | --- | --- |
+| Proveedor del evento | Cloud Pub/Sub | El evento sale de un mensaje publicado |
+| Tipo de evento | `google.cloud.pubsub.topic.v1.messagePublished` | Cada mensaje en el topic es un evento |
+| Tema | `mooc-insignias` | El topic propio de las insignias |
+| Destino | La función `mooc-insignias` | A quién se le entrega |
+| Cuenta de servicio | `mooc-eventarc` | La única identidad que puede invocar la función |
+
+> **Para decir:** «Este es el disparador que creó Terraform. Escucha el topic
+> `mooc-insignias` y le entrega cada mensaje a la función, con la cuenta
+> `mooc-eventarc`, que es la única que puede invocarla.»
+
+Si la vista de Eventarc no carga, el mismo activador se ve en **Cloud Run →
+`mooc-insignias` → Activadores**.
 
 ### La reentrega (1,5 min)
 
